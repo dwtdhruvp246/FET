@@ -751,7 +751,7 @@ async function signUp() {
   assertSupabase();
   const email = $("#email").value.trim();
   const password = $("#password").value;
-  const fullName = $("#displayName").value.trim();
+  const fullName = email.split("@")[0] || "Household user";
   if (!email || !password) {
     showToast("Enter an email and password.");
     return;
