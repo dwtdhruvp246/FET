@@ -312,6 +312,40 @@ code {
   min-width: 0;
 }
 
+.family-shell {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.family-sidebar {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.family-sidebar h2 {
+  margin: 8px 0 10px;
+  font-size: 1.45rem;
+  line-height: 1.1;
+}
+
+.family-sidebar .topbar-actions {
+  display: grid;
+  justify-content: stretch;
+}
+
+.family-main {
+  min-width: 0;
+}
+
 .admin-account {
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -420,6 +454,11 @@ code {
   padding: 12px;
 }
 
+.member-card,
+.breakdown-item {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
 .head-item {
   align-items: start;
 }
@@ -457,6 +496,46 @@ code {
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 9px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  color: white;
+  font-size: 0.88rem;
+  font-weight: 900;
+}
+
+.small-meter {
+  height: 7px;
+  margin-top: 9px;
+}
+
+.breakdown-list {
+  display: grid;
+  gap: 10px;
+}
+
+.breakdown-item {
+  display: grid;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: white;
+}
+
+.breakdown-item span,
+.member-card small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 
 .mini-badge {
@@ -614,7 +693,12 @@ code {
     grid-template-columns: 1fr;
   }
 
-  .admin-sidebar {
+  .family-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-sidebar,
+  .family-sidebar {
     position: relative;
     top: 0;
   }
@@ -672,6 +756,16 @@ code {
     grid-template-columns: 1fr auto;
     align-items: center;
     justify-items: start;
+  }
+
+  .member-card,
+  .breakdown-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .member-card .row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
   }
 }
 

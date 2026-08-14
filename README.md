@@ -11,9 +11,12 @@ A static family expense tracker that uses Supabase Auth and Postgres as the data
 - Payment history with amount, method, date, period, notes, and reference number
 - Head billing status: paid, unpaid, or overdue
 - Approved heads can create and manage their own households
+- Head of family workspace with Dashboard, Expenses, and Members pages
 - Household setup with currency and monthly budget
-- Add family members with roles and allowances
-- Add, filter, delete, and export expenses
+- Add family members with roles, allowances, spending limits, status, and profile color
+- Add, edit, filter, delete, and export expenses
+- Track who an expense was for and who paid it
+- Member spending breakdowns and recent household ledger
 - Row Level Security policies for private household data
 - No frontend service role key
 
@@ -78,6 +81,18 @@ Recording a payment automatically marks that head as `paid` and updates their la
 8. Suspend the head.
 9. Sign in as the head and confirm the suspended screen appears.
 10. Sign in as admin, reactivate the head, then record a manual payment on the Finance page.
+
+## Phase 3 and 4 test flow
+
+1. Sign in as an active head of family.
+2. Create a household if one does not exist yet.
+3. Go to the Members page.
+4. Add members with allowance, spending limit, and color.
+5. Go to the Expenses page.
+6. Add an expense and choose both `For` and `Paid by`.
+7. Edit that expense and save it.
+8. Go to Dashboard and confirm spending totals, recent expenses, and member breakdown update.
+9. Mark a member inactive and confirm they stay in the roster but no longer appear in the new expense member selectors.
 
 Because this is a static GitHub Pages app, it does not create Supabase Auth users from the browser. That would require a secret service role key, and secret keys should never be shipped in frontend code.
 

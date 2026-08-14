@@ -25,6 +25,8 @@ const state = {
   adminFamilies: [],
   payments: [],
   adminTab: "dashboard",
+  familyTab: "dashboard",
+  editingExpenseId: null,
   filterMonth: toMonthValue(new Date()),
   filterCategory: "All"
 };
@@ -141,6 +143,8 @@ function resetState() {
   state.adminFamilies = [];
   state.payments = [];
   state.adminTab = "dashboard";
+  state.familyTab = "dashboard";
+  state.editingExpenseId = null;
 }
 
 async function loadApp() {
@@ -262,7 +266,7 @@ async function loadExpenses() {
     "expenses load",
     supabase
       .from("expenses")
-      .select("*, family_members(name, role)")
+      .select("*, target_member:family_members!expenses_member_id_fkey(name, role, avatar_color), payer_member:family_members!expenses_paid_by_member_id_fkey(name, role, avatar_color)")
       .eq("family_id", state.family.id)
       .order("expense_date", { ascending: false })
       .order("created_at", { ascending: false })
@@ -270,10 +274,23 @@ async function loadExpenses() {
 }
 
 function render() {
+  renderFamilyTabs();
   renderFamily();
   renderMembers();
   renderExpenses();
   renderStats();
+  renderMemberBreakdown();
+  renderRecentExpenses();
+}
+
+function renderFamilyTabs() {
+  document.querySelectorAll("[data-family-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.familyTab === state.familyTab);
+  });
+
+  document.querySelectorAll("[data-family-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.familyPanel !== state.familyTab);
+  });
 }
 
 function renderAdmin() {
@@ -465,17 +482,26 @@ function formatCurrencyTotals(payments) {
 
 function renderFamily() {
   $("#householdTitle").textContent = state.family.name;
+  $("#headBillingBadge").textContent = state.headApproval?.billing_status || "billing";
+  $("#headBillingBadge").className = `mini-badge ${state.headApproval?.billing_status || ""}`;
 }
 
 function renderMembers() {
   const memberSelect = $("#expenseMember");
+  const payerSelect = $("#expensePaidBy");
   memberSelect.innerHTML = `<option value="">Whole family</option>`;
+  payerSelect.innerHTML = `<option value="">Household account</option>`;
 
-  state.members.forEach((member) => {
+  state.members.filter((member) => member.status !== "inactive").forEach((member) => {
     const option = document.createElement("option");
     option.value = member.id;
     option.textContent = `${member.name} (${member.role})`;
     memberSelect.append(option);
+
+    const payerOption = document.createElement("option");
+    payerOption.value = member.id;
+    payerOption.textContent = `${member.name} (${member.role})`;
+    payerSelect.append(payerOption);
   });
 
   const list = $("#membersList");
@@ -486,17 +512,119 @@ function renderMembers() {
 
   list.innerHTML = "";
   state.members.forEach((member) => {
+    const monthTotal = memberMonthTotal(member.id);
+    const limit = Number(member.spending_limit || 0);
+    const limitPercent = limit > 0 ? Math.min((monthTotal / limit) * 100, 100) : 0;
     const item = document.createElement("article");
-    item.className = "member-item";
+    item.className = "member-item member-card";
     item.innerHTML = `
+      <div class="avatar" style="background:${escapeHtml(member.avatar_color || "#167D77")}">${memberInitials(member.name)}</div>
       <div>
         <strong>${escapeHtml(member.name)}</strong>
-        <span>${escapeHtml(member.role)} &middot; ${money(member.monthly_allowance, state.family.currency)} allowance</span>
+        <span>${escapeHtml(member.role)} &middot; ${money(member.monthly_allowance, state.family.currency)} allowance &middot; ${money(limit, state.family.currency)} limit</span>
+        <div class="badge-row">${statusBadge(member.status || "active")}</div>
+        <div class="meter small-meter"><span style="width:${limitPercent}%"></span></div>
+        <small>${money(monthTotal, state.family.currency)} spent this month</small>
       </div>
-      <button type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.name)}">Delete</button>
+      <div class="row-actions">
+        <button type="button" data-toggle-member="${member.id}" data-next-status="${member.status === "active" ? "inactive" : "active"}">
+          ${member.status === "active" ? "Mark inactive" : "Reactivate"}
+        </button>
+        <button type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.name)}">Delete</button>
+      </div>
     `;
     list.append(item);
   });
+}
+
+function renderMemberBreakdown() {
+  const list = $("#memberBreakdownList");
+  const rows = [
+    {
+      id: "",
+      name: "Whole family",
+      role: "Shared",
+      avatar_color: "#2859B8",
+      spending_limit: Number(state.family.monthly_budget || 0),
+      total: sharedMonthTotal()
+    },
+    ...state.members.map((member) => ({
+      ...member,
+      total: memberMonthTotal(member.id)
+    }))
+  ].filter((row) => row.total > 0 || row.id);
+
+  if (!rows.length) {
+    list.innerHTML = `
+      <div class="empty-ledger">
+        <strong>No spending yet</strong>
+        <span>Add expenses to see family member patterns.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const maxTotal = Math.max(...rows.map((row) => row.total), 1);
+  list.innerHTML = "";
+  rows.forEach((row) => {
+    const limit = Number(row.spending_limit || 0);
+    const percent = Math.min((row.total / maxTotal) * 100, 100);
+    const limitText = limit > 0 ? `${money(row.total, state.family.currency)} of ${money(limit, state.family.currency)}` : money(row.total, state.family.currency);
+    const item = document.createElement("article");
+    item.className = "breakdown-item";
+    item.innerHTML = `
+      <div class="avatar" style="background:${escapeHtml(row.avatar_color || "#167D77")}">${memberInitials(row.name)}</div>
+      <div>
+        <strong>${escapeHtml(row.name)}</strong>
+        <span>${escapeHtml(row.role || "Member")} &middot; ${limitText}</span>
+        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
+function renderRecentExpenses() {
+  const list = $("#recentExpensesList");
+  const recent = state.expenses.slice(0, 5);
+  if (!recent.length) {
+    list.innerHTML = `
+      <div class="empty-ledger">
+        <strong>No recent expenses</strong>
+        <span>The latest household spending will appear here.</span>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = "";
+  recent.forEach((expense) => list.append(renderExpenseItem(expense, false)));
+}
+
+function monthExpenses() {
+  return state.expenses.filter((expense) => expense.expense_date.startsWith(state.filterMonth));
+}
+
+function memberMonthTotal(memberId) {
+  return monthExpenses()
+    .filter((expense) => expense.member_id === memberId)
+    .reduce((sum, expense) => sum + Number(expense.amount), 0);
+}
+
+function sharedMonthTotal() {
+  return monthExpenses()
+    .filter((expense) => !expense.member_id)
+    .reduce((sum, expense) => sum + Number(expense.amount), 0);
+}
+
+function memberInitials(name) {
+  return `${name || "?"}`
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
 
 function filteredExpenses() {
@@ -524,37 +652,45 @@ function renderExpenses() {
 
   list.innerHTML = "";
   expenses.forEach((expense) => {
-    const memberName = expense.family_members?.name || "Whole family";
-    const item = document.createElement("article");
-    item.className = "expense-item";
-    item.innerHTML = `
-      <div class="expense-date">
-        <strong>${new Date(`${expense.expense_date}T00:00:00`).getDate()}</strong>
-        <span>${new Date(`${expense.expense_date}T00:00:00`).toLocaleString("en", { month: "short" })}</span>
-      </div>
-      <div class="expense-detail">
-        <strong>${escapeHtml(expense.category)}</strong>
-        <span>${escapeHtml(memberName)} &middot; ${escapeHtml(expense.payment_method || "Method not set")}</span>
-        ${expense.note ? `<small>${escapeHtml(expense.note)}</small>` : ""}
-      </div>
-      <div class="expense-actions">
-        <strong>${money(expense.amount, state.family.currency)}</strong>
-        <button type="button" data-delete-expense="${expense.id}" aria-label="Delete expense">Delete</button>
-      </div>
-    `;
-    list.append(item);
+    list.append(renderExpenseItem(expense, true));
   });
 }
 
+function renderExpenseItem(expense, withActions = true) {
+  const memberName = expense.target_member?.name || "Whole family";
+  const payerName = expense.payer_member?.name || "Household account";
+  const item = document.createElement("article");
+  item.className = "expense-item";
+  item.innerHTML = `
+    <div class="expense-date">
+      <strong>${new Date(`${expense.expense_date}T00:00:00`).getDate()}</strong>
+      <span>${new Date(`${expense.expense_date}T00:00:00`).toLocaleString("en", { month: "short" })}</span>
+    </div>
+    <div class="expense-detail">
+      <strong>${escapeHtml(expense.category)}</strong>
+      <span>For ${escapeHtml(memberName)} &middot; Paid by ${escapeHtml(payerName)} &middot; ${escapeHtml(expense.payment_method || "Method not set")}</span>
+      ${expense.note ? `<small>${escapeHtml(expense.note)}</small>` : ""}
+    </div>
+    <div class="expense-actions">
+      <strong>${money(expense.amount, state.family.currency)}</strong>
+      ${withActions ? `<div class="row-actions"><button type="button" data-edit-expense="${expense.id}">Edit</button><button type="button" data-delete-expense="${expense.id}" aria-label="Delete expense">Delete</button></div>` : ""}
+    </div>
+  `;
+  return item;
+}
+
 function renderStats() {
-  const monthExpenses = state.expenses.filter((expense) =>
-    expense.expense_date.startsWith(state.filterMonth)
-  );
-  const spent = monthExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const currentMonthExpenses = monthExpenses();
+  const spent = currentMonthExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
   const budget = Number(state.family.monthly_budget || 0);
   const remaining = budget - spent;
   const percentage = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
+  const monthDate = new Date(`${state.filterMonth}-01T00:00:00`);
 
+  $("#dashboardMonthTitle").textContent = monthDate.toLocaleString("en", {
+    month: "long",
+    year: "numeric"
+  });
   $("#spentAmount").textContent = money(spent, state.family.currency);
   $("#remainingAmount").textContent = money(remaining, state.family.currency);
   $("#remainingText").textContent = remaining >= 0 ? "Still available" : "Over budget";
@@ -564,7 +700,7 @@ function renderStats() {
       ? `${Math.round(percentage)}% of ${money(budget, state.family.currency)} used`
       : "No monthly budget set";
 
-  const byCategory = monthExpenses.reduce((acc, expense) => {
+  const byCategory = currentMonthExpenses.reduce((acc, expense) => {
     acc[expense.category] = (acc[expense.category] || 0) + Number(expense.amount);
     return acc;
   }, {});
@@ -712,6 +848,8 @@ async function addMember(event) {
   const name = $("#memberName").value.trim();
   const role = $("#memberRole").value;
   const allowance = Number($("#memberAllowance").value || 0);
+  const spendingLimit = Number($("#memberLimit").value || 0);
+  const avatarColor = $("#memberColor").value;
   if (!name) return;
 
   try {
@@ -722,13 +860,31 @@ async function addMember(event) {
         created_by: state.session.user.id,
         name,
         role,
-        monthly_allowance: allowance
+        monthly_allowance: allowance,
+        spending_limit: spendingLimit,
+        avatar_color: avatarColor,
+        status: "active"
       })
     );
     $("#memberForm").reset();
+    $("#memberColor").value = "#167D77";
     await loadMembers();
     render();
     showToast("Member added.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function updateMemberStatus(memberId, nextStatus) {
+  try {
+    await query(
+      "member status update",
+      supabase.from("family_members").update({ status: nextStatus }).eq("id", memberId)
+    );
+    await loadMembers();
+    render();
+    showToast(nextStatus === "active" ? "Member reactivated." : "Member marked inactive.");
   } catch (error) {
     showToast(error.message);
   }
@@ -846,27 +1002,69 @@ async function addExpense(event) {
   }
 
   try {
-    await query(
-      "expense create",
-      supabase.from("expenses").insert({
-        family_id: state.family.id,
-        member_id: $("#expenseMember").value || null,
-        user_id: state.session.user.id,
-        amount,
-        expense_date: $("#expenseDate").value,
-        category: $("#expenseCategory").value,
-        payment_method: $("#expensePayment").value,
-        note: $("#expenseNote").value.trim()
-      })
-    );
-    $("#expenseForm").reset();
-    $("#expenseDate").value = toDateValue(new Date());
+    const payload = expensePayload(amount);
+    if (state.editingExpenseId) {
+      await query(
+        "expense update",
+        supabase.from("expenses").update(payload).eq("id", state.editingExpenseId)
+      );
+      showToast("Expense updated.");
+    } else {
+      await query(
+        "expense create",
+        supabase.from("expenses").insert(payload)
+      );
+      showToast("Expense added.");
+    }
+
+    resetExpenseForm();
     await loadExpenses();
     render();
-    showToast("Expense added.");
   } catch (error) {
     showToast(error.message);
   }
+}
+
+function expensePayload(amount) {
+  return {
+    family_id: state.family.id,
+    member_id: $("#expenseMember").value || null,
+    paid_by_member_id: $("#expensePaidBy").value || null,
+    user_id: state.session.user.id,
+    amount,
+    expense_date: $("#expenseDate").value,
+    category: $("#expenseCategory").value,
+    payment_method: $("#expensePayment").value,
+    note: $("#expenseNote").value.trim()
+  };
+}
+
+function startEditExpense(expenseId) {
+  const expense = state.expenses.find((item) => item.id === expenseId);
+  if (!expense) return;
+
+  state.editingExpenseId = expense.id;
+  state.familyTab = "expenses";
+  renderFamilyTabs();
+  $("#expenseTitle").textContent = "Edit spending";
+  $("#expenseSubmitButton").textContent = "Save expense";
+  $("#cancelEditExpenseButton").classList.remove("hidden");
+  $("#expenseAmount").value = expense.amount;
+  $("#expenseDate").value = expense.expense_date;
+  $("#expenseCategory").value = expense.category;
+  $("#expenseMember").value = expense.member_id || "";
+  $("#expensePaidBy").value = expense.paid_by_member_id || "";
+  $("#expensePayment").value = expense.payment_method || "Card";
+  $("#expenseNote").value = expense.note || "";
+}
+
+function resetExpenseForm() {
+  state.editingExpenseId = null;
+  $("#expenseForm").reset();
+  $("#expenseDate").value = toDateValue(new Date());
+  $("#expenseTitle").textContent = "Record spending";
+  $("#expenseSubmitButton").textContent = "Add expense";
+  $("#cancelEditExpenseButton").classList.add("hidden");
 }
 
 async function deleteHead(headId) {
@@ -939,11 +1137,12 @@ function exportCsv() {
   }
 
   const rows = [
-    ["Date", "Category", "Member", "Payment method", "Note", "Amount"],
+    ["Date", "Category", "For", "Paid by", "Payment method", "Note", "Amount"],
     ...expenses.map((expense) => [
       expense.expense_date,
       expense.category,
-      expense.family_members?.name || "Whole family",
+      expense.target_member?.name || "Whole family",
+      expense.payer_member?.name || "Household account",
       expense.payment_method || "",
       expense.note || "",
       expense.amount
@@ -975,6 +1174,9 @@ document.addEventListener("click", async (event) => {
   const memberId = event.target.dataset.deleteMember;
   if (memberId) await deleteMember(memberId);
 
+  const toggleMemberId = event.target.dataset.toggleMember;
+  if (toggleMemberId) await updateMemberStatus(toggleMemberId, event.target.dataset.nextStatus);
+
   const headId = event.target.dataset.deleteHead;
   if (headId) await deleteHead(headId);
 
@@ -990,6 +1192,15 @@ document.addEventListener("click", async (event) => {
     renderAdminTabs();
   }
 
+  const familyTab = event.target.dataset.familyTab;
+  if (familyTab) {
+    state.familyTab = familyTab;
+    renderFamilyTabs();
+  }
+
+  const editExpenseId = event.target.dataset.editExpense;
+  if (editExpenseId) startEditExpense(editExpenseId);
+
   const expenseId = event.target.dataset.deleteExpense;
   if (expenseId) await deleteExpense(expenseId);
 });
@@ -1000,6 +1211,7 @@ $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPayment);
 $("#memberForm").addEventListener("submit", addMember);
 $("#expenseForm").addEventListener("submit", addExpense);
+$("#cancelEditExpenseButton").addEventListener("click", resetExpenseForm);
 $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#pendingSignOutButton").addEventListener("click", async () => supabase.auth.signOut());

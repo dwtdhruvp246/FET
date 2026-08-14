@@ -7,8 +7,8 @@
     <title>Household Ledger</title>
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="config.js?v=4"></script>
-    <script type="module" src="app.js?v=4"></script>
+    <script src="config.js?v=5"></script>
+    <script type="module" src="app.js?v=5"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -323,62 +323,35 @@
         </section>
 
         <section id="appView" class="hidden">
-          <header class="topbar">
-            <div>
-              <p class="eyebrow">Current household</p>
-              <h2 id="householdTitle">Household</h2>
-            </div>
-            <div class="topbar-actions">
-              <button id="exportCsvButton" type="button">Export CSV</button>
-              <button id="signOutButton" type="button">Sign out</button>
-            </div>
-          </header>
+          <div class="family-shell">
+            <aside class="family-sidebar">
+              <div>
+                <p class="eyebrow">Family workspace</p>
+                <h2 id="householdTitle">Household</h2>
+                <span id="headBillingBadge" class="mini-badge">billing</span>
+              </div>
+              <nav class="admin-nav" aria-label="Family pages">
+                <button class="admin-nav-button active" type="button" data-family-tab="dashboard">Dashboard</button>
+                <button class="admin-nav-button" type="button" data-family-tab="expenses">Expenses</button>
+                <button class="admin-nav-button" type="button" data-family-tab="members">Members</button>
+              </nav>
+              <div class="topbar-actions">
+                <button id="exportCsvButton" type="button">Export CSV</button>
+                <button id="signOutButton" type="button">Sign out</button>
+              </div>
+            </aside>
 
-          <section class="stats-grid" aria-label="Monthly spending summary">
-            <article class="stat-card meter-card">
-              <span class="stat-label">Spent this month</span>
-              <strong id="spentAmount">$0.00</strong>
-              <div class="meter"><span id="budgetMeter"></span></div>
-              <small id="budgetText">No budget set</small>
-            </article>
-            <article class="stat-card">
-              <span class="stat-label">Remaining</span>
-              <strong id="remainingAmount">$0.00</strong>
-              <small id="remainingText">Budget balance</small>
-            </article>
-            <article class="stat-card">
-              <span class="stat-label">Top category</span>
-              <strong id="topCategory">None</strong>
-              <small id="topCategoryText">Add expenses to see patterns</small>
-            </article>
-            <article class="stat-card">
-              <span class="stat-label">Family members</span>
-              <strong id="memberCount">0</strong>
-              <small>People tracked in this household</small>
-            </article>
-          </section>
-
-          <section class="content-grid">
-            <div class="stack">
-              <section class="tool-panel" aria-labelledby="expenseTitle">
-                <div class="panel-heading inline">
+            <div class="family-main">
+              <section class="family-panel" data-family-panel="dashboard">
+                <header class="topbar">
                   <div>
-                    <p class="eyebrow">New expense</p>
-                    <h3 id="expenseTitle">Record spending</h3>
+                    <p class="eyebrow">Monthly command center</p>
+                    <h2 id="dashboardMonthTitle">This month</h2>
                   </div>
-                </div>
-                <form id="expenseForm" class="form-grid">
-                  <label>
-                    Amount
-                    <input id="expenseAmount" type="number" min="0.01" step="0.01" required placeholder="42.50" />
-                  </label>
-                  <label>
-                    Date
-                    <input id="expenseDate" type="date" required />
-                  </label>
-                  <label>
-                    Category
-                    <select id="expenseCategory" required>
+                  <div class="filters">
+                    <input id="monthFilter" type="month" />
+                    <select id="categoryFilter">
+                      <option value="All">All categories</option>
                       <option value="Groceries">Groceries</option>
                       <option value="Utilities">Utilities</option>
                       <option value="Transport">Transport</option>
@@ -388,83 +361,185 @@
                       <option value="Fun">Fun</option>
                       <option value="Other">Other</option>
                     </select>
-                  </label>
-                  <label>
-                    Family member
-                    <select id="expenseMember"></select>
-                  </label>
-                  <label>
-                    Payment method
-                    <select id="expensePayment">
-                      <option value="Card">Card</option>
-                      <option value="Cash">Cash</option>
-                      <option value="Bank transfer">Bank transfer</option>
-                      <option value="Mobile wallet">Mobile wallet</option>
-                    </select>
-                  </label>
-                  <label class="full">
-                    Note
-                    <input id="expenseNote" placeholder="Dinner, medicine, school books..." />
-                  </label>
-                  <button class="primary full" type="submit">Add expense</button>
-                </form>
+                  </div>
+                </header>
+
+                <section class="stats-grid" aria-label="Monthly spending summary">
+                  <article class="stat-card meter-card">
+                    <span class="stat-label">Spent this month</span>
+                    <strong id="spentAmount">$0.00</strong>
+                    <div class="meter"><span id="budgetMeter"></span></div>
+                    <small id="budgetText">No budget set</small>
+                  </article>
+                  <article class="stat-card">
+                    <span class="stat-label">Safe to spend</span>
+                    <strong id="remainingAmount">$0.00</strong>
+                    <small id="remainingText">Budget balance</small>
+                  </article>
+                  <article class="stat-card">
+                    <span class="stat-label">Top category</span>
+                    <strong id="topCategory">None</strong>
+                    <small id="topCategoryText">Add expenses to see patterns</small>
+                  </article>
+                  <article class="stat-card">
+                    <span class="stat-label">Family members</span>
+                    <strong id="memberCount">0</strong>
+                    <small>People tracked in this household</small>
+                  </article>
+                </section>
+
+                <section class="content-grid">
+                  <section class="ledger-panel">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Member spending</p>
+                      <h3>Breakdown</h3>
+                    </div>
+                    <div id="memberBreakdownList" class="breakdown-list"></div>
+                  </section>
+
+                  <section class="ledger-panel">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Recent ledger</p>
+                      <h3>Latest expenses</h3>
+                    </div>
+                    <div id="recentExpensesList" class="expenses-list"></div>
+                  </section>
+                </section>
               </section>
 
-              <section class="tool-panel" aria-labelledby="membersTitle">
-                <div class="panel-heading inline">
+              <section class="family-panel hidden" data-family-panel="expenses">
+                <header class="topbar">
+                  <div>
+                    <p class="eyebrow">Expenses</p>
+                    <h2>Track household spending</h2>
+                  </div>
+                </header>
+
+                <section class="content-grid">
+                  <section class="tool-panel" aria-labelledby="expenseTitle">
+                    <div class="panel-heading inline">
+                      <div>
+                        <p class="eyebrow">Expense form</p>
+                        <h3 id="expenseTitle">Record spending</h3>
+                      </div>
+                      <button id="cancelEditExpenseButton" class="hidden" type="button">Cancel edit</button>
+                    </div>
+                    <form id="expenseForm" class="form-grid">
+                      <label>
+                        Amount
+                        <input id="expenseAmount" type="number" min="0.01" step="0.01" required placeholder="42.50" />
+                      </label>
+                      <label>
+                        Date
+                        <input id="expenseDate" type="date" required />
+                      </label>
+                      <label>
+                        Category
+                        <select id="expenseCategory" required>
+                          <option value="Groceries">Groceries</option>
+                          <option value="Utilities">Utilities</option>
+                          <option value="Transport">Transport</option>
+                          <option value="School">School</option>
+                          <option value="Health">Health</option>
+                          <option value="Rent">Rent</option>
+                          <option value="Fun">Fun</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </label>
+                      <label>
+                        For
+                        <select id="expenseMember"></select>
+                      </label>
+                      <label>
+                        Paid by
+                        <select id="expensePaidBy"></select>
+                      </label>
+                      <label>
+                        Payment method
+                        <select id="expensePayment">
+                          <option value="Card">Card</option>
+                          <option value="Cash">Cash</option>
+                          <option value="Bank transfer">Bank transfer</option>
+                          <option value="Mobile wallet">Mobile wallet</option>
+                        </select>
+                      </label>
+                      <label class="full">
+                        Note
+                        <input id="expenseNote" placeholder="Dinner, medicine, school books..." />
+                      </label>
+                      <button id="expenseSubmitButton" class="primary full" type="submit">Add expense</button>
+                    </form>
+                  </section>
+
+                  <section class="ledger-panel" aria-labelledby="ledgerTitle">
+                    <div class="panel-heading ledger-heading">
+                      <div>
+                        <p class="eyebrow">Ledger</p>
+                        <h3 id="ledgerTitle">Expenses</h3>
+                      </div>
+                    </div>
+                    <div id="expensesList" class="expenses-list"></div>
+                  </section>
+                </section>
+              </section>
+
+              <section class="family-panel hidden" data-family-panel="members">
+                <header class="topbar">
                   <div>
                     <p class="eyebrow">Family</p>
-                    <h3 id="membersTitle">Members</h3>
+                    <h2>Members and limits</h2>
                   </div>
-                </div>
-                <form id="memberForm" class="member-form">
-                  <label>
-                    Name
-                    <input id="memberName" required placeholder="Avery" />
-                  </label>
-                  <label>
-                    Role
-                    <select id="memberRole">
-                      <option value="Adult">Adult</option>
-                      <option value="Child">Child</option>
-                      <option value="Teen">Teen</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </label>
-                  <label>
-                    Monthly allowance
-                    <input id="memberAllowance" type="number" min="0" step="0.01" placeholder="0" />
-                  </label>
-                  <button type="submit">Add member</button>
-                </form>
-                <div id="membersList" class="members-list"></div>
+                </header>
+
+                <section class="content-grid">
+                  <section class="tool-panel" aria-labelledby="membersTitle">
+                    <div class="panel-heading inline">
+                      <div>
+                        <p class="eyebrow">Member profile</p>
+                        <h3 id="membersTitle">Add member</h3>
+                      </div>
+                    </div>
+                    <form id="memberForm" class="form-grid">
+                      <label>
+                        Name
+                        <input id="memberName" required placeholder="Avery" />
+                      </label>
+                      <label>
+                        Role
+                        <select id="memberRole">
+                          <option value="Adult">Adult</option>
+                          <option value="Child">Child</option>
+                          <option value="Teen">Teen</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </label>
+                      <label>
+                        Monthly allowance
+                        <input id="memberAllowance" type="number" min="0" step="0.01" placeholder="0" />
+                      </label>
+                      <label>
+                        Spending limit
+                        <input id="memberLimit" type="number" min="0" step="0.01" placeholder="0" />
+                      </label>
+                      <label>
+                        Color
+                        <input id="memberColor" type="color" value="#167D77" />
+                      </label>
+                      <button class="primary full" type="submit">Add member</button>
+                    </form>
+                  </section>
+
+                  <section class="ledger-panel">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Roster</p>
+                      <h3>Family members</h3>
+                    </div>
+                    <div id="membersList" class="members-list"></div>
+                  </section>
+                </section>
               </section>
             </div>
-
-            <section class="ledger-panel" aria-labelledby="ledgerTitle">
-              <div class="panel-heading ledger-heading">
-                <div>
-                  <p class="eyebrow">Ledger</p>
-                  <h3 id="ledgerTitle">Expenses</h3>
-                </div>
-                <div class="filters">
-                  <input id="monthFilter" type="month" />
-                  <select id="categoryFilter">
-                    <option value="All">All categories</option>
-                    <option value="Groceries">Groceries</option>
-                    <option value="Utilities">Utilities</option>
-                    <option value="Transport">Transport</option>
-                    <option value="School">School</option>
-                    <option value="Health">Health</option>
-                    <option value="Rent">Rent</option>
-                    <option value="Fun">Fun</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-              <div id="expensesList" class="expenses-list"></div>
-            </section>
-          </section>
+          </div>
         </section>
       </main>
     </div>
