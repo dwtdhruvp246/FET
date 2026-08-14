@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Family expense tracker powered by Supabase." />
-    <meta name="theme-color" content="#102925" />
+    <meta name="description" content="Family recurring payment tracker powered by Supabase." />
+    <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Ledger" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -13,662 +13,377 @@
     <link rel="apple-touch-icon" href="assets/pwa-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="config.js?v=8"></script>
-    <script type="module" src="app.js?v=8"></script>
+    <script src="config.js?v=10"></script>
+    <script type="module" src="app.js?v=10"></script>
   </head>
   <body>
-    <div class="app-frame">
-      <main class="workspace">
-        <section id="configWarning" class="notice hidden">
-          <strong>Connect Supabase first.</strong>
-          Update <code>config.js</code> with your Supabase project URL and publishable key, then run the SQL in <code>supabase/schema.sql</code>.
-        </section>
+    <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
+    <main id="mainWorkspace" class="workspace" tabindex="-1">
+      <section id="loadingView" class="loading-view" aria-live="polite" aria-label="Loading app">
+        <div class="loading-card">
+          <img class="brand-mark" src="assets/ledger-mark.svg" alt="" width="64" height="64" />
+          <div class="spinner" aria-hidden="true"></div>
+          <strong>Opening your workspace</strong>
+          <span>Checking your secure session...</span>
+        </div>
+      </section>
 
-        <section id="authView" class="auth-panel hidden" aria-labelledby="authTitle">
-          <div class="panel-heading">
-            <p class="eyebrow">Welcome back</p>
-            <h2 id="authTitle">Sign in to your household</h2>
+      <section id="configWarning" class="notice hidden">
+        <strong>Connect Supabase first.</strong>
+        Update <code>config.js</code> with your Supabase project URL and publishable key, then run the SQL in <code>supabase/schema.sql</code>.
+      </section>
+
+      <section id="authView" class="auth-panel hidden" aria-labelledby="authTitle">
+        <div class="panel-heading">
+          <p class="eyebrow">Household Ledger</p>
+          <h1 id="authTitle">Sign in to manage recurring family payments</h1>
+          <p class="muted-copy">Track dues, assign responsibility, record partial payments, and keep every household obligation visible.</p>
+        </div>
+
+        <form id="authForm" class="form-grid">
+          <label class="full" for="email">
+            Email
+            <input id="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+          </label>
+          <label class="full" for="password">
+            Password
+            <input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters" />
+          </label>
+          <div class="button-row">
+            <button class="primary" type="submit">Sign in</button>
+            <button type="button" data-show-signup>Create account</button>
           </div>
+        </form>
+      </section>
 
-          <form id="authForm" class="form-grid">
-            <label>
-              Email
-              <input id="email" type="email" autocomplete="email" required placeholder="you@example.com" />
-            </label>
-            <label>
-              Password
-              <input id="password" type="password" autocomplete="current-password" minlength="6" placeholder="At least 6 characters" />
-            </label>
-            <div class="button-row">
-              <button class="primary" type="submit" data-auth-action="signin">Sign in</button>
-              <button type="button" data-show-signup>Create account</button>
+      <section id="signupView" class="auth-panel hidden" aria-labelledby="signupTitle">
+        <div class="panel-heading">
+          <p class="eyebrow">Free account</p>
+          <h1 id="signupTitle">Create your login</h1>
+          <p class="muted-copy">Start with a household workspace. Member access can be unlocked by the platform admin.</p>
+        </div>
+
+        <form id="signupForm" class="form-grid">
+          <label class="full" for="signupName">
+            Full name
+            <input id="signupName" autocomplete="name" required placeholder="Your name" />
+          </label>
+          <label for="signupEmail">
+            Email
+            <input id="signupEmail" type="email" autocomplete="email" required placeholder="you@example.com" />
+          </label>
+          <label for="signupPassword">
+            Password
+            <input id="signupPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="At least 6 characters" />
+          </label>
+          <label class="full" for="signupPasswordConfirm">
+            Confirm password
+            <input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="Repeat your password" />
+          </label>
+          <div class="button-row">
+            <button class="primary" type="submit">Create account</button>
+            <button type="button" data-show-signin>Back to sign in</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="setupView" class="setup-panel hidden" aria-labelledby="setupTitle">
+        <div class="panel-heading">
+          <p class="eyebrow">First household</p>
+          <h1 id="setupTitle">Create your payment workspace</h1>
+          <p class="muted-copy">This becomes the place where recurring family obligations, members, and payment records live.</p>
+        </div>
+        <form id="familyForm" class="form-grid">
+          <label for="familyName">
+            Household name
+            <input id="familyName" required placeholder="The Parekh family" />
+          </label>
+          <label for="familyBudget">
+            Monthly expected payments
+            <input id="familyBudget" type="number" min="0" step="0.01" placeholder="2500" />
+          </label>
+          <label for="familyCurrency">
+            Currency
+            <select id="familyCurrency">
+              <option value="USD">USD</option>
+              <option value="ZAR">ZAR</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="CAD">CAD</option>
+              <option value="AUD">AUD</option>
+            </select>
+          </label>
+          <button class="primary" type="submit">Create household</button>
+        </form>
+      </section>
+
+      <section id="suspendedView" class="setup-panel hidden" aria-labelledby="suspendedTitle">
+        <div class="panel-heading">
+          <p class="eyebrow">Account suspended</p>
+          <h1 id="suspendedTitle">Your household access is currently paused</h1>
+        </div>
+        <p class="muted-copy">Contact the app admin to reactivate your household account.</p>
+        <button id="suspendedSignOutButton" type="button">Sign out</button>
+      </section>
+
+      <section id="adminView" class="hidden">
+        <div class="app-shell">
+          <header class="app-nav">
+            <div>
+              <p class="eyebrow">Admin console</p>
+              <h1>Platform control</h1>
             </div>
-          </form>
-        </section>
+            <nav class="tabs" aria-label="Admin sections">
+              <button class="tab-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
+              <button class="tab-button" type="button" data-admin-tab="households">Households</button>
+              <button class="tab-button" type="button" data-admin-tab="users">Users</button>
+              <button class="tab-button" type="button" data-admin-tab="finance">Finance</button>
+              <button class="tab-button" type="button" data-admin-tab="support">Support</button>
+            </nav>
+            <button id="adminSignOutButton" type="button">Sign out</button>
+          </header>
 
-        <section id="signupView" class="auth-panel hidden" aria-labelledby="signupTitle">
-          <div class="panel-heading">
-            <p class="eyebrow">Free account</p>
-            <h2 id="signupTitle">Create your login</h2>
-          </div>
-
-          <form id="signupForm" class="form-grid">
-            <label class="full">
-              Full name
-              <input id="signupName" autocomplete="name" required placeholder="Your name" />
-            </label>
-            <label>
-              Email
-              <input id="signupEmail" type="email" autocomplete="email" required placeholder="you@example.com" />
-            </label>
-            <label>
-              Password
-              <input id="signupPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="At least 6 characters" />
-            </label>
-            <label class="full">
-              Confirm password
-              <input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="Repeat your password" />
-            </label>
-            <div class="button-row">
-              <button class="primary" type="submit">Create account</button>
-              <button type="button" data-show-signin>Back to sign in</button>
-            </div>
-          </form>
-        </section>
-
-        <section id="setupView" class="setup-panel hidden" aria-labelledby="setupTitle">
-          <div class="panel-heading">
-            <p class="eyebrow">First family</p>
-            <h2 id="setupTitle">Create your household</h2>
-          </div>
-          <form id="familyForm" class="form-grid">
-            <label>
-              Family name
-              <input id="familyName" required placeholder="The Martins" />
-            </label>
-            <label>
-              Monthly budget
-              <input id="familyBudget" type="number" min="0" step="0.01" placeholder="2500" />
-            </label>
-            <label>
-              Currency
-              <select id="familyCurrency">
-                <option value="USD">USD</option>
-                <option value="ZAR">ZAR</option>
-                <option value="EUR">EUR</option>
-                <option value="GBP">GBP</option>
-                <option value="CAD">CAD</option>
-                <option value="AUD">AUD</option>
-              </select>
-            </label>
-            <button class="primary" type="submit">Create household</button>
-          </form>
-        </section>
-
-        <section id="pendingView" class="setup-panel hidden" aria-labelledby="pendingTitle">
-          <div class="panel-heading">
-            <p class="eyebrow">Member access locked</p>
-            <h2 id="pendingTitle">Your free account is active</h2>
-          </div>
-          <p class="muted-copy">You can create a household and track expenses. An admin needs to unlock family-member access before you can add relatives.</p>
-          <button id="pendingSignOutButton" type="button">Sign out</button>
-        </section>
-
-        <section id="suspendedView" class="setup-panel hidden" aria-labelledby="suspendedTitle">
-          <div class="panel-heading">
-            <p class="eyebrow">Account suspended</p>
-            <h2 id="suspendedTitle">Your household access is currently paused</h2>
-          </div>
-          <p class="muted-copy">Contact the app admin to reactivate your head-of-family account.</p>
-          <button id="suspendedSignOutButton" type="button">Sign out</button>
-        </section>
-
-        <section id="adminView" class="hidden">
-          <div class="admin-shell">
-            <aside class="admin-sidebar">
+          <section class="screen-panel" data-admin-panel="dashboard">
+            <header class="topbar">
               <div>
-                <p class="eyebrow">Admin console</p>
-                <h2>Control room</h2>
+                <p class="eyebrow">Overview</p>
+                <h2>Household health</h2>
               </div>
-              <nav class="admin-nav" aria-label="Admin pages">
-                <button class="admin-nav-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
-                <button class="admin-nav-button" type="button" data-admin-tab="heads">Heads</button>
-                <button class="admin-nav-button" type="button" data-admin-tab="finance">Finance</button>
-                <button class="admin-nav-button" type="button" data-admin-tab="households">Households</button>
-              </nav>
-              <button id="adminSignOutButton" type="button">Sign out</button>
-            </aside>
-
-            <div class="admin-main">
-              <section class="admin-panel" data-admin-panel="dashboard">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Dashboard</p>
-                    <h2>Platform overview</h2>
-                  </div>
-                  <span id="adminEmail" class="admin-account">-</span>
-                </header>
-
-                <section class="stats-grid" aria-label="Admin summary">
-                  <article class="stat-card">
-                    <span class="stat-label">Active heads</span>
-                    <strong id="adminActiveHeadCount">0</strong>
-                    <small id="adminSuspendedText">0 suspended</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Households</span>
-                    <strong id="adminFamilyCount">0</strong>
-                    <small>Families in the app</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Revenue recorded</span>
-                    <strong id="adminRevenueTotal">$0.00</strong>
-                    <small id="adminPaymentCount">0 payments</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Unpaid heads</span>
-                    <strong id="adminUnpaidHeadCount">0</strong>
-                    <small>Need payment follow-up</small>
-                  </article>
-                </section>
-
-                <section class="ledger-panel">
-                  <div class="panel-heading">
-                    <p class="eyebrow">Recent payments</p>
-                    <h3>Latest finance activity</h3>
-                  </div>
-                  <div id="recentPaymentsList" class="expenses-list"></div>
-                </section>
+              <span id="adminEmail" class="admin-account">-</span>
+            </header>
+            <section class="stats-grid" aria-label="Admin summary">
+              <article class="stat-card"><span class="stat-label">Households</span><strong id="adminFamilyCount">0</strong><small>Workspaces created</small></article>
+              <article class="stat-card"><span class="stat-label">Overdue dues</span><strong id="adminOverdueCount">0</strong><small>Across all households</small></article>
+              <article class="stat-card"><span class="stat-label">Due this month</span><strong id="adminDueTotal">$0.00</strong><small>Expected obligations</small></article>
+              <article class="stat-card"><span class="stat-label">Platform revenue</span><strong id="adminRevenueTotal">$0.00</strong><small id="adminPaymentCount">0 payments</small></article>
+            </section>
+            <section class="content-grid">
+              <section class="ledger-panel">
+                <div class="panel-heading"><p class="eyebrow">Attention</p><h3>Households needing follow-up</h3></div>
+                <div id="adminAttentionList" class="record-list"></div>
               </section>
-
-              <section class="admin-panel hidden" data-admin-panel="heads">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Access</p>
-                    <h2>Heads of family</h2>
-                  </div>
-                </header>
-
-                <section class="content-grid">
-                  <section class="tool-panel" aria-labelledby="headTitle">
-                    <div class="panel-heading">
-                      <p class="eyebrow">New approval</p>
-                      <h3 id="headTitle">Add head of family</h3>
-                    </div>
-                    <form id="headForm" class="form-grid">
-                      <label>
-                        Full name
-                        <input id="headName" required placeholder="Jordan Lee" />
-                      </label>
-                      <label>
-                        Email
-                        <input id="headEmail" type="email" required placeholder="head@example.com" />
-                      </label>
-                      <label>
-                        Monthly fee
-                        <input id="headMonthlyFee" type="number" min="0" step="0.01" placeholder="0" />
-                      </label>
-                      <label>
-                        Fee currency
-                        <select id="headFeeCurrency">
-                          <option value="USD">USD</option>
-                          <option value="ZAR">ZAR</option>
-                          <option value="EUR">EUR</option>
-                          <option value="GBP">GBP</option>
-                          <option value="CAD">CAD</option>
-                          <option value="AUD">AUD</option>
-                        </select>
-                      </label>
-                      <label>
-                        Billing status
-                        <select id="headBillingStatus">
-                          <option value="unpaid">Unpaid</option>
-                          <option value="paid">Paid</option>
-                          <option value="overdue">Overdue</option>
-                        </select>
-                      </label>
-                      <label class="checkbox-label full">
-                        <input id="headCanAddMembers" type="checkbox" />
-                        Allow this user to add family members
-                      </label>
-                      <button class="primary full" type="submit">Save user access</button>
-                    </form>
-                  </section>
-
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Directory</p>
-                      <h3>Users with admin settings</h3>
-                    </div>
-                    <div id="headsList" class="members-list"></div>
-                  </section>
-                </section>
+              <section class="ledger-panel">
+                <div class="panel-heading"><p class="eyebrow">Recent</p><h3>Platform finance activity</h3></div>
+                <div id="recentPaymentsList" class="record-list"></div>
               </section>
+            </section>
+          </section>
 
-              <section class="admin-panel hidden" data-admin-panel="finance">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Finance</p>
-                    <h2>Manual payments</h2>
-                  </div>
-                </header>
+          <section class="screen-panel hidden" data-admin-panel="households">
+            <header class="topbar">
+              <div><p class="eyebrow">Households</p><h2>Family workspaces</h2></div>
+              <input id="adminHouseholdSearch" class="compact-input" placeholder="Search households" />
+            </header>
+            <div id="adminFamiliesList" class="record-list"></div>
+          </section>
 
-                <section class="content-grid">
-                  <section class="tool-panel" aria-labelledby="paymentTitle">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Record payment</p>
-                      <h3 id="paymentTitle">Add user payment</h3>
-                    </div>
-                    <form id="paymentForm" class="form-grid">
-                      <label class="full">
-                        Head of family
-                        <select id="paymentHead" required></select>
-                      </label>
-                      <label>
-                        Amount
-                        <input id="paymentAmount" type="number" min="0.01" step="0.01" required placeholder="49.00" />
-                      </label>
-                      <label>
-                        Currency
-                        <select id="paymentCurrency">
-                          <option value="USD">USD</option>
-                          <option value="ZAR">ZAR</option>
-                          <option value="EUR">EUR</option>
-                          <option value="GBP">GBP</option>
-                          <option value="CAD">CAD</option>
-                          <option value="AUD">AUD</option>
-                        </select>
-                      </label>
-                      <label>
-                        Method
-                        <select id="paymentMethod">
-                          <option value="Cash">Cash</option>
-                          <option value="EFT">EFT</option>
-                          <option value="Card">Card</option>
-                          <option value="Bank deposit">Bank deposit</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </label>
-                      <label>
-                        Payment date
-                        <input id="paymentDate" type="date" required />
-                      </label>
-                      <label>
-                        Period start
-                        <input id="billingStart" type="date" />
-                      </label>
-                      <label>
-                        Period end
-                        <input id="billingEnd" type="date" />
-                      </label>
-                      <label>
-                        Reference
-                        <input id="paymentReference" placeholder="Receipt or EFT ref" />
-                      </label>
-                      <label>
-                        Paid until
-                        <input id="paidUntil" type="date" />
-                      </label>
-                      <label class="full">
-                        Notes
-                        <input id="paymentNotes" placeholder="Cash received, bank confirmation, discount..." />
-                      </label>
-                      <button class="primary full" type="submit">Record payment</button>
-                    </form>
-                  </section>
-
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">History</p>
-                      <h3>Payment records</h3>
-                    </div>
-                    <div id="paymentsList" class="expenses-list"></div>
-                  </section>
-                </section>
+          <section class="screen-panel hidden" data-admin-panel="users">
+            <header class="topbar"><div><p class="eyebrow">Access</p><h2>Users and member access</h2></div></header>
+            <section class="content-grid">
+              <section class="tool-panel" aria-labelledby="headTitle">
+                <div class="panel-heading"><p class="eyebrow">Manual settings</p><h3 id="headTitle">Save user access</h3></div>
+                <form id="headForm" class="form-grid">
+                  <label for="headName">Full name<input id="headName" required placeholder="Jordan Lee" /></label>
+                  <label for="headEmail">Email<input id="headEmail" type="email" required placeholder="head@example.com" /></label>
+                  <label for="headMonthlyFee">Monthly platform fee<input id="headMonthlyFee" type="number" min="0" step="0.01" placeholder="0" /></label>
+                  <label for="headFeeCurrency">Fee currency<select id="headFeeCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+                  <label for="headBillingStatus">Billing status<select id="headBillingStatus"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></label>
+                  <label class="checkbox-label full"><input id="headCanAddMembers" type="checkbox" /> Allow this user to add family members</label>
+                  <button class="primary full" type="submit">Save user access</button>
+                </form>
               </section>
-
-              <section class="admin-panel hidden" data-admin-panel="households">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Households</p>
-                    <h2>Family workspaces</h2>
-                  </div>
-                </header>
-                <section class="ledger-panel" aria-labelledby="adminFamiliesTitle">
-                  <div class="panel-heading">
-                    <p class="eyebrow">Approval queue</p>
-                    <h3 id="adminFamiliesTitle">Member access by household</h3>
-                  </div>
-                  <div id="adminFamiliesList" class="expenses-list"></div>
-                </section>
+              <section class="ledger-panel">
+                <div class="panel-heading"><p class="eyebrow">Directory</p><h3>Configured users</h3></div>
+                <div id="headsList" class="record-list"></div>
               </section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-admin-panel="finance">
+            <header class="topbar"><div><p class="eyebrow">Finance</p><h2>Platform subscription payments</h2></div></header>
+            <section class="content-grid">
+              <section class="tool-panel" aria-labelledby="paymentTitle">
+                <div class="panel-heading"><p class="eyebrow">Record payment</p><h3 id="paymentTitle">Add household subscription payment</h3></div>
+                <form id="paymentForm" class="form-grid">
+                  <label class="full" for="paymentHead">User<select id="paymentHead" required></select></label>
+                  <label for="paymentAmount">Amount<input id="paymentAmount" type="number" min="0.01" step="0.01" required placeholder="49.00" /></label>
+                  <label for="paymentCurrency">Currency<select id="paymentCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+                  <label for="paymentMethod">Method<select id="paymentMethod"><option value="Cash">Cash</option><option value="EFT">EFT</option><option value="Card">Card</option><option value="Bank deposit">Bank deposit</option><option value="Other">Other</option></select></label>
+                  <label for="paymentDate">Payment date<input id="paymentDate" type="date" required /></label>
+                  <label for="paidUntil">Paid until<input id="paidUntil" type="date" /></label>
+                  <label class="full" for="paymentReference">Reference<input id="paymentReference" placeholder="Receipt or EFT ref" /></label>
+                  <label class="full" for="paymentNotes">Notes<input id="paymentNotes" placeholder="Cash received, bank confirmation, discount..." /></label>
+                  <button class="primary full" type="submit">Record platform payment</button>
+                </form>
+              </section>
+              <section class="ledger-panel">
+                <div class="panel-heading"><p class="eyebrow">History</p><h3>Subscription payments</h3></div>
+                <div id="paymentsList" class="record-list"></div>
+              </section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-admin-panel="support">
+            <header class="topbar"><div><p class="eyebrow">Support</p><h2>Admin notes and actions</h2></div></header>
+            <section class="content-grid">
+              <section class="tool-panel">
+                <div class="panel-heading"><p class="eyebrow">Note</p><h3>Add household support note</h3></div>
+                <form id="adminNoteForm" class="form-grid">
+                  <label class="full" for="adminNoteFamily">Household<select id="adminNoteFamily" required></select></label>
+                  <label class="full" for="adminNoteText">Note<textarea id="adminNoteText" required placeholder="Payment discussion, access request, reminder issue..."></textarea></label>
+                  <button class="primary full" type="submit">Save support note</button>
+                </form>
+              </section>
+              <section class="ledger-panel">
+                <div class="panel-heading"><p class="eyebrow">Timeline</p><h3>Support notes</h3></div>
+                <div id="adminNotesList" class="record-list"></div>
+              </section>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <section id="appView" class="hidden">
+        <div class="app-shell">
+          <header class="app-nav">
+            <div>
+              <p class="eyebrow">Family workspace</p>
+              <h1 id="householdTitle">Household</h1>
+              <span id="headBillingBadge" class="mini-badge">free</span>
             </div>
-          </div>
-        </section>
-
-        <section id="appView" class="hidden">
-          <div class="family-shell">
-            <aside class="family-sidebar">
-              <div>
-                <p class="eyebrow">Family workspace</p>
-                <h2 id="householdTitle">Household</h2>
-                <span id="headBillingBadge" class="mini-badge">billing</span>
-              </div>
-              <nav class="admin-nav" aria-label="Family pages">
-                <button class="admin-nav-button active" type="button" data-family-tab="dashboard">Dashboard</button>
-                <button class="admin-nav-button" type="button" data-family-tab="expenses">Expenses</button>
-                <button class="admin-nav-button" type="button" data-family-tab="members">Members</button>
-                <button class="admin-nav-button" type="button" data-family-tab="budget">Budget</button>
-                <button class="admin-nav-button" type="button" data-family-tab="reports">Reports</button>
-              </nav>
-              <div class="topbar-actions">
-                <button id="exportCsvButton" type="button">Export CSV</button>
-                <button id="signOutButton" type="button">Sign out</button>
-              </div>
-            </aside>
-
-            <div class="family-main">
-              <section class="family-panel" data-family-panel="dashboard">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Monthly command center</p>
-                    <h2 id="dashboardMonthTitle">This month</h2>
-                  </div>
-                  <div class="filters">
-                    <input id="monthFilter" type="month" />
-                    <select id="categoryFilter">
-                      <option value="All">All categories</option>
-                      <option value="Groceries">Groceries</option>
-                      <option value="Utilities">Utilities</option>
-                      <option value="Transport">Transport</option>
-                      <option value="School">School</option>
-                      <option value="Health">Health</option>
-                      <option value="Rent">Rent</option>
-                      <option value="Fun">Fun</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                </header>
-
-                <section class="stats-grid" aria-label="Monthly spending summary">
-                  <article class="stat-card meter-card">
-                    <span class="stat-label">Spent this month</span>
-                    <strong id="spentAmount">$0.00</strong>
-                    <div class="meter"><span id="budgetMeter"></span></div>
-                    <small id="budgetText">No budget set</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Safe to spend</span>
-                    <strong id="remainingAmount">$0.00</strong>
-                    <small id="remainingText">Budget balance</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Top category</span>
-                    <strong id="topCategory">None</strong>
-                    <small id="topCategoryText">Add expenses to see patterns</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Family members</span>
-                    <strong id="memberCount">0</strong>
-                    <small id="memberAccessText">Member access</small>
-                  </article>
-                </section>
-
-                <section class="content-grid">
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Member spending</p>
-                      <h3>Breakdown</h3>
-                    </div>
-                    <div id="memberBreakdownList" class="breakdown-list"></div>
-                  </section>
-
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Recent ledger</p>
-                      <h3>Latest expenses</h3>
-                    </div>
-                    <div id="recentExpensesList" class="expenses-list"></div>
-                  </section>
-                </section>
-              </section>
-
-              <section class="family-panel hidden" data-family-panel="expenses">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Expenses</p>
-                    <h2>Track household spending</h2>
-                  </div>
-                </header>
-
-                <section class="content-grid">
-                  <section class="tool-panel" aria-labelledby="expenseTitle">
-                    <div class="panel-heading inline">
-                      <div>
-                        <p class="eyebrow">Expense form</p>
-                        <h3 id="expenseTitle">Record spending</h3>
-                      </div>
-                      <button id="cancelEditExpenseButton" class="hidden" type="button">Cancel edit</button>
-                    </div>
-                    <form id="expenseForm" class="form-grid">
-                      <label>
-                        Amount
-                        <input id="expenseAmount" type="number" min="0.01" step="0.01" required placeholder="42.50" />
-                      </label>
-                      <label>
-                        Date
-                        <input id="expenseDate" type="date" required />
-                      </label>
-                      <label>
-                        Category
-                        <select id="expenseCategory" required>
-                          <option value="Groceries">Groceries</option>
-                          <option value="Utilities">Utilities</option>
-                          <option value="Transport">Transport</option>
-                          <option value="School">School</option>
-                          <option value="Health">Health</option>
-                          <option value="Rent">Rent</option>
-                          <option value="Fun">Fun</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </label>
-                      <label>
-                        For
-                        <select id="expenseMember"></select>
-                      </label>
-                      <label>
-                        Paid by
-                        <select id="expensePaidBy"></select>
-                      </label>
-                      <label>
-                        Payment method
-                        <select id="expensePayment">
-                          <option value="Card">Card</option>
-                          <option value="Cash">Cash</option>
-                          <option value="Bank transfer">Bank transfer</option>
-                          <option value="Mobile wallet">Mobile wallet</option>
-                        </select>
-                      </label>
-                      <label class="full">
-                        Note
-                        <input id="expenseNote" placeholder="Dinner, medicine, school books..." />
-                      </label>
-                      <button id="expenseSubmitButton" class="primary full" type="submit">Add expense</button>
-                    </form>
-                  </section>
-
-                  <section class="ledger-panel" aria-labelledby="ledgerTitle">
-                    <div class="panel-heading ledger-heading">
-                      <div>
-                        <p class="eyebrow">Ledger</p>
-                        <h3 id="ledgerTitle">Expenses</h3>
-                      </div>
-                    </div>
-                    <div id="expensesList" class="expenses-list"></div>
-                  </section>
-                </section>
-              </section>
-
-              <section class="family-panel hidden" data-family-panel="members">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Family</p>
-                    <h2>Members and limits</h2>
-                  </div>
-                </header>
-
-                <section class="content-grid">
-                  <section id="memberAccessNotice" class="notice hidden">
-                    <strong>Family-member access is locked.</strong>
-                    An admin needs to allow this account before you can add relatives. You can still track household-level expenses.
-                  </section>
-                  <section class="tool-panel" aria-labelledby="membersTitle">
-                    <div class="panel-heading inline">
-                      <div>
-                        <p class="eyebrow">Member profile</p>
-                        <h3 id="membersTitle">Add member</h3>
-                      </div>
-                    </div>
-                    <form id="memberForm" class="form-grid">
-                      <label>
-                        Name
-                        <input id="memberName" required placeholder="Avery" />
-                      </label>
-                      <label>
-                        Role
-                        <select id="memberRole">
-                          <option value="Adult">Adult</option>
-                          <option value="Child">Child</option>
-                          <option value="Teen">Teen</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </label>
-                      <label>
-                        Monthly allowance
-                        <input id="memberAllowance" type="number" min="0" step="0.01" placeholder="0" />
-                      </label>
-                      <label>
-                        Spending limit
-                        <input id="memberLimit" type="number" min="0" step="0.01" placeholder="0" />
-                      </label>
-                      <label>
-                        Color
-                        <input id="memberColor" type="color" value="#167D77" />
-                      </label>
-                      <button class="primary full" type="submit">Add member</button>
-                    </form>
-                  </section>
-
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Roster</p>
-                      <h3>Family members</h3>
-                    </div>
-                    <div id="membersList" class="members-list"></div>
-                  </section>
-                </section>
-              </section>
-
-              <section class="family-panel hidden" data-family-panel="budget">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Budgeting</p>
-                    <h2>Category limits</h2>
-                  </div>
-                </header>
-
-                <section class="content-grid">
-                  <section class="tool-panel" aria-labelledby="budgetTitle">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Monthly plan</p>
-                      <h3 id="budgetTitle">Set category budget</h3>
-                    </div>
-                    <form id="budgetForm" class="form-grid">
-                      <label>
-                        Category
-                        <select id="budgetCategory" required>
-                          <option value="Groceries">Groceries</option>
-                          <option value="Utilities">Utilities</option>
-                          <option value="Transport">Transport</option>
-                          <option value="School">School</option>
-                          <option value="Health">Health</option>
-                          <option value="Rent">Rent</option>
-                          <option value="Fun">Fun</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </label>
-                      <label>
-                        Monthly limit
-                        <input id="budgetLimit" type="number" min="0" step="0.01" required placeholder="500" />
-                      </label>
-                      <button class="primary full" type="submit">Save category budget</button>
-                    </form>
-                  </section>
-
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Progress</p>
-                      <h3>Budget usage</h3>
-                    </div>
-                    <div id="categoryBudgetList" class="breakdown-list"></div>
-                  </section>
-                </section>
-              </section>
-
-              <section class="family-panel hidden" data-family-panel="reports">
-                <header class="topbar">
-                  <div>
-                    <p class="eyebrow">Reports</p>
-                    <h2>Household insights</h2>
-                  </div>
-                </header>
-
-                <section class="stats-grid" aria-label="Reports summary">
-                  <article class="stat-card">
-                    <span class="stat-label">Average expense</span>
-                    <strong id="averageExpense">$0.00</strong>
-                    <small>For the selected month</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Expense count</span>
-                    <strong id="expenseCount">0</strong>
-                    <small>Transactions recorded</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Highest expense</span>
-                    <strong id="highestExpense">$0.00</strong>
-                    <small id="highestExpenseText">No expenses yet</small>
-                  </article>
-                  <article class="stat-card">
-                    <span class="stat-label">Budget health</span>
-                    <strong id="budgetHealth">0%</strong>
-                    <small id="budgetHealthText">Monthly usage</small>
-                  </article>
-                </section>
-
-                <section class="content-grid">
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Categories</p>
-                      <h3>Spending by category</h3>
-                    </div>
-                    <div id="categoryReportList" class="breakdown-list"></div>
-                  </section>
-
-                  <section class="ledger-panel">
-                    <div class="panel-heading">
-                      <p class="eyebrow">Members</p>
-                      <h3>Spending by person</h3>
-                    </div>
-                    <div id="memberReportList" class="breakdown-list"></div>
-                  </section>
-                </section>
-              </section>
+            <nav class="tabs" aria-label="Family sections">
+              <button class="tab-button active" type="button" data-family-tab="dashboard">Dashboard</button>
+              <button class="tab-button" type="button" data-family-tab="obligations">Obligations</button>
+              <button class="tab-button" type="button" data-family-tab="schedule">Schedule</button>
+              <button class="tab-button" type="button" data-family-tab="my">My payments</button>
+              <button class="tab-button" type="button" data-family-tab="members">Members</button>
+              <button class="tab-button" type="button" data-family-tab="reports">Reports</button>
+            </nav>
+            <div class="topbar-actions">
+              <button id="enableNotificationsButton" type="button">Enable reminders</button>
+              <button id="exportCsvButton" type="button">Export CSV</button>
+              <button id="signOutButton" type="button">Sign out</button>
             </div>
-          </div>
-        </section>
-      </main>
-    </div>
+          </header>
+
+          <section class="screen-panel" data-family-panel="dashboard">
+            <header class="topbar">
+              <div><p class="eyebrow">Command center</p><h2 id="dashboardMonthTitle">This month</h2></div>
+              <div class="filters">
+                <input id="monthFilter" type="month" />
+                <select id="statusFilter">
+                  <option value="all">All statuses</option>
+                  <option value="upcoming">Upcoming</option>
+                  <option value="due-soon">Due soon</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="partial">Partial</option>
+                  <option value="paid">Paid</option>
+                </select>
+              </div>
+            </header>
+            <section class="stats-grid" aria-label="Monthly payment summary">
+              <article class="stat-card meter-card"><span class="stat-label">Due this month</span><strong id="dueAmount">$0.00</strong><div class="meter"><span id="paidMeter"></span></div><small id="paidProgressText">No dues yet</small></article>
+              <article class="stat-card"><span class="stat-label">Outstanding</span><strong id="outstandingAmount">$0.00</strong><small id="outstandingText">Balance to collect</small></article>
+              <article class="stat-card"><span class="stat-label">Overdue</span><strong id="overdueCount">0</strong><small id="overdueText">Needs attention</small></article>
+              <article class="stat-card"><span class="stat-label">Assigned to me</span><strong id="myDueCount">0</strong><small>Current month obligations</small></article>
+            </section>
+            <section class="content-grid">
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Next up</p><h3>Due soon and overdue</h3></div><div id="priorityDueList" class="record-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Responsibility</p><h3>Member workload</h3></div><div id="memberResponsibilityList" class="breakdown-list"></div></section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="obligations">
+            <header class="topbar"><div><p class="eyebrow">Payment items</p><h2>Recurring obligations</h2></div></header>
+            <section class="content-grid">
+              <section class="tool-panel" aria-labelledby="obligationTitle">
+                <div class="panel-heading inline"><div><p class="eyebrow">Create</p><h3 id="obligationTitle">Add obligation</h3></div><button id="cancelEditObligationButton" class="hidden" type="button">Cancel edit</button></div>
+                <form id="obligationForm" class="form-grid">
+                  <label class="full" for="obligationName">Payment name<input id="obligationName" required placeholder="Rent, electricity, school fees..." /></label>
+                  <label for="obligationAmount">Amount due<input id="obligationAmount" type="number" min="0.01" step="0.01" required placeholder="1000" /></label>
+                  <label for="obligationCurrency">Currency<select id="obligationCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+                  <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
+                  <label for="obligationMember">Responsible member<select id="obligationMember"></select></label>
+                  <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option></select></label>
+                  <label for="recurrenceInterval">Every N months<input id="recurrenceInterval" type="number" min="1" max="24" value="1" /></label>
+                  <label for="dueDay">Due day<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
+                  <label for="startDate">Start date<input id="startDate" type="date" required /></label>
+                  <label for="reminderDays">Remind days before<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
+                  <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
+                  <button id="obligationSubmitButton" class="primary full" type="submit">Save obligation</button>
+                </form>
+              </section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Active list</p><h3>Recurring payment items</h3></div><div id="obligationsList" class="record-list"></div></section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="schedule">
+            <header class="topbar"><div><p class="eyebrow">Due schedule</p><h2>Monthly payment board</h2></div></header>
+            <div id="scheduleList" class="record-list"></div>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="my">
+            <header class="topbar"><div><p class="eyebrow">Responsibility</p><h2>My assigned payments</h2></div></header>
+            <div id="myPaymentsList" class="record-list"></div>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="members">
+            <header class="topbar"><div><p class="eyebrow">Family</p><h2>Members and reminder contacts</h2></div></header>
+            <section class="content-grid">
+              <section id="memberAccessNotice" class="notice hidden">
+                <strong>Family-member access is locked.</strong>
+                Admin unlock is required before adding relatives. You can still track household-level obligations.
+              </section>
+              <section class="tool-panel" aria-labelledby="membersTitle">
+                <div class="panel-heading"><p class="eyebrow">Member profile</p><h3 id="membersTitle">Add member</h3></div>
+                <form id="memberForm" class="form-grid">
+                  <label for="memberName">Name<input id="memberName" required placeholder="Avery" /></label>
+                  <label for="memberRole">Role<select id="memberRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
+                  <label for="memberEmail">Email<input id="memberEmail" type="email" placeholder="member@example.com" /></label>
+                  <label for="memberPhone">Phone<input id="memberPhone" type="tel" placeholder="+27..." /></label>
+                  <label for="memberColor">Color<input id="memberColor" type="color" value="#2563EB" /></label>
+                  <button class="primary full" type="submit">Add member</button>
+                </form>
+              </section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3></div><div id="membersList" class="record-list"></div></section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="reports">
+            <header class="topbar"><div><p class="eyebrow">Reports</p><h2>Payment reliability</h2></div></header>
+            <section class="stats-grid" aria-label="Reports summary">
+              <article class="stat-card"><span class="stat-label">Paid rate</span><strong id="paidRate">0%</strong><small>Selected month</small></article>
+              <article class="stat-card"><span class="stat-label">Partial payments</span><strong id="partialCount">0</strong><small>Need completion</small></article>
+              <article class="stat-card"><span class="stat-label">Active obligations</span><strong id="activeObligationCount">0</strong><small>Recurring items</small></article>
+              <article class="stat-card"><span class="stat-label">Year expected</span><strong id="yearExpected">$0.00</strong><small>Based on active items</small></article>
+            </section>
+            <section class="content-grid">
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due by category</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
+            </section>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <dialog id="recordPaymentDialog" class="payment-dialog">
+      <form id="recordPaymentForm" method="dialog" class="form-grid">
+        <div class="panel-heading full"><p class="eyebrow">Payment record</p><h3 id="recordPaymentTitle">Record payment</h3><p id="recordPaymentMeta" class="muted-copy"></p></div>
+        <input id="recordItemId" type="hidden" />
+        <input id="recordPeriodStart" type="hidden" />
+        <input id="recordDueDate" type="hidden" />
+        <label for="recordAmount">Amount paid<input id="recordAmount" type="number" min="0.01" step="0.01" required /></label>
+        <label for="recordPaidBy">Paid by<select id="recordPaidBy"></select></label>
+        <label for="recordPaymentDate">Payment date<input id="recordPaymentDate" type="date" required /></label>
+        <label for="recordMethod">Method<select id="recordMethod"><option value="Cash">Cash</option><option value="EFT">EFT</option><option value="Card">Card</option><option value="Bank deposit">Bank deposit</option><option value="Other">Other</option></select></label>
+        <label class="full" for="recordReference">Reference<input id="recordReference" placeholder="Receipt, EFT, account ref..." /></label>
+        <label class="full" for="recordNotes">Notes<input id="recordNotes" placeholder="Optional payment note" /></label>
+        <div class="button-row full">
+          <button class="primary" type="submit">Save payment</button>
+          <button type="button" data-close-payment-dialog>Cancel</button>
+        </div>
+      </form>
+    </dialog>
 
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
   </body>

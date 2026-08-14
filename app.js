@@ -20,31 +20,37 @@ const state = {
   headApproval: null,
   family: null,
   members: [],
-  expenses: [],
+  paymentItems: [],
+  paymentRecords: [],
   heads: [],
   adminFamilies: [],
+  adminMembers: [],
+  adminPaymentItems: [],
+  adminPaymentRecords: [],
   payments: [],
-  categoryBudgets: [],
+  adminNotes: [],
   adminTab: "dashboard",
   familyTab: "dashboard",
-  editingExpenseId: null,
+  editingObligationId: null,
   filterMonth: toMonthValue(new Date()),
-  filterCategory: "All"
+  filterStatus: "all"
 };
 
 const $ = (selector) => document.querySelector(selector);
 
 const views = {
+  loading: $("#loadingView"),
   configWarning: $("#configWarning"),
   auth: $("#authView"),
   signup: $("#signupView"),
   setup: $("#setupView"),
-  pending: $("#pendingView"),
   suspended: $("#suspendedView"),
   admin: $("#adminView"),
   app: $("#appView")
 };
 
+const adminTabs = new Set(["dashboard", "households", "users", "finance", "support"]);
+const familyTabs = new Set(["dashboard", "obligations", "schedule", "my", "members", "reports"]);
 const currencyNames = {
   USD: "en-US",
   ZAR: "en-ZA",
@@ -55,14 +61,14 @@ const currencyNames = {
 };
 
 const today = new Date();
-$("#expenseDate").value = toDateValue(today);
-$("#monthFilter").value = state.filterMonth;
 $("#paymentDate").value = toDateValue(today);
+$("#monthFilter").value = state.filterMonth;
+$("#startDate").value = toDateValue(today);
+$("#recordPaymentDate").value = toDateValue(today);
 registerServiceWorker();
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch((error) => {
       console.warn("Service worker registration failed", error);
@@ -83,6 +89,22 @@ function toMonthValue(date) {
   return `${year}-${month}`;
 }
 
+function parseDate(value) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function monthStart(monthValue) {
+  return `${monthValue}-01`;
+}
+
+function monthDiff(fromDate, toDate) {
+  return (toDate.getFullYear() - fromDate.getFullYear()) * 12 + toDate.getMonth() - fromDate.getMonth();
+}
+
+function lastDayOfMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
 function money(amount, currency = "USD") {
   return new Intl.NumberFormat(currencyNames[currency] || "en-US", {
     style: "currency",
@@ -100,7 +122,41 @@ function showToast(message) {
   const toast = $("#toast");
   toast.textContent = message;
   toast.classList.remove("hidden");
-  window.setTimeout(() => toast.classList.add("hidden"), 3400);
+  window.setTimeout(() => toast.classList.add("hidden"), 3600);
+}
+
+function routeFromHash() {
+  const route = window.location.hash.replace(/^#\/?/, "");
+  const [area, tab] = route.split("/");
+  return { area, tab };
+}
+
+function applyRouteFromHash() {
+  const { area, tab } = routeFromHash();
+  if (area === "admin" && adminTabs.has(tab)) state.adminTab = tab;
+  if (area === "family" && familyTabs.has(tab)) state.familyTab = tab;
+}
+
+function setRoute(area, tab, replace = false) {
+  const nextHash = `#${area}/${tab}`;
+  if (window.location.hash === nextHash) return;
+  if (replace) {
+    window.history.replaceState(null, "", nextHash);
+    return;
+  }
+  window.history.pushState(null, "", nextHash);
+}
+
+function syncRouteForWorkspace(area) {
+  applyRouteFromHash();
+  if (area === "admin") {
+    if (!adminTabs.has(state.adminTab)) state.adminTab = "dashboard";
+    setRoute("admin", state.adminTab, true);
+  }
+  if (area === "family") {
+    if (!familyTabs.has(state.familyTab)) state.familyTab = "dashboard";
+    setRoute("family", state.familyTab, true);
+  }
 }
 
 function assertSupabase() {
@@ -120,21 +176,26 @@ async function query(label, promise) {
 }
 
 async function init() {
+  setView("loading");
   if (!isConfigured) {
     setView("configWarning");
     return;
   }
 
+  applyRouteFromHash();
   const { data } = await supabase.auth.getSession();
   state.session = data.session;
 
-  supabase.auth.onAuthStateChange(async (_event, session) => {
+  supabase.auth.onAuthStateChange(async (event, session) => {
+    if (event === "INITIAL_SESSION") return;
     state.session = session;
     if (session) {
+      setView("loading");
       await loadApp();
       return;
     }
     resetState();
+    window.history.replaceState(null, "", window.location.pathname + window.location.search);
     setView("auth");
   });
 
@@ -151,14 +212,18 @@ function resetState() {
   state.headApproval = null;
   state.family = null;
   state.members = [];
-  state.expenses = [];
+  state.paymentItems = [];
+  state.paymentRecords = [];
   state.heads = [];
   state.adminFamilies = [];
+  state.adminMembers = [];
+  state.adminPaymentItems = [];
+  state.adminPaymentRecords = [];
   state.payments = [];
-  state.categoryBudgets = [];
+  state.adminNotes = [];
   state.adminTab = "dashboard";
   state.familyTab = "dashboard";
-  state.editingExpenseId = null;
+  state.editingObligationId = null;
 }
 
 async function loadApp() {
@@ -168,6 +233,7 @@ async function loadApp() {
 
   if (state.isAdmin) {
     await loadAdminData();
+    syncRouteForWorkspace("admin");
     setView("admin");
     renderAdmin();
     return;
@@ -179,15 +245,15 @@ async function loadApp() {
   }
 
   await loadFamily();
-
   if (!state.family) {
     setView("setup");
     return;
   }
 
-  await Promise.all([loadMembers(), loadExpenses(), loadCategoryBudgets()]);
+  await loadFamilyData();
+  syncRouteForWorkspace("family");
   setView("app");
-  render();
+  renderFamilyApp();
 }
 
 async function ensureProfile() {
@@ -199,13 +265,7 @@ async function ensureProfile() {
 
   await query(
     "profile upsert",
-    supabase.from("profiles").upsert(
-      {
-        id: user.id,
-        full_name: fullName
-      },
-      { onConflict: "id" }
-    )
+    supabase.from("profiles").upsert({ id: user.id, full_name: fullName }, { onConflict: "id" })
   );
 
   state.profile = await query(
@@ -216,7 +276,6 @@ async function ensureProfile() {
 
 async function loadAccess() {
   const userEmail = state.session.user.email?.toLowerCase();
-
   const adminRows = await query(
     "admin access load",
     supabase.from("app_admins").select("*").eq("user_id", state.session.user.id).limit(1)
@@ -238,25 +297,8 @@ async function loadFamily() {
   state.family = families[0] || null;
 }
 
-async function loadAdminData() {
-  state.heads = await query(
-    "heads load",
-    supabase.from("family_heads").select("*").order("created_at", { ascending: false })
-  );
-
-  state.adminFamilies = await query(
-    "admin families load",
-    supabase.from("families").select("*").order("created_at", { ascending: false })
-  );
-
-  state.payments = await query(
-    "payments load",
-    supabase
-      .from("payments")
-      .select("*, family_heads(full_name, email, billing_status, status)")
-      .order("payment_date", { ascending: false })
-      .order("created_at", { ascending: false })
-  );
+async function loadFamilyData() {
+  await Promise.all([loadMembers(), loadPaymentItems(), loadPaymentRecords()]);
 }
 
 async function loadMembers() {
@@ -270,50 +312,461 @@ async function loadMembers() {
   );
 }
 
-async function loadExpenses() {
-  state.expenses = await query(
-    "expenses load",
+async function loadPaymentItems() {
+  state.paymentItems = await query(
+    "payment items load",
     supabase
-      .from("expenses")
-      .select("*, target_member:family_members!expenses_member_id_fkey(name, role, avatar_color), payer_member:family_members!expenses_paid_by_member_id_fkey(name, role, avatar_color)")
+      .from("payment_items")
+      .select("*")
       .eq("family_id", state.family.id)
-      .order("expense_date", { ascending: false })
       .order("created_at", { ascending: false })
   );
 }
 
-async function loadCategoryBudgets() {
-  state.categoryBudgets = await query(
-    "category budgets load",
+async function loadPaymentRecords() {
+  state.paymentRecords = await query(
+    "payment records load",
     supabase
-      .from("category_budgets")
+      .from("payment_records")
       .select("*")
       .eq("family_id", state.family.id)
-      .order("category", { ascending: true })
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false })
   );
 }
 
-function render() {
+async function loadAdminData() {
+  state.heads = await query(
+    "heads load",
+    supabase.from("family_heads").select("*").order("created_at", { ascending: false })
+  );
+  state.adminFamilies = await query(
+    "admin families load",
+    supabase.from("families").select("*").order("created_at", { ascending: false })
+  );
+  state.adminMembers = await query(
+    "admin members load",
+    supabase.from("family_members").select("*").order("created_at", { ascending: true })
+  );
+  state.adminPaymentItems = await query(
+    "admin payment items load",
+    supabase.from("payment_items").select("*").order("created_at", { ascending: false })
+  );
+  state.adminPaymentRecords = await query(
+    "admin payment records load",
+    supabase.from("payment_records").select("*").order("payment_date", { ascending: false })
+  );
+  state.payments = await query(
+    "payments load",
+    supabase
+      .from("payments")
+      .select("*, family_heads(full_name, email, billing_status, status)")
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false })
+  );
+  state.adminNotes = await query(
+    "admin notes load",
+    supabase.from("admin_support_notes").select("*").order("created_at", { ascending: false })
+  );
+}
+
+function renderFamilyApp() {
   renderFamilyTabs();
-  renderFamily();
-  renderMembers();
-  renderExpenses();
-  renderStats();
-  renderMemberBreakdown();
-  renderRecentExpenses();
-  renderCategoryBudgets();
-  renderReports();
+  renderFamilyHeader();
   renderMemberAccess();
+  renderMemberOptions();
+  renderDashboard();
+  renderObligations();
+  renderSchedule();
+  renderMyPayments();
+  renderMembers();
+  renderReports();
 }
 
 function renderFamilyTabs() {
   document.querySelectorAll("[data-family-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.familyTab === state.familyTab);
   });
-
   document.querySelectorAll("[data-family-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.familyPanel !== state.familyTab);
   });
+}
+
+function renderFamilyHeader() {
+  $("#householdTitle").textContent = state.family.name;
+  const billing = state.headApproval?.billing_status || "free";
+  $("#headBillingBadge").textContent = billing;
+  $("#headBillingBadge").className = `mini-badge ${badgeClass(billing)}`;
+  $("#dashboardMonthTitle").textContent = parseDate(monthStart(state.filterMonth)).toLocaleString("en", {
+    month: "long",
+    year: "numeric"
+  });
+}
+
+function canAddMembers() {
+  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+}
+
+function renderMemberAccess() {
+  const allowed = canAddMembers();
+  $("#memberAccessNotice").classList.toggle("hidden", allowed);
+  $("#memberForm").querySelectorAll("input, select, button").forEach((field) => {
+    field.disabled = !allowed;
+  });
+}
+
+function renderMemberOptions() {
+  const obligationMember = $("#obligationMember");
+  const recordPaidBy = $("#recordPaidBy");
+  obligationMember.innerHTML = `<option value="">Household account</option>`;
+  recordPaidBy.innerHTML = `<option value="">Household account</option>`;
+
+  activeMembers().forEach((member) => {
+    const option = document.createElement("option");
+    option.value = member.id;
+    option.textContent = `${member.name} (${member.role})`;
+    obligationMember.append(option);
+
+    const payer = document.createElement("option");
+    payer.value = member.id;
+    payer.textContent = `${member.name} (${member.role})`;
+    recordPaidBy.append(payer);
+  });
+}
+
+function activeMembers() {
+  return state.members.filter((member) => member.status !== "inactive");
+}
+
+function selectedOccurrences(items = state.paymentItems, records = state.paymentRecords) {
+  return generateOccurrences(items, records, state.filterMonth).filter((occurrence) => {
+    return state.filterStatus === "all" || occurrence.status === state.filterStatus;
+  });
+}
+
+function generateOccurrences(items, records, monthValue) {
+  const targetDate = parseDate(monthStart(monthValue));
+  return items
+    .filter((item) => item.status !== "inactive" && isItemDueInMonth(item, targetDate))
+    .map((item) => occurrenceForItem(item, records, targetDate))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+function isItemDueInMonth(item, targetDate) {
+  const start = parseDate(item.start_date);
+  const diff = monthDiff(start, targetDate);
+  if (diff < 0) return false;
+  if (item.recurrence_type === "once") return diff === 0;
+  if (item.recurrence_type === "yearly") return diff % 12 === 0;
+  if (item.recurrence_type === "quarterly") return diff % 3 === 0;
+  const interval = item.recurrence_type === "custom" ? Number(item.recurrence_interval || 1) : 1;
+  return diff % Math.max(interval, 1) === 0;
+}
+
+function occurrenceForItem(item, records, targetDate) {
+  const year = targetDate.getFullYear();
+  const monthIndex = targetDate.getMonth();
+  const day = Math.min(Number(item.due_day || 1), lastDayOfMonth(year, monthIndex));
+  const dueDate = toDateValue(new Date(year, monthIndex, day));
+  const periodStart = toDateValue(new Date(year, monthIndex, 1));
+  const paid = records
+    .filter((record) => record.payment_item_id === item.id && record.period_start === periodStart)
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+  const amount = Number(item.amount || 0);
+  const outstanding = Math.max(amount - paid, 0);
+  const status = occurrenceStatus(item, dueDate, paid, amount);
+  return {
+    key: `${item.id}:${periodStart}`,
+    item,
+    dueDate,
+    periodStart,
+    amount,
+    paid,
+    outstanding,
+    status
+  };
+}
+
+function occurrenceStatus(item, dueDate, paid, amount) {
+  if (paid >= amount) return "paid";
+  if (paid > 0) return "partial";
+  const todayDate = parseDate(toDateValue(new Date()));
+  const due = parseDate(dueDate);
+  const days = Math.ceil((due - todayDate) / 86400000);
+  if (days < 0) return "overdue";
+  if (days <= Number(item.reminder_days_before || 3)) return "due-soon";
+  return "upcoming";
+}
+
+function renderDashboard() {
+  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
+  const due = occurrences.reduce((sum, item) => sum + item.amount, 0);
+  const paid = occurrences.reduce((sum, item) => sum + item.paid, 0);
+  const outstanding = occurrences.reduce((sum, item) => sum + item.outstanding, 0);
+  const overdue = occurrences.filter((item) => item.status === "overdue");
+  const myDue = myOccurrences(occurrences).filter((item) => item.status !== "paid");
+  const currency = state.family.currency || "USD";
+  const percentage = due > 0 ? Math.min((paid / due) * 100, 100) : 0;
+
+  $("#dueAmount").textContent = money(due, currency);
+  $("#outstandingAmount").textContent = money(outstanding, currency);
+  $("#outstandingText").textContent = outstanding > 0 ? "Still outstanding" : "All clear";
+  $("#overdueCount").textContent = overdue.length;
+  $("#overdueText").textContent = overdue.length ? "Needs follow-up" : "No overdue dues";
+  $("#myDueCount").textContent = myDue.length;
+  $("#paidMeter").style.width = `${percentage}%`;
+  $("#paidProgressText").textContent = due > 0 ? `${Math.round(percentage)}% paid this month` : "No dues yet";
+
+  renderPriorityDueList(occurrences);
+  renderMemberResponsibility(occurrences);
+}
+
+function renderPriorityDueList(occurrences) {
+  const list = $("#priorityDueList");
+  const priority = occurrences
+    .filter((item) => ["overdue", "due-soon", "partial"].includes(item.status))
+    .slice(0, 8);
+  if (!priority.length) {
+    list.innerHTML = emptyState("Nothing urgent", "Upcoming recurring payments will appear here before they are due.");
+    return;
+  }
+  list.innerHTML = "";
+  priority.forEach((occurrence) => list.append(renderOccurrenceCard(occurrence, true)));
+}
+
+function renderMemberResponsibility(occurrences) {
+  const list = $("#memberResponsibilityList");
+  const rows = activeMembers().map((member) => {
+    const assigned = occurrences.filter((occurrence) => occurrence.item.responsible_member_id === member.id);
+    return {
+      member,
+      total: assigned.reduce((sum, item) => sum + item.amount, 0),
+      outstanding: assigned.reduce((sum, item) => sum + item.outstanding, 0),
+      count: assigned.length
+    };
+  }).filter((row) => row.count > 0);
+
+  if (!rows.length) {
+    list.innerHTML = emptyState("No assigned dues", "Assign members to recurring obligations to see responsibility totals.");
+    return;
+  }
+
+  const maxTotal = Math.max(...rows.map((row) => row.total), 1);
+  list.innerHTML = "";
+  rows.forEach((row) => {
+    const percent = Math.min((row.total / maxTotal) * 100, 100);
+    const item = document.createElement("article");
+    item.className = "breakdown-item";
+    item.innerHTML = `
+      <div class="avatar" style="background:${escapeHtml(row.member.avatar_color || "#2563EB")}">${memberInitials(row.member.name)}</div>
+      <div>
+        <strong>${escapeHtml(row.member.name)}</strong>
+        <span>${row.count} due items &middot; ${money(row.outstanding, state.family.currency)} outstanding</span>
+        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
+function renderObligations() {
+  const list = $("#obligationsList");
+  if (!state.paymentItems.length) {
+    list.innerHTML = emptyState("No recurring obligations", "Add rent, utilities, school fees, subscriptions, or family contributions.");
+    return;
+  }
+  list.innerHTML = "";
+  state.paymentItems.forEach((item) => list.append(renderObligationCard(item)));
+}
+
+function renderObligationCard(item) {
+  const member = memberById(item.responsible_member_id);
+  const article = document.createElement("article");
+  article.className = "record-card";
+  article.innerHTML = `
+    <div class="record-main">
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${escapeHtml(item.category)} &middot; ${recurrenceLabel(item)} &middot; Due day ${item.due_day}</span>
+      <div class="badge-row">
+        ${statusBadge(item.status || "active")}
+        <span class="mini-badge">${escapeHtml(member?.name || "Household account")}</span>
+        <span class="mini-badge">Remind ${item.reminder_days_before || 0} days before</span>
+      </div>
+    </div>
+    <div class="record-side">
+      <strong>${money(item.amount, item.currency)}</strong>
+      <div class="row-actions">
+        <button type="button" data-edit-obligation="${item.id}">Edit</button>
+        <button type="button" data-toggle-obligation="${item.id}" data-next-status="${item.status === "inactive" ? "active" : "inactive"}">
+          ${item.status === "inactive" ? "Reactivate" : "Pause"}
+        </button>
+        <button type="button" data-delete-obligation="${item.id}">Delete</button>
+      </div>
+    </div>
+  `;
+  return article;
+}
+
+function renderSchedule() {
+  const list = $("#scheduleList");
+  const occurrences = selectedOccurrences();
+  if (!occurrences.length) {
+    list.innerHTML = emptyState("No dues for this view", "Change the month or status filter, or add a recurring obligation.");
+    return;
+  }
+  list.innerHTML = "";
+  occurrences.forEach((occurrence) => list.append(renderOccurrenceCard(occurrence, true)));
+}
+
+function renderMyPayments() {
+  const list = $("#myPaymentsList");
+  const occurrences = myOccurrences(selectedOccurrences());
+  if (!occurrences.length) {
+    list.innerHTML = emptyState("No payments assigned to you", "Your assigned obligations appear here when your member email matches your login email.");
+    return;
+  }
+  list.innerHTML = "";
+  occurrences.forEach((occurrence) => list.append(renderOccurrenceCard(occurrence, true)));
+}
+
+function myOccurrences(occurrences) {
+  const email = state.session.user.email?.toLowerCase();
+  const matchingMember = state.members.find((member) => member.email?.toLowerCase() === email);
+  if (!matchingMember) return [];
+  return occurrences.filter((occurrence) => occurrence.item.responsible_member_id === matchingMember.id);
+}
+
+function renderOccurrenceCard(occurrence, withAction = false) {
+  const member = memberById(occurrence.item.responsible_member_id);
+  const article = document.createElement("article");
+  article.className = "record-card";
+  article.innerHTML = `
+    <div class="date-chip">
+      <strong>${parseDate(occurrence.dueDate).getDate()}</strong>
+      <span>${parseDate(occurrence.dueDate).toLocaleString("en", { month: "short" })}</span>
+    </div>
+    <div class="record-main">
+      <strong>${escapeHtml(occurrence.item.name)}</strong>
+      <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
+      <div class="badge-row">
+        ${statusBadge(occurrence.status)}
+        <span class="mini-badge">${money(occurrence.paid, occurrence.item.currency)} paid</span>
+      </div>
+    </div>
+    <div class="record-side">
+      <strong>${money(occurrence.amount, occurrence.item.currency)}</strong>
+      ${withAction && occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Record payment</button>` : ""}
+    </div>
+  `;
+  return article;
+}
+
+function renderMembers() {
+  const list = $("#membersList");
+  if (!state.members.length) {
+    list.innerHTML = emptyState("No family members yet", "Add members with email or phone details so reminders can target the right person.");
+    return;
+  }
+  list.innerHTML = "";
+  state.members.forEach((member) => {
+    const assignedCount = state.paymentItems.filter((item) => item.responsible_member_id === member.id).length;
+    const item = document.createElement("article");
+    item.className = "record-card";
+    item.innerHTML = `
+      <div class="avatar" style="background:${escapeHtml(member.avatar_color || "#2563EB")}">${memberInitials(member.name)}</div>
+      <div class="record-main">
+        <strong>${escapeHtml(member.name)}</strong>
+        <span>${escapeHtml(member.role)} &middot; ${escapeHtml(member.email || "No email")} &middot; ${escapeHtml(member.phone || "No phone")}</span>
+        <div class="badge-row">${statusBadge(member.status || "active")}<span class="mini-badge">${assignedCount} assigned</span></div>
+      </div>
+      <div class="record-side">
+        ${canAddMembers() ? `<div class="row-actions"><button type="button" data-toggle-member="${member.id}" data-next-status="${member.status === "active" ? "inactive" : "active"}">${member.status === "active" ? "Mark inactive" : "Reactivate"}</button><button type="button" data-delete-member="${member.id}">Delete</button></div>` : ""}
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
+function renderReports() {
+  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
+  const paid = occurrences.filter((item) => item.status === "paid").length;
+  const partial = occurrences.filter((item) => item.status === "partial").length;
+  const paidRate = occurrences.length ? Math.round((paid / occurrences.length) * 100) : 0;
+  $("#paidRate").textContent = `${paidRate}%`;
+  $("#partialCount").textContent = partial;
+  $("#activeObligationCount").textContent = state.paymentItems.filter((item) => item.status !== "inactive").length;
+  $("#yearExpected").textContent = formatCurrencyTotals(estimateYearTotals(state.paymentItems));
+  renderCategoryReport(occurrences);
+  renderPaymentRecordList();
+}
+
+function estimateYearTotals(items) {
+  return items.filter((item) => item.status !== "inactive").reduce((rows, item) => {
+    let multiplier = 12;
+    if (item.recurrence_type === "once") multiplier = 1;
+    if (item.recurrence_type === "quarterly") multiplier = 4;
+    if (item.recurrence_type === "yearly") multiplier = 1;
+    if (item.recurrence_type === "custom") multiplier = Math.ceil(12 / Math.max(Number(item.recurrence_interval || 1), 1));
+    rows.push({ currency: item.currency, amount: Number(item.amount || 0) * multiplier });
+    return rows;
+  }, []);
+}
+
+function renderCategoryReport(occurrences) {
+  const list = $("#categoryReportList");
+  const rows = Object.values(occurrences.reduce((acc, occurrence) => {
+    const key = occurrence.item.category;
+    acc[key] ||= { name: key, amount: 0, outstanding: 0, currency: occurrence.item.currency };
+    acc[key].amount += occurrence.amount;
+    acc[key].outstanding += occurrence.outstanding;
+    return acc;
+  }, {}));
+  if (!rows.length) {
+    list.innerHTML = emptyState("No category data", "Reports update when monthly obligations exist.");
+    return;
+  }
+  const max = Math.max(...rows.map((row) => row.amount), 1);
+  list.innerHTML = "";
+  rows.forEach((row) => {
+    const item = document.createElement("article");
+    item.className = "breakdown-item";
+    item.innerHTML = `
+      <div class="category-chip">${escapeHtml(row.name.slice(0, 2).toUpperCase())}</div>
+      <div>
+        <strong>${escapeHtml(row.name)}</strong>
+        <span>${money(row.amount, row.currency)} due &middot; ${money(row.outstanding, row.currency)} outstanding</span>
+        <div class="meter small-meter"><span style="width:${Math.min((row.amount / max) * 100, 100)}%"></span></div>
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
+function renderPaymentRecordList() {
+  const list = $("#paymentRecordsList");
+  if (!state.paymentRecords.length) {
+    list.innerHTML = emptyState("No payment records", "Partial and full payments will appear here after they are saved.");
+    return;
+  }
+  list.innerHTML = "";
+  state.paymentRecords.slice(0, 20).forEach((record) => list.append(renderFamilyPaymentRecord(record)));
+}
+
+function renderFamilyPaymentRecord(record) {
+  const item = state.paymentItems.find((paymentItem) => paymentItem.id === record.payment_item_id);
+  const member = memberById(record.paid_by_member_id);
+  const article = document.createElement("article");
+  article.className = "record-card";
+  article.innerHTML = `
+    <div class="date-chip"><strong>${parseDate(record.payment_date).getDate()}</strong><span>${parseDate(record.payment_date).toLocaleString("en", { month: "short" })}</span></div>
+    <div class="record-main">
+      <strong>${escapeHtml(item?.name || "Payment")}</strong>
+      <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(record.payment_method || "Method not set")} &middot; ${escapeHtml(record.reference_number || "No reference")}</span>
+      ${record.notes ? `<small>${escapeHtml(record.notes)}</small>` : ""}
+    </div>
+    <div class="record-side"><strong>${money(record.amount, item?.currency || state.family.currency)}</strong><button type="button" data-delete-record="${record.id}">Delete</button></div>
+  `;
+  return article;
 }
 
 function renderAdmin() {
@@ -321,145 +774,138 @@ function renderAdmin() {
   renderAdminSummary();
   renderHeads();
   renderPaymentHeadOptions();
-  renderPayments();
+  renderPlatformPayments();
   renderAdminFamilies();
+  renderAdminNoteOptions();
+  renderAdminNotes();
 }
 
 function renderAdminTabs() {
   document.querySelectorAll("[data-admin-tab]").forEach((button) => {
     button.classList.toggle("active", button.dataset.adminTab === state.adminTab);
   });
-
   document.querySelectorAll("[data-admin-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminPanel !== state.adminTab);
   });
 }
 
 function renderAdminSummary() {
-  const activeHeads = state.heads.filter((head) => head.status === "active");
-  const suspendedHeads = state.heads.filter((head) => head.status === "suspended");
-  const unpaidHeads = state.heads.filter((head) => head.billing_status !== "paid");
-
-  $("#adminActiveHeadCount").textContent = activeHeads.length;
-  $("#adminSuspendedText").textContent = `${suspendedHeads.length} suspended`;
-  $("#adminFamilyCount").textContent = state.adminFamilies.length;
+  const occurrences = generateOccurrences(state.adminPaymentItems, state.adminPaymentRecords, state.filterMonth);
   $("#adminEmail").textContent = state.session.user.email || "-";
+  $("#adminFamilyCount").textContent = state.adminFamilies.length;
+  $("#adminOverdueCount").textContent = occurrences.filter((item) => item.status === "overdue").length;
+  $("#adminDueTotal").textContent = formatOccurrenceCurrencyTotals(occurrences);
   $("#adminRevenueTotal").textContent = formatCurrencyTotals(state.payments);
   $("#adminPaymentCount").textContent = `${state.payments.length} payments`;
-  $("#adminUnpaidHeadCount").textContent = unpaidHeads.length;
-
-  const recentList = $("#recentPaymentsList");
-  const recentPayments = state.payments.slice(0, 5);
-  if (!recentPayments.length) {
-    recentList.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No payments recorded</strong>
-        <span>Use the Finance page to manually add the first payment.</span>
-      </div>
-    `;
-    return;
-  }
-
-  recentList.innerHTML = "";
-  recentPayments.forEach((payment) => recentList.append(renderPaymentRecord(payment)));
+  renderAdminAttention(occurrences);
+  renderRecentPlatformPayments();
 }
 
-function renderHeads() {
-  const headsList = $("#headsList");
-  if (!state.heads.length) {
-    headsList.innerHTML = `<p class="empty">No heads approved yet.</p>`;
-  } else {
-    headsList.innerHTML = "";
-    state.heads.forEach((head) => {
-      const item = document.createElement("article");
-      item.className = "member-item head-item";
-      item.innerHTML = `
-        <div>
-          <strong>${escapeHtml(head.full_name)}</strong>
-          <span>${escapeHtml(head.email)} &middot; ${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>
-          <div class="badge-row">
-            ${statusBadge(head.status)}
-            ${statusBadge(head.billing_status)}
-            ${statusBadge(head.can_add_members ? "members unlocked" : "free")}
-            <span class="mini-badge">Paid until ${head.paid_until || "not set"}</span>
-          </div>
-        </div>
-        <div class="row-actions">
-          <button type="button" data-toggle-member-access="${head.id}" data-next-member-access="${head.can_add_members ? "false" : "true"}">
-            ${head.can_add_members ? "Lock members" : "Unlock members"}
-          </button>
-          <button type="button" data-toggle-head="${head.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">
-            ${head.status === "active" ? "Suspend" : "Reactivate"}
-          </button>
-          <button type="button" data-delete-head="${head.id}" aria-label="Revoke ${escapeHtml(head.full_name)}">Revoke</button>
-        </div>
-      `;
-      headsList.append(item);
-    });
+function renderAdminAttention(occurrences) {
+  const list = $("#adminAttentionList");
+  const rows = state.adminFamilies.map((family) => {
+    const familyOccurrences = occurrences.filter((occurrence) => occurrence.item.family_id === family.id);
+    return {
+      family,
+      overdue: familyOccurrences.filter((occurrence) => occurrence.status === "overdue").length,
+      partial: familyOccurrences.filter((occurrence) => occurrence.status === "partial").length,
+      outstanding: familyOccurrences.reduce((sum, occurrence) => sum + occurrence.outstanding, 0)
+    };
+  }).filter((row) => row.overdue || row.partial);
+
+  if (!rows.length) {
+    list.innerHTML = emptyState("No urgent household issues", "Overdue and partially paid dues will appear here.");
+    return;
   }
+  list.innerHTML = "";
+  rows.forEach((row) => {
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `
+      <div class="record-main"><strong>${escapeHtml(row.family.name)}</strong><span>${escapeHtml(row.family.owner_email || "No owner email")} &middot; ${row.overdue} overdue &middot; ${row.partial} partial</span></div>
+      <div class="record-side"><strong>${money(row.outstanding, row.family.currency)}</strong><button type="button" data-admin-open-family="${row.family.id}">Open</button></div>
+    `;
+    list.append(article);
+  });
 }
 
 function renderAdminFamilies() {
-  const familiesList = $("#adminFamiliesList");
-  if (!state.adminFamilies.length) {
-    familiesList.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No households yet</strong>
-        <span>New signups will appear here after they create a household.</span>
-      </div>
-    `;
+  const list = $("#adminFamiliesList");
+  const search = ($("#adminHouseholdSearch").value || "").toLowerCase();
+  const families = state.adminFamilies.filter((family) =>
+    `${family.name} ${family.owner_email || ""}`.toLowerCase().includes(search)
+  );
+  if (!families.length) {
+    list.innerHTML = emptyState("No households found", "New users appear here after creating a household.");
     return;
   }
-
-  familiesList.innerHTML = "";
-  state.adminFamilies.forEach((family) => {
-    const item = document.createElement("article");
-    item.className = "expense-item admin-family-item";
-    const matchingHead = findHeadForFamily(family);
-    const accessText = matchingHead?.can_add_members ? "members unlocked" : "member access locked";
-    const ownerEmail = family.owner_email || "Owner email not stored";
-    const createdDate = new Date(family.created_at).toLocaleDateString();
-    const statusText = matchingHead?.status || "free signup";
-    const billingText = matchingHead?.billing_status || "payment not set";
-    item.innerHTML = `
-      <div class="expense-date">
-        <strong>${family.currency}</strong>
-        <span>Budget</span>
-      </div>
-      <div class="expense-detail">
+  list.innerHTML = "";
+  families.forEach((family) => {
+    const head = findHeadForFamily(family);
+    const itemCount = state.adminPaymentItems.filter((item) => item.family_id === family.id && item.status !== "inactive").length;
+    const memberCount = state.adminMembers.filter((member) => member.family_id === family.id).length;
+    const occurrences = generateOccurrences(
+      state.adminPaymentItems.filter((item) => item.family_id === family.id),
+      state.adminPaymentRecords.filter((record) => record.family_id === family.id),
+      state.filterMonth
+    );
+    const overdue = occurrences.filter((item) => item.status === "overdue").length;
+    const article = document.createElement("article");
+    article.className = "record-card admin-household-card";
+    article.innerHTML = `
+      <div class="record-main">
         <strong>${escapeHtml(family.name)}</strong>
-        <span>${escapeHtml(ownerEmail)} &middot; Created ${createdDate}</span>
-          <div class="badge-row">
-            ${statusBadge(accessText)}
-            ${statusBadge(statusText)}
-            ${statusBadge(billingText)}
-          ${matchingHead?.paid_until ? `<span class="mini-badge">Paid until ${matchingHead.paid_until}</span>` : ""}
+        <span>${escapeHtml(family.owner_email || "Owner email not stored")} &middot; ${memberCount} members &middot; ${itemCount} obligations</span>
+        <div class="badge-row">
+          ${statusBadge(head?.can_add_members ? "members unlocked" : "member access locked")}
+          ${statusBadge(head?.status || "free signup")}
+          ${statusBadge(head?.billing_status || "payment not set")}
+          ${overdue ? statusBadge(`${overdue} overdue`) : '<span class="mini-badge active">clear</span>'}
         </div>
       </div>
-      <div class="expense-actions">
-        <strong>${money(family.monthly_budget, family.currency)}</strong>
+      <div class="record-side">
+        <strong>${formatOccurrenceCurrencyTotals(occurrences)}</strong>
         <div class="row-actions">
-          <button type="button" data-toggle-family-member-access="${family.id}" data-next-member-access="${matchingHead?.can_add_members ? "false" : "true"}">
-            ${matchingHead?.can_add_members ? "Lock members" : "Unlock members"}
-          </button>
-          ${
-            matchingHead
-              ? `<button type="button" data-toggle-family-status="${family.id}" data-next-status="${matchingHead.status === "active" ? "suspended" : "active"}">
-                  ${matchingHead.status === "active" ? "Suspend" : "Reactivate"}
-                </button>`
-              : ""
-          }
+          <button type="button" data-toggle-family-member-access="${family.id}" data-next-member-access="${head?.can_add_members ? "false" : "true"}">${head?.can_add_members ? "Lock members" : "Unlock members"}</button>
+          ${head ? `<button type="button" data-toggle-family-status="${family.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">${head.status === "active" ? "Suspend" : "Reactivate"}</button>` : ""}
         </div>
       </div>
     `;
-    familiesList.append(item);
+    list.append(article);
+  });
+}
+
+function renderHeads() {
+  const list = $("#headsList");
+  if (!state.heads.length) {
+    list.innerHTML = emptyState("No configured users", "Household owners can be configured manually or from the Households page.");
+    return;
+  }
+  list.innerHTML = "";
+  state.heads.forEach((head) => {
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `
+      <div class="record-main">
+        <strong>${escapeHtml(head.full_name)}</strong>
+        <span>${escapeHtml(head.email)} &middot; ${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>
+        <div class="badge-row">${statusBadge(head.status)}${statusBadge(head.billing_status)}${statusBadge(head.can_add_members ? "members unlocked" : "free")}</div>
+      </div>
+      <div class="record-side">
+        <div class="row-actions">
+          <button type="button" data-toggle-member-access="${head.id}" data-next-member-access="${head.can_add_members ? "false" : "true"}">${head.can_add_members ? "Lock members" : "Unlock members"}</button>
+          <button type="button" data-toggle-head="${head.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">${head.status === "active" ? "Suspend" : "Reactivate"}</button>
+          <button type="button" data-delete-head="${head.id}">Revoke</button>
+        </div>
+      </div>
+    `;
+    list.append(article);
   });
 }
 
 function renderPaymentHeadOptions() {
   const select = $("#paymentHead");
-  select.innerHTML = `<option value="">Choose head</option>`;
-
+  select.innerHTML = `<option value="">Choose user</option>`;
   state.heads.forEach((head) => {
     const option = document.createElement("option");
     option.value = head.id;
@@ -470,444 +916,70 @@ function renderPaymentHeadOptions() {
   });
 }
 
-function renderPayments() {
+function renderRecentPlatformPayments() {
+  const list = $("#recentPaymentsList");
+  const recent = state.payments.slice(0, 5);
+  if (!recent.length) {
+    list.innerHTML = emptyState("No platform payments", "Record subscription payments in Finance.");
+    return;
+  }
+  list.innerHTML = "";
+  recent.forEach((payment) => list.append(renderPlatformPayment(payment)));
+}
+
+function renderPlatformPayments() {
   const list = $("#paymentsList");
   if (!state.payments.length) {
-    list.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No payment history</strong>
-        <span>Record manual payments as cash, EFT, card, bank deposit, or other.</span>
-      </div>
-    `;
+    list.innerHTML = emptyState("No payment history", "Record manual platform payments as cash, EFT, card, bank deposit, or other.");
     return;
   }
-
   list.innerHTML = "";
-  state.payments.forEach((payment) => list.append(renderPaymentRecord(payment, true)));
+  state.payments.forEach((payment) => list.append(renderPlatformPayment(payment, true)));
 }
 
-function renderPaymentRecord(payment, withActions = false) {
-  const headName = payment.family_heads?.full_name || "Unknown head";
-  const headEmail = payment.family_heads?.email || "";
-  const item = document.createElement("article");
-  item.className = "expense-item payment-item";
-  item.innerHTML = `
-    <div class="expense-date">
-      <strong>${new Date(`${payment.payment_date}T00:00:00`).getDate()}</strong>
-      <span>${new Date(`${payment.payment_date}T00:00:00`).toLocaleString("en", { month: "short" })}</span>
-    </div>
-    <div class="expense-detail">
-      <strong>${escapeHtml(headName)}</strong>
-      <span>${escapeHtml(headEmail)} &middot; ${escapeHtml(payment.payment_method)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span>
-      ${payment.notes ? `<small>${escapeHtml(payment.notes)}</small>` : ""}
-    </div>
-    <div class="expense-actions">
-      <strong>${money(payment.amount, payment.currency)}</strong>
-      ${withActions ? `<button type="button" data-delete-payment="${payment.id}">Delete</button>` : ""}
-    </div>
+function renderPlatformPayment(payment, withActions = false) {
+  const article = document.createElement("article");
+  article.className = "record-card";
+  article.innerHTML = `
+    <div class="date-chip"><strong>${parseDate(payment.payment_date).getDate()}</strong><span>${parseDate(payment.payment_date).toLocaleString("en", { month: "short" })}</span></div>
+    <div class="record-main"><strong>${escapeHtml(payment.family_heads?.full_name || "Unknown user")}</strong><span>${escapeHtml(payment.family_heads?.email || "")} &middot; ${escapeHtml(payment.payment_method)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span></div>
+    <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong>${withActions ? `<button type="button" data-delete-payment="${payment.id}">Delete</button>` : ""}</div>
   `;
-  return item;
+  return article;
 }
 
-function statusBadge(status) {
-  const badgeClass = `${status}`.toLowerCase().replaceAll(" ", "-");
-  return `<span class="mini-badge ${badgeClass}">${escapeHtml(status)}</span>`;
-}
-
-function formatCurrencyTotals(payments) {
-  if (!payments.length) return money(0, "USD");
-  const totals = payments.reduce((acc, payment) => {
-    acc[payment.currency] = (acc[payment.currency] || 0) + Number(payment.amount);
-    return acc;
-  }, {});
-  return Object.entries(totals)
-    .map(([currency, amount]) => money(amount, currency))
-    .join(" / ");
-}
-
-function renderFamily() {
-  $("#householdTitle").textContent = state.family.name;
-  $("#headBillingBadge").textContent = state.headApproval?.billing_status || "free";
-  $("#headBillingBadge").className = `mini-badge ${state.headApproval?.billing_status || "free"}`;
-}
-
-function canAddMembers() {
-  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
-}
-
-function renderMemberAccess() {
-  const allowed = canAddMembers();
-  $("#memberAccessText").textContent = allowed ? "Adding members unlocked" : "Free plan: household only";
-  $("#memberAccessNotice").classList.toggle("hidden", allowed);
-  $("#memberForm").querySelectorAll("input, select, button").forEach((field) => {
-    field.disabled = !allowed;
-  });
-}
-
-function renderMembers() {
-  const memberSelect = $("#expenseMember");
-  const payerSelect = $("#expensePaidBy");
-  memberSelect.innerHTML = `<option value="">Whole family</option>`;
-  payerSelect.innerHTML = `<option value="">Household account</option>`;
-
-  state.members.filter((member) => member.status !== "inactive").forEach((member) => {
+function renderAdminNoteOptions() {
+  const select = $("#adminNoteFamily");
+  select.innerHTML = `<option value="">Choose household</option>`;
+  state.adminFamilies.forEach((family) => {
     const option = document.createElement("option");
-    option.value = member.id;
-    option.textContent = `${member.name} (${member.role})`;
-    memberSelect.append(option);
-
-    const payerOption = document.createElement("option");
-    payerOption.value = member.id;
-    payerOption.textContent = `${member.name} (${member.role})`;
-    payerSelect.append(payerOption);
+    option.value = family.id;
+    option.textContent = `${family.name} - ${family.owner_email || "No email"}`;
+    select.append(option);
   });
+}
 
-  const list = $("#membersList");
-  if (!state.members.length) {
-    list.innerHTML = `<p class="empty">No family members yet.</p>`;
+function renderAdminNotes() {
+  const list = $("#adminNotesList");
+  if (!state.adminNotes.length) {
+    list.innerHTML = emptyState("No support notes", "Notes about access, payments, or reminder issues will appear here.");
     return;
   }
-
   list.innerHTML = "";
-  state.members.forEach((member) => {
-    const monthTotal = memberMonthTotal(member.id);
-    const limit = Number(member.spending_limit || 0);
-    const limitPercent = limit > 0 ? Math.min((monthTotal / limit) * 100, 100) : 0;
-    const actions = canAddMembers()
-      ? `
-        <div class="row-actions">
-          <button type="button" data-toggle-member="${member.id}" data-next-status="${member.status === "active" ? "inactive" : "active"}">
-            ${member.status === "active" ? "Mark inactive" : "Reactivate"}
-          </button>
-          <button type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.name)}">Delete</button>
-        </div>
-      `
-      : "";
-    const item = document.createElement("article");
-    item.className = "member-item member-card";
-    item.innerHTML = `
-      <div class="avatar" style="background:${escapeHtml(member.avatar_color || "#167D77")}">${memberInitials(member.name)}</div>
-      <div>
-        <strong>${escapeHtml(member.name)}</strong>
-        <span>${escapeHtml(member.role)} &middot; ${money(member.monthly_allowance, state.family.currency)} allowance &middot; ${money(limit, state.family.currency)} limit</span>
-        <div class="badge-row">${statusBadge(member.status || "active")}</div>
-        <div class="meter small-meter"><span style="width:${limitPercent}%"></span></div>
-        <small>${money(monthTotal, state.family.currency)} spent this month</small>
-      </div>
-      ${actions}
+  state.adminNotes.forEach((note) => {
+    const family = state.adminFamilies.find((item) => item.id === note.family_id);
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `
+      <div class="record-main"><strong>${escapeHtml(family?.name || "Household")}</strong><span>${new Date(note.created_at).toLocaleString()}</span><small>${escapeHtml(note.note)}</small></div>
+      <div class="record-side"><button type="button" data-delete-admin-note="${note.id}">Delete</button></div>
     `;
-    list.append(item);
+    list.append(article);
   });
 }
 
-function renderMemberBreakdown() {
-  const list = $("#memberBreakdownList");
-  const rows = [
-    {
-      id: "",
-      name: "Whole family",
-      role: "Shared",
-      avatar_color: "#2859B8",
-      spending_limit: Number(state.family.monthly_budget || 0),
-      total: sharedMonthTotal()
-    },
-    ...state.members.map((member) => ({
-      ...member,
-      total: memberMonthTotal(member.id)
-    }))
-  ].filter((row) => row.total > 0 || row.id);
-
-  if (!rows.length) {
-    list.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No spending yet</strong>
-        <span>Add expenses to see family member patterns.</span>
-      </div>
-    `;
-    return;
-  }
-
-  const maxTotal = Math.max(...rows.map((row) => row.total), 1);
-  list.innerHTML = "";
-  rows.forEach((row) => {
-    const limit = Number(row.spending_limit || 0);
-    const percent = Math.min((row.total / maxTotal) * 100, 100);
-    const limitText = limit > 0 ? `${money(row.total, state.family.currency)} of ${money(limit, state.family.currency)}` : money(row.total, state.family.currency);
-    const item = document.createElement("article");
-    item.className = "breakdown-item";
-    item.innerHTML = `
-      <div class="avatar" style="background:${escapeHtml(row.avatar_color || "#167D77")}">${memberInitials(row.name)}</div>
-      <div>
-        <strong>${escapeHtml(row.name)}</strong>
-        <span>${escapeHtml(row.role || "Member")} &middot; ${limitText}</span>
-        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
-      </div>
-    `;
-    list.append(item);
-  });
-}
-
-function renderRecentExpenses() {
-  const list = $("#recentExpensesList");
-  const recent = state.expenses.slice(0, 5);
-  if (!recent.length) {
-    list.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No recent expenses</strong>
-        <span>The latest household spending will appear here.</span>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = "";
-  recent.forEach((expense) => list.append(renderExpenseItem(expense, false)));
-}
-
-function renderCategoryBudgets() {
-  const list = $("#categoryBudgetList");
-  const categories = ["Groceries", "Utilities", "Transport", "School", "Health", "Rent", "Fun", "Other"];
-  const rows = categories.map((category) => {
-    const budget = state.categoryBudgets.find((item) => item.category === category);
-    const spent = categoryMonthTotal(category);
-    return {
-      category,
-      limit: Number(budget?.monthly_limit || 0),
-      spent,
-      id: budget?.id
-    };
-  }).filter((row) => row.limit > 0 || row.spent > 0);
-
-  if (!rows.length) {
-    list.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No category budgets yet</strong>
-        <span>Set monthly limits for groceries, rent, school, transport, and more.</span>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = "";
-  rows.forEach((row) => {
-    const percent = row.limit > 0 ? Math.min((row.spent / row.limit) * 100, 100) : 0;
-    const item = document.createElement("article");
-    item.className = "breakdown-item";
-    item.innerHTML = `
-      <div class="category-chip">${escapeHtml(row.category.slice(0, 2).toUpperCase())}</div>
-      <div>
-        <strong>${escapeHtml(row.category)}</strong>
-        <span>${money(row.spent, state.family.currency)} of ${row.limit > 0 ? money(row.limit, state.family.currency) : "no limit"}</span>
-        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
-      </div>
-      ${row.id ? `<button type="button" data-delete-budget="${row.id}">Delete</button>` : ""}
-    `;
-    list.append(item);
-  });
-}
-
-function renderReports() {
-  const expenses = monthExpenses();
-  const spent = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
-  const average = expenses.length ? spent / expenses.length : 0;
-  const highest = [...expenses].sort((a, b) => Number(b.amount) - Number(a.amount))[0];
-  const budget = Number(state.family.monthly_budget || 0);
-  const budgetPercent = budget > 0 ? Math.round((spent / budget) * 100) : 0;
-
-  $("#averageExpense").textContent = money(average, state.family.currency);
-  $("#expenseCount").textContent = expenses.length;
-  $("#highestExpense").textContent = money(highest?.amount || 0, state.family.currency);
-  $("#highestExpenseText").textContent = highest ? `${highest.category} on ${highest.expense_date}` : "No expenses yet";
-  $("#budgetHealth").textContent = budget > 0 ? `${budgetPercent}%` : "0%";
-  $("#budgetHealthText").textContent = budget > 0 ? `${money(spent, state.family.currency)} of ${money(budget, state.family.currency)}` : "No monthly budget";
-
-  renderCategoryReport();
-  renderMemberReport();
-}
-
-function renderCategoryReport() {
-  const list = $("#categoryReportList");
-  const totals = monthExpenses().reduce((acc, expense) => {
-    acc[expense.category] = (acc[expense.category] || 0) + Number(expense.amount);
-    return acc;
-  }, {});
-  renderReportRows(list, Object.entries(totals).map(([name, total]) => ({ name, total })), "No category spending yet");
-}
-
-function renderMemberReport() {
-  const list = $("#memberReportList");
-  const rows = [
-    { name: "Whole family", total: sharedMonthTotal() },
-    ...state.members.map((member) => ({ name: member.name, total: memberMonthTotal(member.id) }))
-  ].filter((row) => row.total > 0);
-  renderReportRows(list, rows, "No member spending yet");
-}
-
-function renderReportRows(list, rows, emptyText) {
-  if (!rows.length) {
-    list.innerHTML = `
-      <div class="empty-ledger">
-        <strong>${emptyText}</strong>
-        <span>Reports update as expenses are recorded.</span>
-      </div>
-    `;
-    return;
-  }
-
-  const maxTotal = Math.max(...rows.map((row) => row.total), 1);
-  list.innerHTML = "";
-  rows.sort((a, b) => b.total - a.total).forEach((row) => {
-    const percent = Math.min((row.total / maxTotal) * 100, 100);
-    const item = document.createElement("article");
-    item.className = "breakdown-item";
-    item.innerHTML = `
-      <div class="category-chip">${escapeHtml(row.name.slice(0, 2).toUpperCase())}</div>
-      <div>
-        <strong>${escapeHtml(row.name)}</strong>
-        <span>${money(row.total, state.family.currency)}</span>
-        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
-      </div>
-    `;
-    list.append(item);
-  });
-}
-
-function monthExpenses() {
-  return state.expenses.filter((expense) => expense.expense_date.startsWith(state.filterMonth));
-}
-
-function memberMonthTotal(memberId) {
-  return monthExpenses()
-    .filter((expense) => expense.member_id === memberId)
-    .reduce((sum, expense) => sum + Number(expense.amount), 0);
-}
-
-function sharedMonthTotal() {
-  return monthExpenses()
-    .filter((expense) => !expense.member_id)
-    .reduce((sum, expense) => sum + Number(expense.amount), 0);
-}
-
-function categoryMonthTotal(category) {
-  return monthExpenses()
-    .filter((expense) => expense.category === category)
-    .reduce((sum, expense) => sum + Number(expense.amount), 0);
-}
-
-function memberInitials(name) {
-  return `${name || "?"}`
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
-function filteredExpenses() {
-  return state.expenses.filter((expense) => {
-    const monthMatch = expense.expense_date.startsWith(state.filterMonth);
-    const categoryMatch =
-      state.filterCategory === "All" || expense.category === state.filterCategory;
-    return monthMatch && categoryMatch;
-  });
-}
-
-function renderExpenses() {
-  const list = $("#expensesList");
-  const expenses = filteredExpenses();
-
-  if (!expenses.length) {
-    list.innerHTML = `
-      <div class="empty-ledger">
-        <strong>No expenses found</strong>
-        <span>Add an expense or change the filters.</span>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = "";
-  expenses.forEach((expense) => {
-    list.append(renderExpenseItem(expense, true));
-  });
-}
-
-function renderExpenseItem(expense, withActions = true) {
-  const memberName = expense.target_member?.name || "Whole family";
-  const payerName = expense.payer_member?.name || "Household account";
-  const item = document.createElement("article");
-  item.className = "expense-item";
-  item.innerHTML = `
-    <div class="expense-date">
-      <strong>${new Date(`${expense.expense_date}T00:00:00`).getDate()}</strong>
-      <span>${new Date(`${expense.expense_date}T00:00:00`).toLocaleString("en", { month: "short" })}</span>
-    </div>
-    <div class="expense-detail">
-      <strong>${escapeHtml(expense.category)}</strong>
-      <span>For ${escapeHtml(memberName)} &middot; Paid by ${escapeHtml(payerName)} &middot; ${escapeHtml(expense.payment_method || "Method not set")}</span>
-      ${expense.note ? `<small>${escapeHtml(expense.note)}</small>` : ""}
-    </div>
-    <div class="expense-actions">
-      <strong>${money(expense.amount, state.family.currency)}</strong>
-      ${withActions ? `<div class="row-actions"><button type="button" data-edit-expense="${expense.id}">Edit</button><button type="button" data-delete-expense="${expense.id}" aria-label="Delete expense">Delete</button></div>` : ""}
-    </div>
-  `;
-  return item;
-}
-
-function renderStats() {
-  const currentMonthExpenses = monthExpenses();
-  const spent = currentMonthExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
-  const budget = Number(state.family.monthly_budget || 0);
-  const remaining = budget - spent;
-  const percentage = budget > 0 ? Math.min((spent / budget) * 100, 100) : 0;
-  const monthDate = new Date(`${state.filterMonth}-01T00:00:00`);
-
-  $("#dashboardMonthTitle").textContent = monthDate.toLocaleString("en", {
-    month: "long",
-    year: "numeric"
-  });
-  $("#spentAmount").textContent = money(spent, state.family.currency);
-  $("#remainingAmount").textContent = money(remaining, state.family.currency);
-  $("#remainingText").textContent = remaining >= 0 ? "Still available" : "Over budget";
-  $("#budgetMeter").style.width = `${percentage}%`;
-  $("#budgetText").textContent =
-    budget > 0
-      ? `${Math.round(percentage)}% of ${money(budget, state.family.currency)} used`
-      : "No monthly budget set";
-
-  const byCategory = currentMonthExpenses.reduce((acc, expense) => {
-    acc[expense.category] = (acc[expense.category] || 0) + Number(expense.amount);
-    return acc;
-  }, {});
-  const top = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0];
-  $("#topCategory").textContent = top ? top[0] : "None";
-  $("#topCategoryText").textContent = top
-    ? `${money(top[1], state.family.currency)} this month`
-    : "Add expenses to see patterns";
-  $("#memberCount").textContent = state.members.length;
-}
-
-function escapeHtml(value) {
-  return `${value ?? ""}`.replace(/[&<>"']/g, (char) => {
-    const entities = {
-      "&": "&amp;",
-      "<": "&lt;",
-      ">": "&gt;",
-      '"': "&quot;",
-      "'": "&#039;"
-    };
-    return entities[char];
-  });
-}
-
-async function handleAuthSubmit(event) {
+async function signIn(event) {
   event.preventDefault();
-  await signIn();
-}
-
-async function signIn() {
   assertSupabase();
   const email = $("#email").value.trim();
   const password = $("#password").value;
@@ -915,39 +987,33 @@ async function signIn() {
     showToast("Enter an email and password.");
     return;
   }
-
   try {
+    setView("loading");
     await query("sign in", supabase.auth.signInWithPassword({ email, password }));
     showToast("Signed in.");
   } catch (error) {
+    setView("auth");
     showToast(error.message);
   }
 }
 
-async function signUp() {
+async function signUp(event) {
+  event.preventDefault();
   assertSupabase();
   const fullName = $("#signupName").value.trim();
   const email = $("#signupEmail").value.trim();
   const password = $("#signupPassword").value;
   const confirmPassword = $("#signupPasswordConfirm").value;
-  if (!email || !password) {
-    showToast("Enter an email and password.");
+  if (!fullName || !email || !password) {
+    showToast("Enter your name, email, and password.");
     return;
   }
   if (password !== confirmPassword) {
     showToast("Passwords do not match.");
     return;
   }
-
   try {
-    await query(
-      "sign up",
-      supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: fullName } }
-      })
-    );
+    await query("sign up", supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } }));
     await supabase.auth.signOut();
     $("#signupForm").reset();
     setView("auth");
@@ -960,12 +1026,9 @@ async function signUp() {
 async function createFamily(event) {
   event.preventDefault();
   assertSupabase();
-
   const user = state.session.user;
   const name = $("#familyName").value.trim();
-  const monthlyBudget = Number($("#familyBudget").value || 0);
-  const currency = $("#familyCurrency").value;
-
+  if (!name) return;
   try {
     const family = await query(
       "family create",
@@ -975,13 +1038,12 @@ async function createFamily(event) {
           owner_id: user.id,
           owner_email: user.email?.toLowerCase(),
           name,
-          monthly_budget: monthlyBudget,
-          currency
+          monthly_budget: Number($("#familyBudget").value || 0),
+          currency: $("#familyCurrency").value
         })
         .select()
         .single()
     );
-
     state.family = family;
     await query(
       "owner member create",
@@ -990,11 +1052,11 @@ async function createFamily(event) {
         user_id: user.id,
         created_by: user.id,
         name: state.profile?.full_name || user.email,
+        email: user.email?.toLowerCase(),
         role: "Owner",
-        monthly_allowance: 0
+        avatar_color: "#2563EB"
       })
     );
-
     await loadApp();
     showToast("Household created.");
   } catch (error) {
@@ -1002,22 +1064,95 @@ async function createFamily(event) {
   }
 }
 
+async function saveObligation(event) {
+  event.preventDefault();
+  assertSupabase();
+  const amount = Number($("#obligationAmount").value);
+  if (!amount || amount <= 0) {
+    showToast("Enter an amount due above zero.");
+    return;
+  }
+  const payload = {
+    family_id: state.family.id,
+    name: $("#obligationName").value.trim(),
+    category: $("#obligationCategory").value,
+    amount,
+    currency: $("#obligationCurrency").value,
+    responsible_member_id: $("#obligationMember").value || null,
+    recurrence_type: $("#recurrenceType").value,
+    recurrence_interval: Number($("#recurrenceInterval").value || 1),
+    due_day: Number($("#dueDay").value || 1),
+    start_date: $("#startDate").value,
+    reminder_days_before: Number($("#reminderDays").value || 0),
+    notes: $("#obligationNotes").value.trim() || null,
+    status: "active",
+    created_by: state.session.user.id
+  };
+  if (!payload.name) {
+    showToast("Enter a payment name.");
+    return;
+  }
+  try {
+    if (state.editingObligationId) {
+      await query("payment item update", supabase.from("payment_items").update(payload).eq("id", state.editingObligationId));
+      showToast("Obligation updated.");
+    } else {
+      await query("payment item create", supabase.from("payment_items").insert(payload));
+      showToast("Obligation saved.");
+    }
+    resetObligationForm();
+    await loadFamilyData();
+    renderFamilyApp();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function startEditObligation(itemId) {
+  const item = state.paymentItems.find((paymentItem) => paymentItem.id === itemId);
+  if (!item) return;
+  state.editingObligationId = item.id;
+  state.familyTab = "obligations";
+  setRoute("family", "obligations");
+  renderFamilyTabs();
+  $("#obligationTitle").textContent = "Edit obligation";
+  $("#obligationSubmitButton").textContent = "Save changes";
+  $("#cancelEditObligationButton").classList.remove("hidden");
+  $("#obligationName").value = item.name;
+  $("#obligationAmount").value = item.amount;
+  $("#obligationCurrency").value = item.currency;
+  $("#obligationCategory").value = item.category;
+  $("#obligationMember").value = item.responsible_member_id || "";
+  $("#recurrenceType").value = item.recurrence_type;
+  $("#recurrenceInterval").value = item.recurrence_interval || 1;
+  $("#dueDay").value = item.due_day || 1;
+  $("#startDate").value = item.start_date;
+  $("#reminderDays").value = item.reminder_days_before || 0;
+  $("#obligationNotes").value = item.notes || "";
+}
+
+function resetObligationForm() {
+  state.editingObligationId = null;
+  $("#obligationForm").reset();
+  $("#startDate").value = toDateValue(new Date());
+  $("#recurrenceInterval").value = 1;
+  $("#dueDay").value = 1;
+  $("#reminderDays").value = 3;
+  $("#obligationCurrency").value = state.family?.currency || "USD";
+  $("#obligationTitle").textContent = "Add obligation";
+  $("#obligationSubmitButton").textContent = "Save obligation";
+  $("#cancelEditObligationButton").classList.add("hidden");
+}
+
 async function addMember(event) {
   event.preventDefault();
   assertSupabase();
-
   if (!canAddMembers()) {
     showToast("Admin approval is required before adding family members.");
     return;
   }
-
   const name = $("#memberName").value.trim();
-  const role = $("#memberRole").value;
-  const allowance = Number($("#memberAllowance").value || 0);
-  const spendingLimit = Number($("#memberLimit").value || 0);
-  const avatarColor = $("#memberColor").value;
   if (!name) return;
-
   try {
     await query(
       "member create",
@@ -1025,74 +1160,68 @@ async function addMember(event) {
         family_id: state.family.id,
         created_by: state.session.user.id,
         name,
-        role,
-        monthly_allowance: allowance,
-        spending_limit: spendingLimit,
-        avatar_color: avatarColor,
+        role: $("#memberRole").value,
+        email: $("#memberEmail").value.trim().toLowerCase() || null,
+        phone: $("#memberPhone").value.trim() || null,
+        avatar_color: $("#memberColor").value,
         status: "active"
       })
     );
     $("#memberForm").reset();
-    $("#memberColor").value = "#167D77";
-    await loadMembers();
-    render();
+    $("#memberColor").value = "#2563EB";
+    await loadFamilyData();
+    renderFamilyApp();
     showToast("Member added.");
   } catch (error) {
     showToast(error.message);
   }
 }
 
-async function saveCategoryBudget(event) {
-  event.preventDefault();
-  assertSupabase();
-
-  const category = $("#budgetCategory").value;
-  const monthlyLimit = Number($("#budgetLimit").value || 0);
-  if (monthlyLimit < 0) {
-    showToast("Budget limit cannot be negative.");
-    return;
-  }
-
-  const existing = state.categoryBudgets.find((budget) => budget.category === category);
-  const payload = {
-    family_id: state.family.id,
-    category,
-    monthly_limit: monthlyLimit,
-    created_by: state.session.user.id,
-    updated_at: new Date().toISOString()
-  };
-
-  try {
-    if (existing) {
-      await query(
-        "category budget update",
-        supabase.from("category_budgets").update(payload).eq("id", existing.id)
-      );
-    } else {
-      await query(
-        "category budget create",
-        supabase.from("category_budgets").insert(payload)
-      );
-    }
-
-    $("#budgetForm").reset();
-    await loadCategoryBudgets();
-    render();
-    showToast("Category budget saved.");
-  } catch (error) {
-    showToast(error.message);
-  }
+function openRecordPayment(key) {
+  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
+  const occurrence = occurrences.find((item) => item.key === key);
+  if (!occurrence) return;
+  $("#recordItemId").value = occurrence.item.id;
+  $("#recordPeriodStart").value = occurrence.periodStart;
+  $("#recordDueDate").value = occurrence.dueDate;
+  $("#recordPaymentTitle").textContent = `Record ${occurrence.item.name}`;
+  $("#recordPaymentMeta").textContent = `${money(occurrence.outstanding, occurrence.item.currency)} outstanding, due ${occurrence.dueDate}`;
+  $("#recordAmount").value = occurrence.outstanding.toFixed(2);
+  $("#recordPaidBy").value = occurrence.item.responsible_member_id || "";
+  $("#recordPaymentDate").value = toDateValue(new Date());
+  $("#recordPaymentDialog").showModal();
 }
 
-async function updateMemberStatus(memberId, nextStatus) {
+async function savePaymentRecord(event) {
+  event.preventDefault();
+  const item = state.paymentItems.find((paymentItem) => paymentItem.id === $("#recordItemId").value);
+  const amount = Number($("#recordAmount").value || 0);
+  if (!item || amount <= 0) {
+    showToast("Choose a payment and enter an amount.");
+    return;
+  }
   try {
     await query(
-      "member status update",
-      supabase.from("family_members").update({ status: nextStatus }).eq("id", memberId)
+      "payment record create",
+      supabase.from("payment_records").insert({
+        family_id: state.family.id,
+        payment_item_id: item.id,
+        period_start: $("#recordPeriodStart").value,
+        due_date: $("#recordDueDate").value,
+        paid_by_member_id: $("#recordPaidBy").value || null,
+        amount,
+        payment_date: $("#recordPaymentDate").value,
+        payment_method: $("#recordMethod").value,
+        reference_number: $("#recordReference").value.trim() || null,
+        notes: $("#recordNotes").value.trim() || null,
+        recorded_by: state.session.user.id
+      })
     );
-    await loadMembers();
-    render();
-    showToast(nextStatus === "active" ? "Member reactivated." : "Member marked inactive.");
+    $("#recordPaymentDialog").close();
+    $("#recordPaymentForm").reset();
+    await loadPaymentRecords();
+    renderFamilyApp();
+    showToast("Payment recorded.");
   } catch (error) {
     showToast(error.message);
   }
@@ -1100,44 +1229,25 @@ async function updateMemberStatus(memberId, nextStatus) {
 
 async function addHead(event) {
   event.preventDefault();
-  assertSupabase();
-
-  const fullName = $("#headName").value.trim();
   const email = $("#headEmail").value.trim().toLowerCase();
-  const monthlyFee = Number($("#headMonthlyFee").value || 0);
-  const feeCurrency = $("#headFeeCurrency").value;
-  const billingStatus = $("#headBillingStatus").value;
-  const canAddMembersValue = $("#headCanAddMembers").checked;
-  if (!fullName || !email) return;
-
+  const payload = {
+    full_name: $("#headName").value.trim(),
+    email,
+    created_by: state.session.user.id,
+    monthly_fee: Number($("#headMonthlyFee").value || 0),
+    fee_currency: $("#headFeeCurrency").value,
+    billing_status: $("#headBillingStatus").value,
+    can_add_members: $("#headCanAddMembers").checked,
+    status: "active"
+  };
+  if (!payload.full_name || !email) return;
   try {
-    const existingRows = await query(
-      "head duplicate check",
-      supabase.from("family_heads").select("id").ilike("email", email).limit(1)
-    );
-    const payload = {
-        full_name: fullName,
-        email,
-        created_by: state.session.user.id,
-        monthly_fee: monthlyFee,
-        fee_currency: feeCurrency,
-        billing_status: billingStatus,
-        can_add_members: canAddMembersValue,
-        status: "active"
-    };
-
+    const existingRows = await query("head duplicate check", supabase.from("family_heads").select("id").ilike("email", email).limit(1));
     if (existingRows[0]) {
-      await query(
-        "head update",
-        supabase.from("family_heads").update(payload).eq("id", existingRows[0].id)
-      );
+      await query("head update", supabase.from("family_heads").update(payload).eq("id", existingRows[0].id));
     } else {
-      await query(
-        "head create",
-        supabase.from("family_heads").insert(payload)
-      );
+      await query("head create", supabase.from("family_heads").insert(payload));
     }
-
     $("#headForm").reset();
     await loadAdminData();
     renderAdmin();
@@ -1147,12 +1257,66 @@ async function addHead(event) {
   }
 }
 
-async function updateHeadStatus(headId, nextStatus) {
+async function addPlatformPayment(event) {
+  event.preventDefault();
+  const head = state.heads.find((item) => item.id === $("#paymentHead").value);
+  const amount = Number($("#paymentAmount").value);
+  if (!head || amount <= 0) {
+    showToast("Choose a user and enter a payment amount.");
+    return;
+  }
+  const matchingFamily = findFamilyForHead(head);
   try {
     await query(
-      "head status update",
-      supabase.from("family_heads").update({ status: nextStatus }).eq("id", headId)
+      "platform payment create",
+      supabase.from("payments").insert({
+        family_head_id: head.id,
+        family_id: matchingFamily?.id || null,
+        recorded_by: state.session.user.id,
+        amount,
+        currency: $("#paymentCurrency").value,
+        payment_method: $("#paymentMethod").value,
+        payment_date: $("#paymentDate").value,
+        reference_number: $("#paymentReference").value.trim() || null,
+        notes: $("#paymentNotes").value.trim() || null
+      })
     );
+    const headUpdate = { billing_status: "paid", last_payment_at: new Date().toISOString() };
+    if ($("#paidUntil").value) headUpdate.paid_until = $("#paidUntil").value;
+    await query("head billing update", supabase.from("family_heads").update(headUpdate).eq("id", head.id));
+    $("#paymentForm").reset();
+    $("#paymentDate").value = toDateValue(new Date());
+    await loadAdminData();
+    renderAdmin();
+    showToast("Platform payment recorded.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function saveAdminNote(event) {
+  event.preventDefault();
+  try {
+    await query(
+      "admin note create",
+      supabase.from("admin_support_notes").insert({
+        family_id: $("#adminNoteFamily").value,
+        note: $("#adminNoteText").value.trim(),
+        created_by: state.session.user.id
+      })
+    );
+    $("#adminNoteForm").reset();
+    await loadAdminData();
+    renderAdmin();
+    showToast("Support note saved.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function updateHeadStatus(headId, nextStatus) {
+  try {
+    await query("head status update", supabase.from("family_heads").update({ status: nextStatus }).eq("id", headId));
     await loadAdminData();
     renderAdmin();
     showToast(nextStatus === "active" ? "User reactivated." : "User suspended.");
@@ -1163,10 +1327,7 @@ async function updateHeadStatus(headId, nextStatus) {
 
 async function updateHeadMemberAccess(headId, nextValue) {
   try {
-    await query(
-      "head member access update",
-      supabase.from("family_heads").update({ can_add_members: nextValue === "true" }).eq("id", headId)
-    );
+    await query("member access update", supabase.from("family_heads").update({ can_add_members: nextValue === "true" }).eq("id", headId));
     await loadAdminData();
     renderAdmin();
     showToast(nextValue === "true" ? "Family-member access unlocked." : "Family-member access locked.");
@@ -1181,21 +1342,11 @@ async function updateFamilyMemberAccess(familyId, nextValue) {
     showToast("This household does not have an owner email saved.");
     return;
   }
-
   const allowMembers = nextValue === "true";
   const existingHead = findHeadForFamily(family);
-
   try {
     if (existingHead) {
-      await query(
-        "household member access update",
-        supabase
-          .from("family_heads")
-          .update({
-            can_add_members: allowMembers
-          })
-          .eq("id", existingHead.id)
-      );
+      await query("household member access update", supabase.from("family_heads").update({ can_add_members: allowMembers }).eq("id", existingHead.id));
     } else if (allowMembers) {
       await query(
         "household member access create",
@@ -1211,7 +1362,6 @@ async function updateFamilyMemberAccess(familyId, nextValue) {
         })
       );
     }
-
     await loadAdminData();
     renderAdmin();
     showToast(allowMembers ? "Family-member access unlocked." : "Family-member access locked.");
@@ -1227,340 +1377,245 @@ async function updateFamilyStatus(familyId, nextStatus) {
     showToast("Unlock member access first, then you can suspend this household.");
     return;
   }
-
   await updateHeadStatus(existingHead.id, nextStatus);
 }
 
-async function addPayment(event) {
-  event.preventDefault();
-  assertSupabase();
-
-  const headId = $("#paymentHead").value;
-  const head = state.heads.find((item) => item.id === headId);
-  const amount = Number($("#paymentAmount").value);
-  if (!head || !amount || amount <= 0) {
-    showToast("Choose a head and enter a payment amount.");
-    return;
-  }
-
-  const matchingFamily = findFamilyForHead(head);
-  const paidUntil = $("#paidUntil").value;
-
+async function updateMemberStatus(memberId, nextStatus) {
   try {
-    await query(
-      "payment create",
-      supabase.from("payments").insert({
-        family_head_id: head.id,
-        family_id: matchingFamily?.id || null,
-        recorded_by: state.session.user.id,
-        amount,
-        currency: $("#paymentCurrency").value,
-        payment_method: $("#paymentMethod").value,
-        payment_date: $("#paymentDate").value,
-        billing_period_start: $("#billingStart").value || null,
-        billing_period_end: $("#billingEnd").value || null,
-        reference_number: $("#paymentReference").value.trim() || null,
-        notes: $("#paymentNotes").value.trim() || null
-      })
-    );
-
-    const headUpdate = {
-      billing_status: "paid",
-      last_payment_at: new Date().toISOString()
-    };
-    if (paidUntil) headUpdate.paid_until = paidUntil;
-
-    await query(
-      "head billing update",
-      supabase.from("family_heads").update(headUpdate).eq("id", head.id)
-    );
-
-    $("#paymentForm").reset();
-    $("#paymentDate").value = toDateValue(new Date());
-    await loadAdminData();
-    renderAdmin();
-    showToast("Payment recorded.");
+    await query("member status update", supabase.from("family_members").update({ status: nextStatus }).eq("id", memberId));
+    await loadMembers();
+    renderFamilyApp();
+    showToast(nextStatus === "active" ? "Member reactivated." : "Member marked inactive.");
   } catch (error) {
     showToast(error.message);
   }
 }
 
-async function addExpense(event) {
-  event.preventDefault();
-  assertSupabase();
-
-  const amount = Number($("#expenseAmount").value);
-  if (!amount || amount <= 0) {
-    showToast("Enter an expense amount above zero.");
-    return;
-  }
-
+async function updateObligationStatus(itemId, nextStatus) {
   try {
-    const payload = expensePayload(amount);
-    if (state.editingExpenseId) {
-      await query(
-        "expense update",
-        supabase.from("expenses").update(payload).eq("id", state.editingExpenseId)
-      );
-      showToast("Expense updated.");
-    } else {
-      await query(
-        "expense create",
-        supabase.from("expenses").insert(payload)
-      );
-      showToast("Expense added.");
-    }
-
-    resetExpenseForm();
-    await loadExpenses();
-    render();
+    await query("payment item status update", supabase.from("payment_items").update({ status: nextStatus }).eq("id", itemId));
+    await loadPaymentItems();
+    renderFamilyApp();
+    showToast(nextStatus === "active" ? "Obligation reactivated." : "Obligation paused.");
   } catch (error) {
     showToast(error.message);
   }
 }
 
-function expensePayload(amount) {
-  return {
-    family_id: state.family.id,
-    member_id: $("#expenseMember").value || null,
-    paid_by_member_id: $("#expensePaidBy").value || null,
-    user_id: state.session.user.id,
-    amount,
-    expense_date: $("#expenseDate").value,
-    category: $("#expenseCategory").value,
-    payment_method: $("#expensePayment").value,
-    note: $("#expenseNote").value.trim()
-  };
-}
-
-function startEditExpense(expenseId) {
-  const expense = state.expenses.find((item) => item.id === expenseId);
-  if (!expense) return;
-
-  state.editingExpenseId = expense.id;
-  state.familyTab = "expenses";
-  renderFamilyTabs();
-  $("#expenseTitle").textContent = "Edit spending";
-  $("#expenseSubmitButton").textContent = "Save expense";
-  $("#cancelEditExpenseButton").classList.remove("hidden");
-  $("#expenseAmount").value = expense.amount;
-  $("#expenseDate").value = expense.expense_date;
-  $("#expenseCategory").value = expense.category;
-  $("#expenseMember").value = expense.member_id || "";
-  $("#expensePaidBy").value = expense.paid_by_member_id || "";
-  $("#expensePayment").value = expense.payment_method || "Card";
-  $("#expenseNote").value = expense.note || "";
-}
-
-function resetExpenseForm() {
-  state.editingExpenseId = null;
-  $("#expenseForm").reset();
-  $("#expenseDate").value = toDateValue(new Date());
-  $("#expenseTitle").textContent = "Record spending";
-  $("#expenseSubmitButton").textContent = "Add expense";
-  $("#cancelEditExpenseButton").classList.add("hidden");
-}
-
-async function deleteHead(headId) {
+async function deleteRow(table, id, reload, message) {
   try {
-    await query(
-      "head delete",
-      supabase.from("family_heads").delete().eq("id", headId)
-    );
-    await loadAdminData();
-    renderAdmin();
-    showToast("Head access revoked.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-async function deletePayment(paymentId) {
-  try {
-    await query(
-      "payment delete",
-      supabase.from("payments").delete().eq("id", paymentId)
-    );
-    await loadAdminData();
-    renderAdmin();
-    showToast("Payment deleted.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-async function deleteCategoryBudget(budgetId) {
-  try {
-    await query(
-      "category budget delete",
-      supabase.from("category_budgets").delete().eq("id", budgetId)
-    );
-    await loadCategoryBudgets();
-    render();
-    showToast("Category budget deleted.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-function findFamilyForHead(head) {
-  return state.adminFamilies.find(
-    (family) => (family.owner_email || "").toLowerCase() === head.email.toLowerCase()
-  );
-}
-
-function findHeadForFamily(family) {
-  return state.heads.find(
-    (head) => head.email.toLowerCase() === (family.owner_email || "").toLowerCase()
-  );
-}
-
-async function deleteMember(memberId) {
-  try {
-    await query(
-      "member delete",
-      supabase.from("family_members").delete().eq("id", memberId)
-    );
-    await Promise.all([loadMembers(), loadExpenses()]);
-    render();
-    showToast("Member deleted.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-async function deleteExpense(expenseId) {
-  try {
-    await query(
-      "expense delete",
-      supabase.from("expenses").delete().eq("id", expenseId)
-    );
-    await loadExpenses();
-    render();
-    showToast("Expense deleted.");
+    await query(`${table} delete`, supabase.from(table).delete().eq("id", id));
+    await reload();
+    showToast(message);
   } catch (error) {
     showToast(error.message);
   }
 }
 
 function exportCsv() {
-  const expenses = filteredExpenses();
-  if (!expenses.length) {
+  const occurrences = selectedOccurrences();
+  if (!occurrences.length) {
     showToast("Nothing to export for this filter.");
     return;
   }
-
   const rows = [
-    ["Date", "Category", "For", "Paid by", "Payment method", "Note", "Amount"],
-    ...expenses.map((expense) => [
-      expense.expense_date,
-      expense.category,
-      expense.target_member?.name || "Whole family",
-      expense.payer_member?.name || "Household account",
-      expense.payment_method || "",
-      expense.note || "",
-      expense.amount
+    ["Due date", "Payment", "Responsible", "Status", "Amount due", "Paid", "Outstanding"],
+    ...occurrences.map((occurrence) => [
+      occurrence.dueDate,
+      occurrence.item.name,
+      memberById(occurrence.item.responsible_member_id)?.name || "Household account",
+      occurrence.status,
+      occurrence.amount,
+      occurrence.paid,
+      occurrence.outstanding
     ])
   ];
-
-  const csv = rows
-    .map((row) =>
-      row
-        .map((value) => `"${`${value}`.replaceAll('"', '""')}"`)
-        .join(",")
-    )
-    .join("\n");
-
+  const csv = rows.map((row) => row.map((value) => `"${`${value}`.replaceAll('"', '""')}"`).join(",")).join("\n");
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `household-expenses-${state.filterMonth}.csv`;
+  link.download = `household-payments-${state.filterMonth}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
 
+async function enableNotifications() {
+  if (!("Notification" in window)) {
+    showToast("Browser notifications are not supported on this device.");
+    return;
+  }
+  const result = await Notification.requestPermission();
+  if (result === "granted") {
+    showToast("Reminder notifications enabled for this browser.");
+  } else {
+    showToast("Notifications were not enabled. In-app reminders still work.");
+  }
+}
+
+function memberById(id) {
+  return state.members.find((member) => member.id === id);
+}
+
+function findFamilyForHead(head) {
+  return state.adminFamilies.find((family) => (family.owner_email || "").toLowerCase() === head.email.toLowerCase());
+}
+
+function findHeadForFamily(family) {
+  return state.heads.find((head) => head.email.toLowerCase() === (family.owner_email || "").toLowerCase());
+}
+
+function recurrenceLabel(item) {
+  if (item.recurrence_type === "once") return "Once-off";
+  if (item.recurrence_type === "quarterly") return "Every 3 months";
+  if (item.recurrence_type === "yearly") return "Yearly";
+  if (item.recurrence_type === "custom") return `Every ${item.recurrence_interval || 1} months`;
+  return "Monthly";
+}
+
+function formatOccurrenceCurrencyTotals(occurrences) {
+  return formatCurrencyTotals(occurrences.map((occurrence) => ({ currency: occurrence.item.currency, amount: occurrence.amount })));
+}
+
+function formatCurrencyTotals(rows) {
+  if (!rows.length) return money(0, "USD");
+  const totals = rows.reduce((acc, row) => {
+    acc[row.currency || "USD"] = (acc[row.currency || "USD"] || 0) + Number(row.amount || 0);
+    return acc;
+  }, {});
+  return Object.entries(totals).map(([currency, amount]) => money(amount, currency)).join(" / ");
+}
+
+function statusBadge(status) {
+  return `<span class="mini-badge ${badgeClass(status)}">${escapeHtml(status)}</span>`;
+}
+
+function badgeClass(status) {
+  return `${status}`.toLowerCase().replaceAll(" ", "-");
+}
+
+function emptyState(title, text) {
+  return `<div class="empty-ledger"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(text)}</span></div>`;
+}
+
+function memberInitials(name) {
+  return `${name || "?"}`.split(" ").filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function escapeHtml(value) {
+  return `${value ?? ""}`.replace(/[&<>"']/g, (char) => {
+    const entities = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" };
+    return entities[char];
+  });
+}
+
 document.addEventListener("click", async (event) => {
-  const authAction = event.target.dataset.authAction;
-  if (authAction === "signup") await signUp();
-
-  if (event.target.dataset.showSignup !== undefined) {
-    setView("signup");
-  }
-
-  if (event.target.dataset.showSignin !== undefined) {
-    setView("auth");
-  }
-
-  const memberId = event.target.dataset.deleteMember;
-  if (memberId) await deleteMember(memberId);
-
-  const toggleMemberId = event.target.dataset.toggleMember;
-  if (toggleMemberId) await updateMemberStatus(toggleMemberId, event.target.dataset.nextStatus);
-
-  const headId = event.target.dataset.deleteHead;
-  if (headId) await deleteHead(headId);
-
-  const toggleHeadId = event.target.dataset.toggleHead;
-  if (toggleHeadId) await updateHeadStatus(toggleHeadId, event.target.dataset.nextStatus);
-
-  const toggleMemberAccessId = event.target.dataset.toggleMemberAccess;
-  if (toggleMemberAccessId) {
-    await updateHeadMemberAccess(toggleMemberAccessId, event.target.dataset.nextMemberAccess);
-  }
-
-  const toggleFamilyMemberAccessId = event.target.dataset.toggleFamilyMemberAccess;
-  if (toggleFamilyMemberAccessId) {
-    await updateFamilyMemberAccess(toggleFamilyMemberAccessId, event.target.dataset.nextMemberAccess);
-  }
-
-  const toggleFamilyStatusId = event.target.dataset.toggleFamilyStatus;
-  if (toggleFamilyStatusId) {
-    await updateFamilyStatus(toggleFamilyStatusId, event.target.dataset.nextStatus);
-  }
-
-  const paymentId = event.target.dataset.deletePayment;
-  if (paymentId) await deletePayment(paymentId);
-
-  const budgetId = event.target.dataset.deleteBudget;
-  if (budgetId) await deleteCategoryBudget(budgetId);
+  if (event.target.dataset.showSignup !== undefined) setView("signup");
+  if (event.target.dataset.showSignin !== undefined) setView("auth");
+  if (event.target.dataset.closePaymentDialog !== undefined) $("#recordPaymentDialog").close();
 
   const adminTab = event.target.dataset.adminTab;
   if (adminTab) {
     state.adminTab = adminTab;
+    setRoute("admin", adminTab);
     renderAdminTabs();
   }
 
   const familyTab = event.target.dataset.familyTab;
   if (familyTab) {
     state.familyTab = familyTab;
+    setRoute("family", familyTab);
     renderFamilyTabs();
   }
 
-  const editExpenseId = event.target.dataset.editExpense;
-  if (editExpenseId) startEditExpense(editExpenseId);
+  const recordPaymentKey = event.target.dataset.recordPayment;
+  if (recordPaymentKey) openRecordPayment(recordPaymentKey);
 
-  const expenseId = event.target.dataset.deleteExpense;
-  if (expenseId) await deleteExpense(expenseId);
+  const editObligationId = event.target.dataset.editObligation;
+  if (editObligationId) startEditObligation(editObligationId);
+
+  const toggleObligationId = event.target.dataset.toggleObligation;
+  if (toggleObligationId) await updateObligationStatus(toggleObligationId, event.target.dataset.nextStatus);
+
+  const deleteObligationId = event.target.dataset.deleteObligation;
+  if (deleteObligationId && confirm("Delete this recurring obligation and its saved payment records?")) {
+    await deleteRow("payment_items", deleteObligationId, async () => {
+      await loadFamilyData();
+      renderFamilyApp();
+    }, "Obligation deleted.");
+  }
+
+  const memberId = event.target.dataset.toggleMember;
+  if (memberId) await updateMemberStatus(memberId, event.target.dataset.nextStatus);
+
+  const deleteMemberId = event.target.dataset.deleteMember;
+  if (deleteMemberId && confirm("Delete this family member?")) {
+    await deleteRow("family_members", deleteMemberId, async () => {
+      await loadFamilyData();
+      renderFamilyApp();
+    }, "Member deleted.");
+  }
+
+  const deleteRecordId = event.target.dataset.deleteRecord;
+  if (deleteRecordId && confirm("Delete this payment record?")) {
+    await deleteRow("payment_records", deleteRecordId, async () => {
+      await loadPaymentRecords();
+      renderFamilyApp();
+    }, "Payment record deleted.");
+  }
+
+  const deleteHeadId = event.target.dataset.deleteHead;
+  if (deleteHeadId && confirm("Revoke this user access row?")) {
+    await deleteRow("family_heads", deleteHeadId, async () => {
+      await loadAdminData();
+      renderAdmin();
+    }, "User access revoked.");
+  }
+
+  const toggleHeadId = event.target.dataset.toggleHead;
+  if (toggleHeadId) await updateHeadStatus(toggleHeadId, event.target.dataset.nextStatus);
+
+  const toggleMemberAccessId = event.target.dataset.toggleMemberAccess;
+  if (toggleMemberAccessId) await updateHeadMemberAccess(toggleMemberAccessId, event.target.dataset.nextMemberAccess);
+
+  const toggleFamilyMemberAccessId = event.target.dataset.toggleFamilyMemberAccess;
+  if (toggleFamilyMemberAccessId) await updateFamilyMemberAccess(toggleFamilyMemberAccessId, event.target.dataset.nextMemberAccess);
+
+  const toggleFamilyStatusId = event.target.dataset.toggleFamilyStatus;
+  if (toggleFamilyStatusId) await updateFamilyStatus(toggleFamilyStatusId, event.target.dataset.nextStatus);
+
+  const deletePaymentId = event.target.dataset.deletePayment;
+  if (deletePaymentId && confirm("Delete this platform payment record?")) {
+    await deleteRow("payments", deletePaymentId, async () => {
+      await loadAdminData();
+      renderAdmin();
+    }, "Platform payment deleted.");
+  }
+
+  const deleteAdminNoteId = event.target.dataset.deleteAdminNote;
+  if (deleteAdminNoteId && confirm("Delete this support note?")) {
+    await deleteRow("admin_support_notes", deleteAdminNoteId, async () => {
+      await loadAdminData();
+      renderAdmin();
+    }, "Support note deleted.");
+  }
 });
 
-$("#authForm").addEventListener("submit", handleAuthSubmit);
-$("#signupForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  await signUp();
-});
+$("#authForm").addEventListener("submit", signIn);
+$("#signupForm").addEventListener("submit", signUp);
 $("#familyForm").addEventListener("submit", createFamily);
-$("#headForm").addEventListener("submit", addHead);
-$("#paymentForm").addEventListener("submit", addPayment);
-$("#budgetForm").addEventListener("submit", saveCategoryBudget);
+$("#obligationForm").addEventListener("submit", saveObligation);
 $("#memberForm").addEventListener("submit", addMember);
-$("#expenseForm").addEventListener("submit", addExpense);
-$("#cancelEditExpenseButton").addEventListener("click", resetExpenseForm);
+$("#recordPaymentForm").addEventListener("submit", savePaymentRecord);
+$("#headForm").addEventListener("submit", addHead);
+$("#paymentForm").addEventListener("submit", addPlatformPayment);
+$("#adminNoteForm").addEventListener("submit", saveAdminNote);
+$("#cancelEditObligationButton").addEventListener("click", resetObligationForm);
 $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
-$("#pendingSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#suspendedSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#exportCsvButton").addEventListener("click", exportCsv);
+$("#enableNotificationsButton").addEventListener("click", enableNotifications);
 $("#paymentHead").addEventListener("change", (event) => {
   const option = event.target.selectedOptions[0];
   const amount = Number(option?.dataset.amount || 0);
@@ -1569,14 +1624,23 @@ $("#paymentHead").addEventListener("change", (event) => {
 });
 $("#monthFilter").addEventListener("change", (event) => {
   state.filterMonth = event.target.value;
-  render();
+  renderFamilyApp();
 });
-$("#categoryFilter").addEventListener("change", (event) => {
-  state.filterCategory = event.target.value;
-  renderExpenses();
+$("#statusFilter").addEventListener("change", (event) => {
+  state.filterStatus = event.target.value;
+  renderSchedule();
+  renderMyPayments();
+});
+$("#adminHouseholdSearch").addEventListener("input", renderAdminFamilies);
+
+window.addEventListener("hashchange", () => {
+  applyRouteFromHash();
+  if (state.isAdmin) renderAdminTabs();
+  if (state.family) renderFamilyTabs();
 });
 
 init().catch((error) => {
   console.error(error);
   showToast(error.message);
+  if (!state.session) setView("auth");
 });
