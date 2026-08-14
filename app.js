@@ -23,6 +23,8 @@ const state = {
   expenses: [],
   heads: [],
   adminFamilies: [],
+  payments: [],
+  adminTab: "dashboard",
   filterMonth: toMonthValue(new Date()),
   filterCategory: "All"
 };
@@ -34,6 +36,7 @@ const views = {
   auth: $("#authView"),
   setup: $("#setupView"),
   pending: $("#pendingView"),
+  suspended: $("#suspendedView"),
   admin: $("#adminView"),
   app: $("#appView")
 };
@@ -50,6 +53,7 @@ const currencyNames = {
 const today = new Date();
 $("#expenseDate").value = toDateValue(today);
 $("#monthFilter").value = state.filterMonth;
+$("#paymentDate").value = toDateValue(today);
 
 function toDateValue(date) {
   const year = date.getFullYear();
@@ -135,6 +139,8 @@ function resetState() {
   state.expenses = [];
   state.heads = [];
   state.adminFamilies = [];
+  state.payments = [];
+  state.adminTab = "dashboard";
 }
 
 async function loadApp() {
@@ -146,6 +152,11 @@ async function loadApp() {
     await loadAdminData();
     setView("admin");
     renderAdmin();
+    return;
+  }
+
+  if (state.headApproval?.status === "suspended") {
+    setView("suspended");
     return;
   }
 
@@ -201,7 +212,7 @@ async function loadAccess() {
 
   const headRows = await query(
     "head access load",
-    supabase.from("family_heads").select("*").eq("email", userEmail).limit(1)
+    supabase.from("family_heads").select("*").ilike("email", userEmail).limit(1)
   );
   state.headApproval = headRows[0] || null;
 }
@@ -223,6 +234,15 @@ async function loadAdminData() {
   state.adminFamilies = await query(
     "admin families load",
     supabase.from("families").select("*").order("created_at", { ascending: false })
+  );
+
+  state.payments = await query(
+    "payments load",
+    supabase
+      .from("payments")
+      .select("*, family_heads(full_name, email, billing_status, status)")
+      .order("payment_date", { ascending: false })
+      .order("created_at", { ascending: false })
   );
 }
 
@@ -257,10 +277,54 @@ function render() {
 }
 
 function renderAdmin() {
-  $("#adminHeadCount").textContent = state.heads.length;
+  renderAdminTabs();
+  renderAdminSummary();
+  renderHeads();
+  renderPaymentHeadOptions();
+  renderPayments();
+  renderAdminFamilies();
+}
+
+function renderAdminTabs() {
+  document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.adminTab === state.adminTab);
+  });
+
+  document.querySelectorAll("[data-admin-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.dataset.adminPanel !== state.adminTab);
+  });
+}
+
+function renderAdminSummary() {
+  const activeHeads = state.heads.filter((head) => head.status === "active");
+  const suspendedHeads = state.heads.filter((head) => head.status === "suspended");
+  const unpaidHeads = state.heads.filter((head) => head.billing_status !== "paid");
+
+  $("#adminActiveHeadCount").textContent = activeHeads.length;
+  $("#adminSuspendedText").textContent = `${suspendedHeads.length} suspended`;
   $("#adminFamilyCount").textContent = state.adminFamilies.length;
   $("#adminEmail").textContent = state.session.user.email || "-";
+  $("#adminRevenueTotal").textContent = formatCurrencyTotals(state.payments);
+  $("#adminPaymentCount").textContent = `${state.payments.length} payments`;
+  $("#adminUnpaidHeadCount").textContent = unpaidHeads.length;
 
+  const recentList = $("#recentPaymentsList");
+  const recentPayments = state.payments.slice(0, 5);
+  if (!recentPayments.length) {
+    recentList.innerHTML = `
+      <div class="empty-ledger">
+        <strong>No payments recorded</strong>
+        <span>Use the Finance page to manually add the first payment.</span>
+      </div>
+    `;
+    return;
+  }
+
+  recentList.innerHTML = "";
+  recentPayments.forEach((payment) => recentList.append(renderPaymentRecord(payment)));
+}
+
+function renderHeads() {
   const headsList = $("#headsList");
   if (!state.heads.length) {
     headsList.innerHTML = `<p class="empty">No heads approved yet.</p>`;
@@ -268,18 +332,30 @@ function renderAdmin() {
     headsList.innerHTML = "";
     state.heads.forEach((head) => {
       const item = document.createElement("article");
-      item.className = "member-item";
+      item.className = "member-item head-item";
       item.innerHTML = `
         <div>
           <strong>${escapeHtml(head.full_name)}</strong>
-          <span>${escapeHtml(head.email)}</span>
+          <span>${escapeHtml(head.email)} &middot; ${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>
+          <div class="badge-row">
+            ${statusBadge(head.status)}
+            ${statusBadge(head.billing_status)}
+            <span class="mini-badge">Paid until ${head.paid_until || "not set"}</span>
+          </div>
         </div>
-        <button type="button" data-delete-head="${head.id}" aria-label="Revoke ${escapeHtml(head.full_name)}">Revoke</button>
+        <div class="row-actions">
+          <button type="button" data-toggle-head="${head.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">
+            ${head.status === "active" ? "Suspend" : "Reactivate"}
+          </button>
+          <button type="button" data-delete-head="${head.id}" aria-label="Revoke ${escapeHtml(head.full_name)}">Revoke</button>
+        </div>
       `;
       headsList.append(item);
     });
   }
+}
 
+function renderAdminFamilies() {
   const familiesList = $("#adminFamiliesList");
   if (!state.adminFamilies.length) {
     familiesList.innerHTML = `
@@ -295,6 +371,9 @@ function renderAdmin() {
   state.adminFamilies.forEach((family) => {
     const item = document.createElement("article");
     item.className = "expense-item admin-family-item";
+    const matchingHead = state.heads.find(
+      (head) => head.email.toLowerCase() === (family.owner_email || "").toLowerCase()
+    );
     item.innerHTML = `
       <div class="expense-date">
         <strong>${family.currency}</strong>
@@ -302,7 +381,11 @@ function renderAdmin() {
       </div>
       <div class="expense-detail">
         <strong>${escapeHtml(family.name)}</strong>
-        <span>Created ${new Date(family.created_at).toLocaleDateString()}</span>
+        <span>${escapeHtml(family.owner_email || "Owner email not stored")} &middot; Created ${new Date(family.created_at).toLocaleDateString()}</span>
+        <div class="badge-row">
+          ${matchingHead ? statusBadge(matchingHead.status) : '<span class="mini-badge">No head match</span>'}
+          ${matchingHead ? statusBadge(matchingHead.billing_status) : ""}
+        </div>
       </div>
       <div class="expense-actions">
         <strong>${money(family.monthly_budget, family.currency)}</strong>
@@ -310,6 +393,74 @@ function renderAdmin() {
     `;
     familiesList.append(item);
   });
+}
+
+function renderPaymentHeadOptions() {
+  const select = $("#paymentHead");
+  select.innerHTML = `<option value="">Choose head</option>`;
+
+  state.heads.forEach((head) => {
+    const option = document.createElement("option");
+    option.value = head.id;
+    option.textContent = `${head.full_name} - ${head.email}`;
+    option.dataset.amount = head.monthly_fee || 0;
+    option.dataset.currency = head.fee_currency || "USD";
+    select.append(option);
+  });
+}
+
+function renderPayments() {
+  const list = $("#paymentsList");
+  if (!state.payments.length) {
+    list.innerHTML = `
+      <div class="empty-ledger">
+        <strong>No payment history</strong>
+        <span>Record manual payments as cash, EFT, card, bank deposit, or other.</span>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = "";
+  state.payments.forEach((payment) => list.append(renderPaymentRecord(payment, true)));
+}
+
+function renderPaymentRecord(payment, withActions = false) {
+  const headName = payment.family_heads?.full_name || "Unknown head";
+  const headEmail = payment.family_heads?.email || "";
+  const item = document.createElement("article");
+  item.className = "expense-item payment-item";
+  item.innerHTML = `
+    <div class="expense-date">
+      <strong>${new Date(`${payment.payment_date}T00:00:00`).getDate()}</strong>
+      <span>${new Date(`${payment.payment_date}T00:00:00`).toLocaleString("en", { month: "short" })}</span>
+    </div>
+    <div class="expense-detail">
+      <strong>${escapeHtml(headName)}</strong>
+      <span>${escapeHtml(headEmail)} &middot; ${escapeHtml(payment.payment_method)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span>
+      ${payment.notes ? `<small>${escapeHtml(payment.notes)}</small>` : ""}
+    </div>
+    <div class="expense-actions">
+      <strong>${money(payment.amount, payment.currency)}</strong>
+      ${withActions ? `<button type="button" data-delete-payment="${payment.id}">Delete</button>` : ""}
+    </div>
+  `;
+  return item;
+}
+
+function statusBadge(status) {
+  return `<span class="mini-badge ${status}">${escapeHtml(status)}</span>`;
+}
+
+function formatCurrencyTotals(payments) {
+  if (!payments.length) return money(0, "USD");
+  const totals = payments.reduce((acc, payment) => {
+    acc[payment.currency] = (acc[payment.currency] || 0) + Number(payment.amount);
+    return acc;
+  }, {});
+  return Object.entries(totals)
+    .map(([currency, amount]) => money(amount, currency))
+    .join(" / ");
 }
 
 function renderFamily() {
@@ -340,7 +491,7 @@ function renderMembers() {
     item.innerHTML = `
       <div>
         <strong>${escapeHtml(member.name)}</strong>
-        <span>${escapeHtml(member.role)} · ${money(member.monthly_allowance, state.family.currency)} allowance</span>
+        <span>${escapeHtml(member.role)} &middot; ${money(member.monthly_allowance, state.family.currency)} allowance</span>
       </div>
       <button type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.name)}">Delete</button>
     `;
@@ -383,7 +534,7 @@ function renderExpenses() {
       </div>
       <div class="expense-detail">
         <strong>${escapeHtml(expense.category)}</strong>
-        <span>${escapeHtml(memberName)} · ${escapeHtml(expense.payment_method || "Method not set")}</span>
+        <span>${escapeHtml(memberName)} &middot; ${escapeHtml(expense.payment_method || "Method not set")}</span>
         ${expense.note ? `<small>${escapeHtml(expense.note)}</small>` : ""}
       </div>
       <div class="expense-actions">
@@ -525,6 +676,7 @@ async function createFamily(event) {
         .from("families")
         .insert({
           owner_id: user.id,
+          owner_email: user.email?.toLowerCase(),
           name,
           monthly_budget: monthlyBudget,
           currency
@@ -588,6 +740,9 @@ async function addHead(event) {
 
   const fullName = $("#headName").value.trim();
   const email = $("#headEmail").value.trim().toLowerCase();
+  const monthlyFee = Number($("#headMonthlyFee").value || 0);
+  const feeCurrency = $("#headFeeCurrency").value;
+  const billingStatus = $("#headBillingStatus").value;
   if (!fullName || !email) return;
 
   try {
@@ -596,13 +751,85 @@ async function addHead(event) {
       supabase.from("family_heads").insert({
         full_name: fullName,
         email,
-        created_by: state.session.user.id
+        created_by: state.session.user.id,
+        monthly_fee: monthlyFee,
+        fee_currency: feeCurrency,
+        billing_status: billingStatus,
+        status: "active"
       })
     );
     $("#headForm").reset();
     await loadAdminData();
     renderAdmin();
     showToast("Head of family approved.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function updateHeadStatus(headId, nextStatus) {
+  try {
+    await query(
+      "head status update",
+      supabase.from("family_heads").update({ status: nextStatus }).eq("id", headId)
+    );
+    await loadAdminData();
+    renderAdmin();
+    showToast(nextStatus === "active" ? "Head reactivated." : "Head suspended.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function addPayment(event) {
+  event.preventDefault();
+  assertSupabase();
+
+  const headId = $("#paymentHead").value;
+  const head = state.heads.find((item) => item.id === headId);
+  const amount = Number($("#paymentAmount").value);
+  if (!head || !amount || amount <= 0) {
+    showToast("Choose a head and enter a payment amount.");
+    return;
+  }
+
+  const matchingFamily = findFamilyForHead(head);
+  const paidUntil = $("#paidUntil").value;
+
+  try {
+    await query(
+      "payment create",
+      supabase.from("payments").insert({
+        family_head_id: head.id,
+        family_id: matchingFamily?.id || null,
+        recorded_by: state.session.user.id,
+        amount,
+        currency: $("#paymentCurrency").value,
+        payment_method: $("#paymentMethod").value,
+        payment_date: $("#paymentDate").value,
+        billing_period_start: $("#billingStart").value || null,
+        billing_period_end: $("#billingEnd").value || null,
+        reference_number: $("#paymentReference").value.trim() || null,
+        notes: $("#paymentNotes").value.trim() || null
+      })
+    );
+
+    const headUpdate = {
+      billing_status: "paid",
+      last_payment_at: new Date().toISOString()
+    };
+    if (paidUntil) headUpdate.paid_until = paidUntil;
+
+    await query(
+      "head billing update",
+      supabase.from("family_heads").update(headUpdate).eq("id", head.id)
+    );
+
+    $("#paymentForm").reset();
+    $("#paymentDate").value = toDateValue(new Date());
+    await loadAdminData();
+    renderAdmin();
+    showToast("Payment recorded.");
   } catch (error) {
     showToast(error.message);
   }
@@ -654,6 +881,26 @@ async function deleteHead(headId) {
   } catch (error) {
     showToast(error.message);
   }
+}
+
+async function deletePayment(paymentId) {
+  try {
+    await query(
+      "payment delete",
+      supabase.from("payments").delete().eq("id", paymentId)
+    );
+    await loadAdminData();
+    renderAdmin();
+    showToast("Payment deleted.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+function findFamilyForHead(head) {
+  return state.adminFamilies.find(
+    (family) => (family.owner_email || "").toLowerCase() === head.email.toLowerCase()
+  );
 }
 
 async function deleteMember(memberId) {
@@ -731,6 +978,18 @@ document.addEventListener("click", async (event) => {
   const headId = event.target.dataset.deleteHead;
   if (headId) await deleteHead(headId);
 
+  const toggleHeadId = event.target.dataset.toggleHead;
+  if (toggleHeadId) await updateHeadStatus(toggleHeadId, event.target.dataset.nextStatus);
+
+  const paymentId = event.target.dataset.deletePayment;
+  if (paymentId) await deletePayment(paymentId);
+
+  const adminTab = event.target.dataset.adminTab;
+  if (adminTab) {
+    state.adminTab = adminTab;
+    renderAdminTabs();
+  }
+
   const expenseId = event.target.dataset.deleteExpense;
   if (expenseId) await deleteExpense(expenseId);
 });
@@ -738,12 +997,20 @@ document.addEventListener("click", async (event) => {
 $("#authForm").addEventListener("submit", handleAuthSubmit);
 $("#familyForm").addEventListener("submit", createFamily);
 $("#headForm").addEventListener("submit", addHead);
+$("#paymentForm").addEventListener("submit", addPayment);
 $("#memberForm").addEventListener("submit", addMember);
 $("#expenseForm").addEventListener("submit", addExpense);
 $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#pendingSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
+$("#suspendedSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#exportCsvButton").addEventListener("click", exportCsv);
+$("#paymentHead").addEventListener("change", (event) => {
+  const option = event.target.selectedOptions[0];
+  const amount = Number(option?.dataset.amount || 0);
+  if (amount > 0) $("#paymentAmount").value = amount.toFixed(2);
+  if (option?.dataset.currency) $("#paymentCurrency").value = option.dataset.currency;
+});
 $("#monthFilter").addEventListener("change", (event) => {
   state.filterMonth = event.target.value;
   render();
