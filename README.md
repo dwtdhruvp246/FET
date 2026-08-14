@@ -20,6 +20,7 @@ A static family expense tracker that uses Supabase Auth and Postgres as the data
 - Track who an expense was for and who paid it
 - Member spending breakdowns and recent household ledger
 - Category budgets, safe-to-spend, and reports
+- Installable PWA for phones and desktop browsers
 - Row Level Security policies for private household data
 - No frontend service role key
 
@@ -127,6 +128,17 @@ python -m http.server 8000
 ```
 
 Then open `http://localhost:8000`.
+
+## Install on phone
+
+After the site is published on GitHub Pages, open it on your phone:
+
+- Android Chrome: open the site, tap the menu, then tap `Install app` or `Add to Home screen`.
+- iPhone Safari: open the site, tap Share, then tap `Add to Home Screen`.
+
+PWA installation requires HTTPS. GitHub Pages provides HTTPS, so the published site can be installed. Local `http://localhost:8000` is only for testing.
+
+The app shell is cached for offline loading, but Supabase data still needs an internet connection to sign in and sync.
 
 ## Upload to GitHub
 

@@ -58,6 +58,17 @@ const today = new Date();
 $("#expenseDate").value = toDateValue(today);
 $("#monthFilter").value = state.filterMonth;
 $("#paymentDate").value = toDateValue(today);
+registerServiceWorker();
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((error) => {
+      console.warn("Service worker registration failed", error);
+    });
+  });
+}
 
 function toDateValue(date) {
   const year = date.getFullYear();
