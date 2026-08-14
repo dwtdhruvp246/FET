@@ -7,8 +7,8 @@
     <title>Household Ledger</title>
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="config.js?v=5"></script>
-    <script type="module" src="app.js?v=5"></script>
+    <script src="config.js?v=6"></script>
+    <script type="module" src="app.js?v=6"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -31,8 +31,8 @@
 
         <section id="authView" class="auth-panel hidden" aria-labelledby="authTitle">
           <div class="panel-heading">
-            <p class="eyebrow">Private household</p>
-            <h2 id="authTitle">Sign in or create your account</h2>
+            <p class="eyebrow">Welcome back</p>
+            <h2 id="authTitle">Sign in to your household</h2>
           </div>
 
           <form id="authForm" class="form-grid">
@@ -46,8 +46,37 @@
             </label>
             <div class="button-row">
               <button class="primary" type="submit" data-auth-action="signin">Sign in</button>
-              <button type="button" data-auth-action="signup">Create account</button>
-              <button type="button" data-auth-action="magic">Email link</button>
+              <button type="button" data-show-signup>Create account</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="signupView" class="auth-panel hidden" aria-labelledby="signupTitle">
+          <div class="panel-heading">
+            <p class="eyebrow">Free account</p>
+            <h2 id="signupTitle">Create your login</h2>
+          </div>
+
+          <form id="signupForm" class="form-grid">
+            <label class="full">
+              Full name
+              <input id="signupName" autocomplete="name" required placeholder="Your name" />
+            </label>
+            <label>
+              Email
+              <input id="signupEmail" type="email" autocomplete="email" required placeholder="you@example.com" />
+            </label>
+            <label>
+              Password
+              <input id="signupPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="At least 6 characters" />
+            </label>
+            <label class="full">
+              Confirm password
+              <input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="Repeat your password" />
+            </label>
+            <div class="button-row">
+              <button class="primary" type="submit">Create account</button>
+              <button type="button" data-show-signin>Back to sign in</button>
             </div>
           </form>
         </section>
@@ -83,10 +112,10 @@
 
         <section id="pendingView" class="setup-panel hidden" aria-labelledby="pendingTitle">
           <div class="panel-heading">
-            <p class="eyebrow">Approval needed</p>
-            <h2 id="pendingTitle">Your account is waiting for admin access</h2>
+            <p class="eyebrow">Member access locked</p>
+            <h2 id="pendingTitle">Your free account is active</h2>
           </div>
-          <p class="muted-copy">An admin needs to add your email as a head of family before you can create a household.</p>
+          <p class="muted-copy">You can create a household and track expenses. An admin needs to unlock family-member access before you can add relatives.</p>
           <button id="pendingSignOutButton" type="button">Sign out</button>
         </section>
 
@@ -203,14 +232,18 @@
                           <option value="overdue">Overdue</option>
                         </select>
                       </label>
-                      <button class="primary full" type="submit">Approve head</button>
+                      <label class="checkbox-label full">
+                        <input id="headCanAddMembers" type="checkbox" />
+                        Allow this user to add family members
+                      </label>
+                      <button class="primary full" type="submit">Save user access</button>
                     </form>
                   </section>
 
                   <section class="ledger-panel">
                     <div class="panel-heading">
                       <p class="eyebrow">Directory</p>
-                      <h3>Approved heads</h3>
+                      <h3>Users with admin settings</h3>
                     </div>
                     <div id="headsList" class="members-list"></div>
                   </section>
@@ -330,6 +363,8 @@
                 <button class="admin-nav-button active" type="button" data-family-tab="dashboard">Dashboard</button>
                 <button class="admin-nav-button" type="button" data-family-tab="expenses">Expenses</button>
                 <button class="admin-nav-button" type="button" data-family-tab="members">Members</button>
+                <button class="admin-nav-button" type="button" data-family-tab="budget">Budget</button>
+                <button class="admin-nav-button" type="button" data-family-tab="reports">Reports</button>
               </nav>
               <div class="topbar-actions">
                 <button id="exportCsvButton" type="button">Export CSV</button>
@@ -380,7 +415,7 @@
                   <article class="stat-card">
                     <span class="stat-label">Family members</span>
                     <strong id="memberCount">0</strong>
-                    <small>People tracked in this household</small>
+                    <small id="memberAccessText">Member access</small>
                   </article>
                 </section>
 
@@ -488,6 +523,10 @@
                 </header>
 
                 <section class="content-grid">
+                  <section id="memberAccessNotice" class="notice hidden">
+                    <strong>Family-member access is locked.</strong>
+                    An admin needs to allow this account before you can add relatives. You can still track household-level expenses.
+                  </section>
                   <section class="tool-panel" aria-labelledby="membersTitle">
                     <div class="panel-heading inline">
                       <div>
@@ -531,6 +570,102 @@
                       <h3>Family members</h3>
                     </div>
                     <div id="membersList" class="members-list"></div>
+                  </section>
+                </section>
+              </section>
+
+              <section class="family-panel hidden" data-family-panel="budget">
+                <header class="topbar">
+                  <div>
+                    <p class="eyebrow">Budgeting</p>
+                    <h2>Category limits</h2>
+                  </div>
+                </header>
+
+                <section class="content-grid">
+                  <section class="tool-panel" aria-labelledby="budgetTitle">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Monthly plan</p>
+                      <h3 id="budgetTitle">Set category budget</h3>
+                    </div>
+                    <form id="budgetForm" class="form-grid">
+                      <label>
+                        Category
+                        <select id="budgetCategory" required>
+                          <option value="Groceries">Groceries</option>
+                          <option value="Utilities">Utilities</option>
+                          <option value="Transport">Transport</option>
+                          <option value="School">School</option>
+                          <option value="Health">Health</option>
+                          <option value="Rent">Rent</option>
+                          <option value="Fun">Fun</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </label>
+                      <label>
+                        Monthly limit
+                        <input id="budgetLimit" type="number" min="0" step="0.01" required placeholder="500" />
+                      </label>
+                      <button class="primary full" type="submit">Save category budget</button>
+                    </form>
+                  </section>
+
+                  <section class="ledger-panel">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Progress</p>
+                      <h3>Budget usage</h3>
+                    </div>
+                    <div id="categoryBudgetList" class="breakdown-list"></div>
+                  </section>
+                </section>
+              </section>
+
+              <section class="family-panel hidden" data-family-panel="reports">
+                <header class="topbar">
+                  <div>
+                    <p class="eyebrow">Reports</p>
+                    <h2>Household insights</h2>
+                  </div>
+                </header>
+
+                <section class="stats-grid" aria-label="Reports summary">
+                  <article class="stat-card">
+                    <span class="stat-label">Average expense</span>
+                    <strong id="averageExpense">$0.00</strong>
+                    <small>For the selected month</small>
+                  </article>
+                  <article class="stat-card">
+                    <span class="stat-label">Expense count</span>
+                    <strong id="expenseCount">0</strong>
+                    <small>Transactions recorded</small>
+                  </article>
+                  <article class="stat-card">
+                    <span class="stat-label">Highest expense</span>
+                    <strong id="highestExpense">$0.00</strong>
+                    <small id="highestExpenseText">No expenses yet</small>
+                  </article>
+                  <article class="stat-card">
+                    <span class="stat-label">Budget health</span>
+                    <strong id="budgetHealth">0%</strong>
+                    <small id="budgetHealthText">Monthly usage</small>
+                  </article>
+                </section>
+
+                <section class="content-grid">
+                  <section class="ledger-panel">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Categories</p>
+                      <h3>Spending by category</h3>
+                    </div>
+                    <div id="categoryReportList" class="breakdown-list"></div>
+                  </section>
+
+                  <section class="ledger-panel">
+                    <div class="panel-heading">
+                      <p class="eyebrow">Members</p>
+                      <h3>Spending by person</h3>
+                    </div>
+                    <div id="memberReportList" class="breakdown-list"></div>
                   </section>
                 </section>
               </section>

@@ -24,6 +24,7 @@ const state = {
   heads: [],
   adminFamilies: [],
   payments: [],
+  categoryBudgets: [],
   adminTab: "dashboard",
   familyTab: "dashboard",
   editingExpenseId: null,
@@ -36,6 +37,7 @@ const $ = (selector) => document.querySelector(selector);
 const views = {
   configWarning: $("#configWarning"),
   auth: $("#authView"),
+  signup: $("#signupView"),
   setup: $("#setupView"),
   pending: $("#pendingView"),
   suspended: $("#suspendedView"),
@@ -142,6 +144,7 @@ function resetState() {
   state.heads = [];
   state.adminFamilies = [];
   state.payments = [];
+  state.categoryBudgets = [];
   state.adminTab = "dashboard";
   state.familyTab = "dashboard";
   state.editingExpenseId = null;
@@ -166,17 +169,12 @@ async function loadApp() {
 
   await loadFamily();
 
-  if (!state.headApproval && !state.family) {
-    setView("pending");
-    return;
-  }
-
   if (!state.family) {
     setView("setup");
     return;
   }
 
-  await Promise.all([loadMembers(), loadExpenses()]);
+  await Promise.all([loadMembers(), loadExpenses(), loadCategoryBudgets()]);
   setView("app");
   render();
 }
@@ -273,6 +271,17 @@ async function loadExpenses() {
   );
 }
 
+async function loadCategoryBudgets() {
+  state.categoryBudgets = await query(
+    "category budgets load",
+    supabase
+      .from("category_budgets")
+      .select("*")
+      .eq("family_id", state.family.id)
+      .order("category", { ascending: true })
+  );
+}
+
 function render() {
   renderFamilyTabs();
   renderFamily();
@@ -281,6 +290,9 @@ function render() {
   renderStats();
   renderMemberBreakdown();
   renderRecentExpenses();
+  renderCategoryBudgets();
+  renderReports();
+  renderMemberAccess();
 }
 
 function renderFamilyTabs() {
@@ -357,10 +369,14 @@ function renderHeads() {
           <div class="badge-row">
             ${statusBadge(head.status)}
             ${statusBadge(head.billing_status)}
+            ${statusBadge(head.can_add_members ? "members unlocked" : "free")}
             <span class="mini-badge">Paid until ${head.paid_until || "not set"}</span>
           </div>
         </div>
         <div class="row-actions">
+          <button type="button" data-toggle-member-access="${head.id}" data-next-member-access="${head.can_add_members ? "false" : "true"}">
+            ${head.can_add_members ? "Lock members" : "Unlock members"}
+          </button>
           <button type="button" data-toggle-head="${head.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">
             ${head.status === "active" ? "Suspend" : "Reactivate"}
           </button>
@@ -466,7 +482,8 @@ function renderPaymentRecord(payment, withActions = false) {
 }
 
 function statusBadge(status) {
-  return `<span class="mini-badge ${status}">${escapeHtml(status)}</span>`;
+  const badgeClass = `${status}`.toLowerCase().replaceAll(" ", "-");
+  return `<span class="mini-badge ${badgeClass}">${escapeHtml(status)}</span>`;
 }
 
 function formatCurrencyTotals(payments) {
@@ -482,8 +499,21 @@ function formatCurrencyTotals(payments) {
 
 function renderFamily() {
   $("#householdTitle").textContent = state.family.name;
-  $("#headBillingBadge").textContent = state.headApproval?.billing_status || "billing";
-  $("#headBillingBadge").className = `mini-badge ${state.headApproval?.billing_status || ""}`;
+  $("#headBillingBadge").textContent = state.headApproval?.billing_status || "free";
+  $("#headBillingBadge").className = `mini-badge ${state.headApproval?.billing_status || "free"}`;
+}
+
+function canAddMembers() {
+  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+}
+
+function renderMemberAccess() {
+  const allowed = canAddMembers();
+  $("#memberAccessText").textContent = allowed ? "Adding members unlocked" : "Free plan: household only";
+  $("#memberAccessNotice").classList.toggle("hidden", allowed);
+  $("#memberForm").querySelectorAll("input, select, button").forEach((field) => {
+    field.disabled = !allowed;
+  });
 }
 
 function renderMembers() {
@@ -515,6 +545,16 @@ function renderMembers() {
     const monthTotal = memberMonthTotal(member.id);
     const limit = Number(member.spending_limit || 0);
     const limitPercent = limit > 0 ? Math.min((monthTotal / limit) * 100, 100) : 0;
+    const actions = canAddMembers()
+      ? `
+        <div class="row-actions">
+          <button type="button" data-toggle-member="${member.id}" data-next-status="${member.status === "active" ? "inactive" : "active"}">
+            ${member.status === "active" ? "Mark inactive" : "Reactivate"}
+          </button>
+          <button type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.name)}">Delete</button>
+        </div>
+      `
+      : "";
     const item = document.createElement("article");
     item.className = "member-item member-card";
     item.innerHTML = `
@@ -526,12 +566,7 @@ function renderMembers() {
         <div class="meter small-meter"><span style="width:${limitPercent}%"></span></div>
         <small>${money(monthTotal, state.family.currency)} spent this month</small>
       </div>
-      <div class="row-actions">
-        <button type="button" data-toggle-member="${member.id}" data-next-status="${member.status === "active" ? "inactive" : "active"}">
-          ${member.status === "active" ? "Mark inactive" : "Reactivate"}
-        </button>
-        <button type="button" data-delete-member="${member.id}" aria-label="Delete ${escapeHtml(member.name)}">Delete</button>
-      </div>
+      ${actions}
     `;
     list.append(item);
   });
@@ -601,6 +636,114 @@ function renderRecentExpenses() {
   recent.forEach((expense) => list.append(renderExpenseItem(expense, false)));
 }
 
+function renderCategoryBudgets() {
+  const list = $("#categoryBudgetList");
+  const categories = ["Groceries", "Utilities", "Transport", "School", "Health", "Rent", "Fun", "Other"];
+  const rows = categories.map((category) => {
+    const budget = state.categoryBudgets.find((item) => item.category === category);
+    const spent = categoryMonthTotal(category);
+    return {
+      category,
+      limit: Number(budget?.monthly_limit || 0),
+      spent,
+      id: budget?.id
+    };
+  }).filter((row) => row.limit > 0 || row.spent > 0);
+
+  if (!rows.length) {
+    list.innerHTML = `
+      <div class="empty-ledger">
+        <strong>No category budgets yet</strong>
+        <span>Set monthly limits for groceries, rent, school, transport, and more.</span>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = "";
+  rows.forEach((row) => {
+    const percent = row.limit > 0 ? Math.min((row.spent / row.limit) * 100, 100) : 0;
+    const item = document.createElement("article");
+    item.className = "breakdown-item";
+    item.innerHTML = `
+      <div class="category-chip">${escapeHtml(row.category.slice(0, 2).toUpperCase())}</div>
+      <div>
+        <strong>${escapeHtml(row.category)}</strong>
+        <span>${money(row.spent, state.family.currency)} of ${row.limit > 0 ? money(row.limit, state.family.currency) : "no limit"}</span>
+        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
+      </div>
+      ${row.id ? `<button type="button" data-delete-budget="${row.id}">Delete</button>` : ""}
+    `;
+    list.append(item);
+  });
+}
+
+function renderReports() {
+  const expenses = monthExpenses();
+  const spent = expenses.reduce((sum, expense) => sum + Number(expense.amount), 0);
+  const average = expenses.length ? spent / expenses.length : 0;
+  const highest = [...expenses].sort((a, b) => Number(b.amount) - Number(a.amount))[0];
+  const budget = Number(state.family.monthly_budget || 0);
+  const budgetPercent = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+
+  $("#averageExpense").textContent = money(average, state.family.currency);
+  $("#expenseCount").textContent = expenses.length;
+  $("#highestExpense").textContent = money(highest?.amount || 0, state.family.currency);
+  $("#highestExpenseText").textContent = highest ? `${highest.category} on ${highest.expense_date}` : "No expenses yet";
+  $("#budgetHealth").textContent = budget > 0 ? `${budgetPercent}%` : "0%";
+  $("#budgetHealthText").textContent = budget > 0 ? `${money(spent, state.family.currency)} of ${money(budget, state.family.currency)}` : "No monthly budget";
+
+  renderCategoryReport();
+  renderMemberReport();
+}
+
+function renderCategoryReport() {
+  const list = $("#categoryReportList");
+  const totals = monthExpenses().reduce((acc, expense) => {
+    acc[expense.category] = (acc[expense.category] || 0) + Number(expense.amount);
+    return acc;
+  }, {});
+  renderReportRows(list, Object.entries(totals).map(([name, total]) => ({ name, total })), "No category spending yet");
+}
+
+function renderMemberReport() {
+  const list = $("#memberReportList");
+  const rows = [
+    { name: "Whole family", total: sharedMonthTotal() },
+    ...state.members.map((member) => ({ name: member.name, total: memberMonthTotal(member.id) }))
+  ].filter((row) => row.total > 0);
+  renderReportRows(list, rows, "No member spending yet");
+}
+
+function renderReportRows(list, rows, emptyText) {
+  if (!rows.length) {
+    list.innerHTML = `
+      <div class="empty-ledger">
+        <strong>${emptyText}</strong>
+        <span>Reports update as expenses are recorded.</span>
+      </div>
+    `;
+    return;
+  }
+
+  const maxTotal = Math.max(...rows.map((row) => row.total), 1);
+  list.innerHTML = "";
+  rows.sort((a, b) => b.total - a.total).forEach((row) => {
+    const percent = Math.min((row.total / maxTotal) * 100, 100);
+    const item = document.createElement("article");
+    item.className = "breakdown-item";
+    item.innerHTML = `
+      <div class="category-chip">${escapeHtml(row.name.slice(0, 2).toUpperCase())}</div>
+      <div>
+        <strong>${escapeHtml(row.name)}</strong>
+        <span>${money(row.total, state.family.currency)}</span>
+        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
+      </div>
+    `;
+    list.append(item);
+  });
+}
+
 function monthExpenses() {
   return state.expenses.filter((expense) => expense.expense_date.startsWith(state.filterMonth));
 }
@@ -614,6 +757,12 @@ function memberMonthTotal(memberId) {
 function sharedMonthTotal() {
   return monthExpenses()
     .filter((expense) => !expense.member_id)
+    .reduce((sum, expense) => sum + Number(expense.amount), 0);
+}
+
+function categoryMonthTotal(category) {
+  return monthExpenses()
+    .filter((expense) => expense.category === category)
     .reduce((sum, expense) => sum + Number(expense.amount), 0);
 }
 
@@ -749,11 +898,16 @@ async function signIn() {
 
 async function signUp() {
   assertSupabase();
-  const email = $("#email").value.trim();
-  const password = $("#password").value;
-  const fullName = email.split("@")[0] || "Household user";
+  const fullName = $("#signupName").value.trim();
+  const email = $("#signupEmail").value.trim();
+  const password = $("#signupPassword").value;
+  const confirmPassword = $("#signupPasswordConfirm").value;
   if (!email || !password) {
     showToast("Enter an email and password.");
+    return;
+  }
+  if (password !== confirmPassword) {
+    showToast("Passwords do not match.");
     return;
   }
 
@@ -766,31 +920,10 @@ async function signUp() {
         options: { data: { full_name: fullName } }
       })
     );
-    showToast("Account created. Check your email if confirmation is enabled.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
-async function sendMagicLink() {
-  assertSupabase();
-  const email = $("#email").value.trim();
-  if (!email) {
-    showToast("Enter your email first.");
-    return;
-  }
-
-  try {
-    await query(
-      "magic link",
-      supabase.auth.signInWithOtp({
-        email,
-        options: {
-          emailRedirectTo: `${window.location.origin}${window.location.pathname}`
-        }
-      })
-    );
-    showToast("Magic link sent.");
+    await supabase.auth.signOut();
+    $("#signupForm").reset();
+    setView("auth");
+    showToast("Account created. You can sign in now.");
   } catch (error) {
     showToast(error.message);
   }
@@ -845,6 +978,11 @@ async function addMember(event) {
   event.preventDefault();
   assertSupabase();
 
+  if (!canAddMembers()) {
+    showToast("Admin approval is required before adding family members.");
+    return;
+  }
+
   const name = $("#memberName").value.trim();
   const role = $("#memberRole").value;
   const allowance = Number($("#memberAllowance").value || 0);
@@ -876,6 +1014,48 @@ async function addMember(event) {
   }
 }
 
+async function saveCategoryBudget(event) {
+  event.preventDefault();
+  assertSupabase();
+
+  const category = $("#budgetCategory").value;
+  const monthlyLimit = Number($("#budgetLimit").value || 0);
+  if (monthlyLimit < 0) {
+    showToast("Budget limit cannot be negative.");
+    return;
+  }
+
+  const existing = state.categoryBudgets.find((budget) => budget.category === category);
+  const payload = {
+    family_id: state.family.id,
+    category,
+    monthly_limit: monthlyLimit,
+    created_by: state.session.user.id,
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    if (existing) {
+      await query(
+        "category budget update",
+        supabase.from("category_budgets").update(payload).eq("id", existing.id)
+      );
+    } else {
+      await query(
+        "category budget create",
+        supabase.from("category_budgets").insert(payload)
+      );
+    }
+
+    $("#budgetForm").reset();
+    await loadCategoryBudgets();
+    render();
+    showToast("Category budget saved.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function updateMemberStatus(memberId, nextStatus) {
   try {
     await query(
@@ -899,6 +1079,7 @@ async function addHead(event) {
   const monthlyFee = Number($("#headMonthlyFee").value || 0);
   const feeCurrency = $("#headFeeCurrency").value;
   const billingStatus = $("#headBillingStatus").value;
+  const canAddMembersValue = $("#headCanAddMembers").checked;
   if (!fullName || !email) return;
 
   try {
@@ -911,13 +1092,14 @@ async function addHead(event) {
         monthly_fee: monthlyFee,
         fee_currency: feeCurrency,
         billing_status: billingStatus,
+        can_add_members: canAddMembersValue,
         status: "active"
       })
     );
     $("#headForm").reset();
     await loadAdminData();
     renderAdmin();
-    showToast("Head of family approved.");
+    showToast("User access saved.");
   } catch (error) {
     showToast(error.message);
   }
@@ -932,6 +1114,20 @@ async function updateHeadStatus(headId, nextStatus) {
     await loadAdminData();
     renderAdmin();
     showToast(nextStatus === "active" ? "Head reactivated." : "Head suspended.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function updateHeadMemberAccess(headId, nextValue) {
+  try {
+    await query(
+      "head member access update",
+      supabase.from("family_heads").update({ can_add_members: nextValue === "true" }).eq("id", headId)
+    );
+    await loadAdminData();
+    renderAdmin();
+    showToast(nextValue === "true" ? "Family-member access unlocked." : "Family-member access locked.");
   } catch (error) {
     showToast(error.message);
   }
@@ -1095,6 +1291,20 @@ async function deletePayment(paymentId) {
   }
 }
 
+async function deleteCategoryBudget(budgetId) {
+  try {
+    await query(
+      "category budget delete",
+      supabase.from("category_budgets").delete().eq("id", budgetId)
+    );
+    await loadCategoryBudgets();
+    render();
+    showToast("Category budget deleted.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 function findFamilyForHead(head) {
   return state.adminFamilies.find(
     (family) => (family.owner_email || "").toLowerCase() === head.email.toLowerCase()
@@ -1169,7 +1379,14 @@ function exportCsv() {
 document.addEventListener("click", async (event) => {
   const authAction = event.target.dataset.authAction;
   if (authAction === "signup") await signUp();
-  if (authAction === "magic") await sendMagicLink();
+
+  if (event.target.dataset.showSignup !== undefined) {
+    setView("signup");
+  }
+
+  if (event.target.dataset.showSignin !== undefined) {
+    setView("auth");
+  }
 
   const memberId = event.target.dataset.deleteMember;
   if (memberId) await deleteMember(memberId);
@@ -1183,8 +1400,16 @@ document.addEventListener("click", async (event) => {
   const toggleHeadId = event.target.dataset.toggleHead;
   if (toggleHeadId) await updateHeadStatus(toggleHeadId, event.target.dataset.nextStatus);
 
+  const toggleMemberAccessId = event.target.dataset.toggleMemberAccess;
+  if (toggleMemberAccessId) {
+    await updateHeadMemberAccess(toggleMemberAccessId, event.target.dataset.nextMemberAccess);
+  }
+
   const paymentId = event.target.dataset.deletePayment;
   if (paymentId) await deletePayment(paymentId);
+
+  const budgetId = event.target.dataset.deleteBudget;
+  if (budgetId) await deleteCategoryBudget(budgetId);
 
   const adminTab = event.target.dataset.adminTab;
   if (adminTab) {
@@ -1206,9 +1431,14 @@ document.addEventListener("click", async (event) => {
 });
 
 $("#authForm").addEventListener("submit", handleAuthSubmit);
+$("#signupForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await signUp();
+});
 $("#familyForm").addEventListener("submit", createFamily);
 $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPayment);
+$("#budgetForm").addEventListener("submit", saveCategoryBudget);
 $("#memberForm").addEventListener("submit", addMember);
 $("#expenseForm").addEventListener("submit", addExpense);
 $("#cancelEditExpenseButton").addEventListener("click", resetExpenseForm);

@@ -1,15 +1,15 @@
 :root {
-  --ink: #16201f;
-  --muted: #667370;
-  --paper: #f6f3ea;
-  --surface: #fffdf7;
-  --line: #d9ddd2;
-  --teal: #167d77;
-  --teal-soft: #d7f2ea;
-  --orange: #f28c52;
-  --blue: #2859b8;
+  --ink: #18211f;
+  --muted: #68726f;
+  --paper: #f4f6f1;
+  --surface: #ffffff;
+  --line: #dfe5dd;
+  --teal: #126b63;
+  --teal-soft: #dff3ed;
+  --orange: #e97842;
+  --blue: #315fba;
   --danger: #b42318;
-  --shadow: 0 24px 80px rgba(23, 32, 31, 0.12);
+  --shadow: 0 18px 55px rgba(24, 33, 31, 0.08);
   color: var(--ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-size: 16px;
@@ -22,11 +22,7 @@
 body {
   min-height: 100vh;
   margin: 0;
-  background:
-    linear-gradient(90deg, rgba(22, 125, 119, 0.08) 1px, transparent 1px),
-    linear-gradient(0deg, rgba(22, 125, 119, 0.08) 1px, transparent 1px),
-    var(--paper);
-  background-size: 36px 36px;
+  background: var(--paper);
 }
 
 button,
@@ -91,7 +87,7 @@ code {
 
 .app-frame {
   display: grid;
-  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -102,8 +98,8 @@ code {
   align-content: start;
   gap: 24px;
   height: 100vh;
-  padding: 34px;
-  background: #12312f;
+  padding: 26px 22px;
+  background: #102925;
   color: var(--paper);
 }
 
@@ -113,11 +109,11 @@ code {
 }
 
 .rail h1 {
-  max-width: 11ch;
+  max-width: 12ch;
   margin: 8px 0 0;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(2rem, 4vw, 4.6rem);
-  line-height: 0.95;
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
+  line-height: 1;
   font-weight: 700;
 }
 
@@ -163,9 +159,9 @@ code {
 }
 
 .workspace {
-  width: min(1180px, 100%);
+  width: min(1320px, 100%);
   margin: 0 auto;
-  padding: 34px;
+  padding: 26px;
 }
 
 .hidden {
@@ -179,7 +175,7 @@ code {
 .ledger-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: rgba(255, 253, 247, 0.94);
+  background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow);
 }
 
@@ -197,7 +193,7 @@ code {
 .auth-panel,
 .setup-panel {
   max-width: 620px;
-  margin: 10vh auto 0;
+  margin: 7vh auto 0;
   padding: 28px;
 }
 
@@ -365,11 +361,22 @@ code {
 }
 
 .stat-card {
-  min-height: 152px;
+  min-height: 138px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 18px;
   background: var(--surface);
+}
+
+.checkbox-label {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  color: var(--ink);
+}
+
+.checkbox-label input {
+  width: 18px;
+  min-height: 18px;
 }
 
 .stat-label,
@@ -570,6 +577,30 @@ code {
   border-color: rgba(242, 140, 82, 0.28);
   background: #fff2e9;
   color: #944500;
+}
+
+.mini-badge.free {
+  border-color: rgba(49, 95, 186, 0.22);
+  background: #eef4ff;
+  color: var(--blue);
+}
+
+.mini-badge.members-unlocked {
+  border-color: rgba(22, 125, 119, 0.28);
+  background: var(--teal-soft);
+  color: #12312f;
+}
+
+.category-chip {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: var(--blue);
+  font-size: 0.78rem;
+  font-weight: 900;
 }
 
 .filters {
