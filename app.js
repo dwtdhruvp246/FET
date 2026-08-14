@@ -16,9 +16,13 @@ const supabase = isConfigured
 const state = {
   session: null,
   profile: null,
+  isAdmin: false,
+  headApproval: null,
   family: null,
   members: [],
   expenses: [],
+  heads: [],
+  adminFamilies: [],
   filterMonth: toMonthValue(new Date()),
   filterCategory: "All"
 };
@@ -29,6 +33,8 @@ const views = {
   configWarning: $("#configWarning"),
   auth: $("#authView"),
   setup: $("#setupView"),
+  pending: $("#pendingView"),
+  admin: $("#adminView"),
   app: $("#appView")
 };
 
@@ -122,15 +128,33 @@ async function init() {
 
 function resetState() {
   state.profile = null;
+  state.isAdmin = false;
+  state.headApproval = null;
   state.family = null;
   state.members = [];
   state.expenses = [];
+  state.heads = [];
+  state.adminFamilies = [];
 }
 
 async function loadApp() {
   assertSupabase();
   await ensureProfile();
+  await loadAccess();
+
+  if (state.isAdmin) {
+    await loadAdminData();
+    setView("admin");
+    renderAdmin();
+    return;
+  }
+
   await loadFamily();
+
+  if (!state.headApproval && !state.family) {
+    setView("pending");
+    return;
+  }
 
   if (!state.family) {
     setView("setup");
@@ -166,12 +190,40 @@ async function ensureProfile() {
   );
 }
 
+async function loadAccess() {
+  const userEmail = state.session.user.email?.toLowerCase();
+
+  const adminRows = await query(
+    "admin access load",
+    supabase.from("app_admins").select("*").eq("user_id", state.session.user.id).limit(1)
+  );
+  state.isAdmin = adminRows.length > 0;
+
+  const headRows = await query(
+    "head access load",
+    supabase.from("family_heads").select("*").eq("email", userEmail).limit(1)
+  );
+  state.headApproval = headRows[0] || null;
+}
+
 async function loadFamily() {
   const families = await query(
     "family load",
     supabase.from("families").select("*").order("created_at", { ascending: true }).limit(1)
   );
   state.family = families[0] || null;
+}
+
+async function loadAdminData() {
+  state.heads = await query(
+    "heads load",
+    supabase.from("family_heads").select("*").order("created_at", { ascending: false })
+  );
+
+  state.adminFamilies = await query(
+    "admin families load",
+    supabase.from("families").select("*").order("created_at", { ascending: false })
+  );
 }
 
 async function loadMembers() {
@@ -202,6 +254,62 @@ function render() {
   renderMembers();
   renderExpenses();
   renderStats();
+}
+
+function renderAdmin() {
+  $("#adminHeadCount").textContent = state.heads.length;
+  $("#adminFamilyCount").textContent = state.adminFamilies.length;
+  $("#adminEmail").textContent = state.session.user.email || "-";
+
+  const headsList = $("#headsList");
+  if (!state.heads.length) {
+    headsList.innerHTML = `<p class="empty">No heads approved yet.</p>`;
+  } else {
+    headsList.innerHTML = "";
+    state.heads.forEach((head) => {
+      const item = document.createElement("article");
+      item.className = "member-item";
+      item.innerHTML = `
+        <div>
+          <strong>${escapeHtml(head.full_name)}</strong>
+          <span>${escapeHtml(head.email)}</span>
+        </div>
+        <button type="button" data-delete-head="${head.id}" aria-label="Revoke ${escapeHtml(head.full_name)}">Revoke</button>
+      `;
+      headsList.append(item);
+    });
+  }
+
+  const familiesList = $("#adminFamiliesList");
+  if (!state.adminFamilies.length) {
+    familiesList.innerHTML = `
+      <div class="empty-ledger">
+        <strong>No households yet</strong>
+        <span>Approve a head of family so they can create one.</span>
+      </div>
+    `;
+    return;
+  }
+
+  familiesList.innerHTML = "";
+  state.adminFamilies.forEach((family) => {
+    const item = document.createElement("article");
+    item.className = "expense-item admin-family-item";
+    item.innerHTML = `
+      <div class="expense-date">
+        <strong>${family.currency}</strong>
+        <span>Budget</span>
+      </div>
+      <div class="expense-detail">
+        <strong>${escapeHtml(family.name)}</strong>
+        <span>Created ${new Date(family.created_at).toLocaleDateString()}</span>
+      </div>
+      <div class="expense-actions">
+        <strong>${money(family.monthly_budget, family.currency)}</strong>
+      </div>
+    `;
+    familiesList.append(item);
+  });
 }
 
 function renderFamily() {
@@ -474,6 +582,32 @@ async function addMember(event) {
   }
 }
 
+async function addHead(event) {
+  event.preventDefault();
+  assertSupabase();
+
+  const fullName = $("#headName").value.trim();
+  const email = $("#headEmail").value.trim().toLowerCase();
+  if (!fullName || !email) return;
+
+  try {
+    await query(
+      "head create",
+      supabase.from("family_heads").insert({
+        full_name: fullName,
+        email,
+        created_by: state.session.user.id
+      })
+    );
+    $("#headForm").reset();
+    await loadAdminData();
+    renderAdmin();
+    showToast("Head of family approved.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function addExpense(event) {
   event.preventDefault();
   assertSupabase();
@@ -503,6 +637,20 @@ async function addExpense(event) {
     await loadExpenses();
     render();
     showToast("Expense added.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function deleteHead(headId) {
+  try {
+    await query(
+      "head delete",
+      supabase.from("family_heads").delete().eq("id", headId)
+    );
+    await loadAdminData();
+    renderAdmin();
+    showToast("Head access revoked.");
   } catch (error) {
     showToast(error.message);
   }
@@ -580,15 +728,21 @@ document.addEventListener("click", async (event) => {
   const memberId = event.target.dataset.deleteMember;
   if (memberId) await deleteMember(memberId);
 
+  const headId = event.target.dataset.deleteHead;
+  if (headId) await deleteHead(headId);
+
   const expenseId = event.target.dataset.deleteExpense;
   if (expenseId) await deleteExpense(expenseId);
 });
 
 $("#authForm").addEventListener("submit", handleAuthSubmit);
 $("#familyForm").addEventListener("submit", createFamily);
+$("#headForm").addEventListener("submit", addHead);
 $("#memberForm").addEventListener("submit", addMember);
 $("#expenseForm").addEventListener("submit", addExpense);
 $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut());
+$("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
+$("#pendingSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#exportCsvButton").addEventListener("click", exportCsv);
 $("#monthFilter").addEventListener("change", (event) => {
   state.filterMonth = event.target.value;

@@ -7,8 +7,8 @@
     <title>Household Ledger</title>
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="config.js?v=2"></script>
-    <script type="module" src="app.js?v=2"></script>
+    <script src="config.js?v=3"></script>
+    <script type="module" src="app.js?v=3"></script>
   </head>
   <body>
     <div class="app-frame">
@@ -83,6 +83,77 @@
             </label>
             <button class="primary" type="submit">Create household</button>
           </form>
+        </section>
+
+        <section id="pendingView" class="setup-panel hidden" aria-labelledby="pendingTitle">
+          <div class="panel-heading">
+            <p class="eyebrow">Approval needed</p>
+            <h2 id="pendingTitle">Your account is waiting for admin access</h2>
+          </div>
+          <p class="muted-copy">An admin needs to add your email as a head of family before you can create a household.</p>
+          <button id="pendingSignOutButton" type="button">Sign out</button>
+        </section>
+
+        <section id="adminView" class="hidden">
+          <header class="topbar">
+            <div>
+              <p class="eyebrow">Admin dashboard</p>
+              <h2>Control households</h2>
+            </div>
+            <button id="adminSignOutButton" type="button">Sign out</button>
+          </header>
+
+          <section class="stats-grid" aria-label="Admin summary">
+            <article class="stat-card">
+              <span class="stat-label">Heads approved</span>
+              <strong id="adminHeadCount">0</strong>
+              <small>People who can create households</small>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Households</span>
+              <strong id="adminFamilyCount">0</strong>
+              <small>Families in the app</small>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Admin email</span>
+              <strong id="adminEmail">-</strong>
+              <small>Signed-in control account</small>
+            </article>
+            <article class="stat-card">
+              <span class="stat-label">Mode</span>
+              <strong>Admin</strong>
+              <small>Can add or revoke heads</small>
+            </article>
+          </section>
+
+          <section class="content-grid">
+            <section class="tool-panel" aria-labelledby="headTitle">
+              <div class="panel-heading">
+                <p class="eyebrow">Access</p>
+                <h3 id="headTitle">Add head of family</h3>
+              </div>
+              <form id="headForm" class="form-grid">
+                <label>
+                  Full name
+                  <input id="headName" required placeholder="Jordan Lee" />
+                </label>
+                <label>
+                  Email
+                  <input id="headEmail" type="email" required placeholder="head@example.com" />
+                </label>
+                <button class="primary full" type="submit">Approve head</button>
+              </form>
+              <div id="headsList" class="members-list"></div>
+            </section>
+
+            <section class="ledger-panel" aria-labelledby="adminFamiliesTitle">
+              <div class="panel-heading">
+                <p class="eyebrow">Overview</p>
+                <h3 id="adminFamiliesTitle">Households</h3>
+              </div>
+              <div id="adminFamiliesList" class="expenses-list"></div>
+            </section>
+          </section>
         </section>
 
         <section id="appView" class="hidden">

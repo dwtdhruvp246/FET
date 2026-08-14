@@ -188,6 +188,12 @@ code {
   line-height: 1.6;
 }
 
+.muted-copy {
+  margin: 0 0 18px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .auth-panel,
 .setup-panel {
   max-width: 620px;
@@ -281,6 +287,12 @@ code {
   margin: 10px 0 8px;
   font-size: clamp(1.55rem, 3vw, 2.4rem);
   line-height: 1;
+}
+
+#adminEmail {
+  overflow-wrap: anywhere;
+  font-size: 1.05rem;
+  line-height: 1.25;
 }
 
 .meter {
@@ -405,6 +417,10 @@ code {
   display: grid;
   gap: 8px;
   justify-items: end;
+}
+
+.admin-family-item .expense-date strong {
+  font-size: 1rem;
 }
 
 .empty,
