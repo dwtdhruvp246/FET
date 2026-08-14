@@ -86,35 +86,13 @@ code {
 }
 
 .app-frame {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  display: block;
   min-height: 100vh;
-}
-
-.rail {
-  position: sticky;
-  top: 0;
-  display: grid;
-  align-content: start;
-  gap: 24px;
-  height: 100vh;
-  padding: 26px 22px;
-  background: #102925;
-  color: var(--paper);
 }
 
 .brand-mark {
   width: 64px;
   height: 64px;
-}
-
-.rail h1 {
-  max-width: 12ch;
-  margin: 8px 0 0;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(1.55rem, 3vw, 2.45rem);
-  line-height: 1;
-  font-weight: 700;
 }
 
 .eyebrow {
@@ -126,42 +104,10 @@ code {
   text-transform: uppercase;
 }
 
-.receipt-strip {
-  display: grid;
-  gap: 12px;
-  margin-top: 22px;
-}
-
-.receipt-strip span {
-  display: block;
-  height: 8px;
-  border-radius: 999px;
-  background: rgba(246, 243, 234, 0.2);
-}
-
-.receipt-strip span:nth-child(2) {
-  width: 78%;
-  background: var(--teal-soft);
-}
-
-.receipt-strip span:nth-child(3) {
-  width: 58%;
-  background: var(--orange);
-}
-
-.receipt-strip span:nth-child(4) {
-  width: 86%;
-}
-
-.receipt-strip span:nth-child(5) {
-  width: 44%;
-  background: #e9d46f;
-}
-
 .workspace {
-  width: min(1320px, 100%);
+  width: min(1440px, 100%);
   margin: 0 auto;
-  padding: 26px;
+  padding: 30px;
 }
 
 .hidden {
@@ -257,50 +203,54 @@ code {
 
 .admin-shell {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 20px;
-  align-items: start;
 }
 
 .admin-sidebar {
   position: sticky;
-  top: 24px;
+  top: 0;
+  z-index: 5;
   display: grid;
-  gap: 18px;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  align-items: center;
+  gap: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 18px;
-  background: #12312f;
-  color: var(--paper);
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--ink);
   box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
 }
 
 .admin-sidebar h2 {
-  margin: 8px 0 0;
-  font-size: 1.35rem;
+  margin: 4px 0 0;
+  font-size: 1.2rem;
   line-height: 1.1;
 }
 
 .admin-sidebar button {
-  border-color: rgba(246, 243, 234, 0.22);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--paper);
+  border-color: var(--line);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .admin-nav {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .admin-nav-button {
   justify-content: start;
-  width: 100%;
+  width: auto;
   text-align: left;
 }
 
 .admin-nav-button.active {
   border-color: var(--orange);
-  background: var(--paper);
+  background: #fff4ed;
   color: #12312f;
 }
 
@@ -585,6 +535,14 @@ code {
   color: var(--blue);
 }
 
+.mini-badge.free-signup,
+.mini-badge.payment-not-set,
+.mini-badge.member-access-locked {
+  border-color: rgba(49, 95, 186, 0.18);
+  background: #f3f6fb;
+  color: #4d5d78;
+}
+
 .mini-badge.members-unlocked {
   border-color: rgba(22, 125, 119, 0.28);
   background: var(--teal-soft);
@@ -654,6 +612,14 @@ code {
   font-size: 1rem;
 }
 
+.admin-family-item {
+  grid-template-columns: 72px minmax(0, 1fr) minmax(220px, auto);
+}
+
+.admin-family-item .expense-actions {
+  min-width: 220px;
+}
+
 .empty,
 .empty-ledger {
   margin: 0;
@@ -687,26 +653,6 @@ code {
 }
 
 @media (max-width: 960px) {
-  .app-frame {
-    grid-template-columns: 1fr;
-  }
-
-  .rail {
-    position: relative;
-    height: auto;
-    grid-template-columns: auto 1fr;
-    padding: 24px;
-  }
-
-  .rail h1 {
-    max-width: 18ch;
-    font-size: 2.6rem;
-  }
-
-  .receipt-strip {
-    display: none;
-  }
-
   .workspace {
     padding: 22px;
   }
@@ -717,10 +663,6 @@ code {
   }
 
   .content-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-shell {
     grid-template-columns: 1fr;
   }
 
@@ -735,7 +677,11 @@ code {
   }
 
   .admin-nav {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .admin-sidebar {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -769,7 +715,12 @@ code {
   }
 
   .admin-nav {
+    display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-nav-button {
+    width: 100%;
   }
 
   .stats-grid,

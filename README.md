@@ -6,7 +6,8 @@ A static family expense tracker that uses Supabase Auth and Postgres as the data
 
 - Email/password sign up and sign in
 - Admin dashboard with Dashboard, Heads, Finance, and Households pages
-- Admin can unlock family-member access, suspend, reactivate, or revoke users
+- Admin can unlock family-member access from the Households page or the Heads page
+- Admin can suspend, reactivate, or revoke users
 - Admin can manually record user payments
 - Payment history with amount, method, date, period, notes, and reference number
 - Head billing status: paid, unpaid, or overdue
@@ -65,14 +66,14 @@ Recent Supabase projects may require tables to be explicitly available to the Da
 
 Anyone can sign up with email and password. They can create a household and track household-level expenses immediately.
 
-Adding family members is locked on free accounts. The admin unlocks it from the Admin `Heads` page by adding the user's email and enabling `Allow this user to add family members`.
+Adding family members is locked on free accounts. The admin unlocks it from Admin `Households`: once a free user creates a household, that household appears in the list. Click `Unlock members` on that household to create or update the owner's access settings and allow them to add family members. You can still use `Heads` as a manual directory for editing fees, billing status, and access.
 
 If the admin suspends a head of family, that user is blocked from the household area until the admin reactivates them.
 
 ## Admin finance workflow
 
 1. Go to the Admin `Heads` page.
-2. Add the user with name, email, monthly fee, billing status, and family-member access.
+2. Open the `Households` page and unlock member access for the user's household, or add the user manually on the `Heads` page.
 3. Go to the Admin `Finance` page.
 4. Choose the head of family.
 5. Add amount, currency, payment method, payment date, billing period, optional reference, optional paid-until date, and notes.
@@ -111,7 +112,7 @@ Recording a payment automatically marks that head as `paid` and updates their la
 2. Sign in with email and password.
 3. Create a household without admin approval.
 4. Try to add a family member and confirm it is locked.
-5. As admin, unlock family-member access for that email.
+5. As admin, open `Households` and click `Unlock members` for that household.
 6. Return to the user account and confirm member adding works.
 7. Go to Budget and save category limits.
 8. Add expenses and confirm Budget progress updates.

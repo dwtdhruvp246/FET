@@ -405,7 +405,7 @@ function renderAdminFamilies() {
     familiesList.innerHTML = `
       <div class="empty-ledger">
         <strong>No households yet</strong>
-        <span>Approve a head of family so they can create one.</span>
+        <span>New signups will appear here after they create a household.</span>
       </div>
     `;
     return;
@@ -415,9 +415,12 @@ function renderAdminFamilies() {
   state.adminFamilies.forEach((family) => {
     const item = document.createElement("article");
     item.className = "expense-item admin-family-item";
-    const matchingHead = state.heads.find(
-      (head) => head.email.toLowerCase() === (family.owner_email || "").toLowerCase()
-    );
+    const matchingHead = findHeadForFamily(family);
+    const accessText = matchingHead?.can_add_members ? "members unlocked" : "member access locked";
+    const ownerEmail = family.owner_email || "Owner email not stored";
+    const createdDate = new Date(family.created_at).toLocaleDateString();
+    const statusText = matchingHead?.status || "free signup";
+    const billingText = matchingHead?.billing_status || "payment not set";
     item.innerHTML = `
       <div class="expense-date">
         <strong>${family.currency}</strong>
@@ -425,14 +428,28 @@ function renderAdminFamilies() {
       </div>
       <div class="expense-detail">
         <strong>${escapeHtml(family.name)}</strong>
-        <span>${escapeHtml(family.owner_email || "Owner email not stored")} &middot; Created ${new Date(family.created_at).toLocaleDateString()}</span>
-        <div class="badge-row">
-          ${matchingHead ? statusBadge(matchingHead.status) : '<span class="mini-badge">No head match</span>'}
-          ${matchingHead ? statusBadge(matchingHead.billing_status) : ""}
+        <span>${escapeHtml(ownerEmail)} &middot; Created ${createdDate}</span>
+          <div class="badge-row">
+            ${statusBadge(accessText)}
+            ${statusBadge(statusText)}
+            ${statusBadge(billingText)}
+          ${matchingHead?.paid_until ? `<span class="mini-badge">Paid until ${matchingHead.paid_until}</span>` : ""}
         </div>
       </div>
       <div class="expense-actions">
         <strong>${money(family.monthly_budget, family.currency)}</strong>
+        <div class="row-actions">
+          <button type="button" data-toggle-family-member-access="${family.id}" data-next-member-access="${matchingHead?.can_add_members ? "false" : "true"}">
+            ${matchingHead?.can_add_members ? "Lock members" : "Unlock members"}
+          </button>
+          ${
+            matchingHead
+              ? `<button type="button" data-toggle-family-status="${family.id}" data-next-status="${matchingHead.status === "active" ? "suspended" : "active"}">
+                  ${matchingHead.status === "active" ? "Suspend" : "Reactivate"}
+                </button>`
+              : ""
+          }
+        </div>
       </div>
     `;
     familiesList.append(item);
@@ -1094,9 +1111,11 @@ async function addHead(event) {
   if (!fullName || !email) return;
 
   try {
-    await query(
-      "head create",
-      supabase.from("family_heads").insert({
+    const existingRows = await query(
+      "head duplicate check",
+      supabase.from("family_heads").select("id").ilike("email", email).limit(1)
+    );
+    const payload = {
         full_name: fullName,
         email,
         created_by: state.session.user.id,
@@ -1105,8 +1124,20 @@ async function addHead(event) {
         billing_status: billingStatus,
         can_add_members: canAddMembersValue,
         status: "active"
-      })
-    );
+    };
+
+    if (existingRows[0]) {
+      await query(
+        "head update",
+        supabase.from("family_heads").update(payload).eq("id", existingRows[0].id)
+      );
+    } else {
+      await query(
+        "head create",
+        supabase.from("family_heads").insert(payload)
+      );
+    }
+
     $("#headForm").reset();
     await loadAdminData();
     renderAdmin();
@@ -1124,7 +1155,7 @@ async function updateHeadStatus(headId, nextStatus) {
     );
     await loadAdminData();
     renderAdmin();
-    showToast(nextStatus === "active" ? "Head reactivated." : "Head suspended.");
+    showToast(nextStatus === "active" ? "User reactivated." : "User suspended.");
   } catch (error) {
     showToast(error.message);
   }
@@ -1142,6 +1173,62 @@ async function updateHeadMemberAccess(headId, nextValue) {
   } catch (error) {
     showToast(error.message);
   }
+}
+
+async function updateFamilyMemberAccess(familyId, nextValue) {
+  const family = state.adminFamilies.find((item) => item.id === familyId);
+  if (!family?.owner_email) {
+    showToast("This household does not have an owner email saved.");
+    return;
+  }
+
+  const allowMembers = nextValue === "true";
+  const existingHead = findHeadForFamily(family);
+
+  try {
+    if (existingHead) {
+      await query(
+        "household member access update",
+        supabase
+          .from("family_heads")
+          .update({
+            can_add_members: allowMembers
+          })
+          .eq("id", existingHead.id)
+      );
+    } else if (allowMembers) {
+      await query(
+        "household member access create",
+        supabase.from("family_heads").insert({
+          full_name: `${family.name} owner`,
+          email: family.owner_email.toLowerCase(),
+          created_by: state.session.user.id,
+          monthly_fee: 0,
+          fee_currency: family.currency || "USD",
+          billing_status: "unpaid",
+          can_add_members: true,
+          status: "active"
+        })
+      );
+    }
+
+    await loadAdminData();
+    renderAdmin();
+    showToast(allowMembers ? "Family-member access unlocked." : "Family-member access locked.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function updateFamilyStatus(familyId, nextStatus) {
+  const family = state.adminFamilies.find((item) => item.id === familyId);
+  const existingHead = family ? findHeadForFamily(family) : null;
+  if (!existingHead) {
+    showToast("Unlock member access first, then you can suspend this household.");
+    return;
+  }
+
+  await updateHeadStatus(existingHead.id, nextStatus);
 }
 
 async function addPayment(event) {
@@ -1322,6 +1409,12 @@ function findFamilyForHead(head) {
   );
 }
 
+function findHeadForFamily(family) {
+  return state.heads.find(
+    (head) => head.email.toLowerCase() === (family.owner_email || "").toLowerCase()
+  );
+}
+
 async function deleteMember(memberId) {
   try {
     await query(
@@ -1414,6 +1507,16 @@ document.addEventListener("click", async (event) => {
   const toggleMemberAccessId = event.target.dataset.toggleMemberAccess;
   if (toggleMemberAccessId) {
     await updateHeadMemberAccess(toggleMemberAccessId, event.target.dataset.nextMemberAccess);
+  }
+
+  const toggleFamilyMemberAccessId = event.target.dataset.toggleFamilyMemberAccess;
+  if (toggleFamilyMemberAccessId) {
+    await updateFamilyMemberAccess(toggleFamilyMemberAccessId, event.target.dataset.nextMemberAccess);
+  }
+
+  const toggleFamilyStatusId = event.target.dataset.toggleFamilyStatus;
+  if (toggleFamilyStatusId) {
+    await updateFamilyStatus(toggleFamilyStatusId, event.target.dataset.nextStatus);
   }
 
   const paymentId = event.target.dataset.deletePayment;

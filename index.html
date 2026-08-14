@@ -13,22 +13,11 @@
     <link rel="apple-touch-icon" href="assets/pwa-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="config.js?v=7"></script>
-    <script type="module" src="app.js?v=7"></script>
+    <script src="config.js?v=8"></script>
+    <script type="module" src="app.js?v=8"></script>
   </head>
   <body>
     <div class="app-frame">
-      <aside class="rail">
-        <img class="brand-mark" src="assets/ledger-mark.svg" alt="" />
-        <div>
-          <p class="eyebrow">Household Ledger</p>
-          <h1>Family spending, kept close.</h1>
-        </div>
-        <div class="receipt-strip" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span>
-        </div>
-      </aside>
-
       <main class="workspace">
         <section id="configWarning" class="notice hidden">
           <strong>Connect Supabase first.</strong>
@@ -139,7 +128,7 @@
             <aside class="admin-sidebar">
               <div>
                 <p class="eyebrow">Admin console</p>
-                <h2>Household control</h2>
+                <h2>Control room</h2>
               </div>
               <nav class="admin-nav" aria-label="Admin pages">
                 <button class="admin-nav-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
@@ -347,8 +336,8 @@
                 </header>
                 <section class="ledger-panel" aria-labelledby="adminFamiliesTitle">
                   <div class="panel-heading">
-                    <p class="eyebrow">Overview</p>
-                    <h3 id="adminFamiliesTitle">Households</h3>
+                    <p class="eyebrow">Approval queue</p>
+                    <h3 id="adminFamiliesTitle">Member access by household</h3>
                   </div>
                   <div id="adminFamiliesList" class="expenses-list"></div>
                 </section>
