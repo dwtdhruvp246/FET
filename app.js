@@ -229,6 +229,10 @@ function assertSupabase() {
   }
 }
 
+function isSameAuthUser(previousSession, nextSession) {
+  return Boolean(previousSession?.user?.id && previousSession.user.id === nextSession?.user?.id);
+}
+
 async function query(label, promise) {
   const { data, error } = await promise;
   if (error) {
@@ -251,9 +255,16 @@ async function init() {
 
   supabase.auth.onAuthStateChange(async (event, session) => {
     if (event === "INITIAL_SESSION") return;
+    const previousSession = state.session;
     state.session = session;
+
+    if (session && isSameAuthUser(previousSession, session)) {
+      return;
+    }
+
     if (session) {
       setView("loading");
+      resetState();
       await loadApp();
       return;
     }
