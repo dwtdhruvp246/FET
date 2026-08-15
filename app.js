@@ -41,6 +41,7 @@ const $ = (selector) => document.querySelector(selector);
 const views = {
   loading: $("#loadingView"),
   configWarning: $("#configWarning"),
+  appError: $("#appErrorView"),
   auth: $("#authView"),
   signup: $("#signupView"),
   setup: $("#setupView"),
@@ -120,9 +121,71 @@ function setView(viewName) {
 
 function showToast(message) {
   const toast = $("#toast");
-  toast.textContent = message;
+  toast.textContent = friendlyMessage(message);
   toast.classList.remove("hidden");
   window.setTimeout(() => toast.classList.add("hidden"), 3600);
+}
+
+function showAppError(error) {
+  $("#appErrorMessage").textContent = friendlyMessage(error?.message) || "A database or permission error stopped the app from loading.";
+  setView("appError");
+}
+
+function friendlyMessage(message = "") {
+  const text = `${message}`;
+  if (text.includes("infinite recursion")) {
+    return "A database access rule needs to be updated before this workspace can open.";
+  }
+  if (text.includes("permission denied") || text.includes("violates row-level security")) {
+    return "You do not have permission to complete that action yet.";
+  }
+  if (text.includes("Failed to fetch") || text.includes("NetworkError")) {
+    return "The network connection failed. Check your internet connection and try again.";
+  }
+  if (text.includes("duplicate key")) {
+    return "That record already exists. Update the existing one instead.";
+  }
+  return text;
+}
+
+function openDrawer() {
+  const activeView = state.isAdmin ? views.admin : views.app;
+  activeView?.classList.add("drawer-open");
+  activeView?.querySelector(".drawer-backdrop")?.classList.remove("hidden");
+}
+
+function closeDrawer() {
+  [views.admin, views.app].forEach((view) => {
+    view?.classList.remove("drawer-open");
+    view?.querySelector(".drawer-backdrop")?.classList.add("hidden");
+  });
+}
+
+function confirmAction({ title = "Are you sure?", message = "", action = "Confirm" }) {
+  const dialog = $("#confirmDialog");
+  $("#confirmDialogTitle").textContent = title;
+  $("#confirmDialogMessage").textContent = message;
+  $("#confirmDialogConfirm").textContent = action;
+  dialog.showModal();
+  return new Promise((resolve) => {
+    const form = $("#confirmDialogForm");
+    const handleSubmit = (event) => {
+      event.preventDefault();
+      cleanup();
+      dialog.close();
+      resolve(true);
+    };
+    const handleClose = () => {
+      cleanup();
+      resolve(false);
+    };
+    const cleanup = () => {
+      form.removeEventListener("submit", handleSubmit);
+      dialog.removeEventListener("close", handleClose);
+    };
+    form.addEventListener("submit", handleSubmit);
+    dialog.addEventListener("close", handleClose);
+  });
 }
 
 function routeFromHash() {
@@ -394,6 +457,7 @@ function renderFamilyTabs() {
 
 function renderFamilyHeader() {
   $("#householdTitle").textContent = state.family.name;
+  $("#mobileHouseholdTitle").textContent = state.family.name;
   const billing = state.headApproval?.billing_status || "free";
   $("#headBillingBadge").textContent = billing;
   $("#headBillingBadge").className = `mini-badge ${badgeClass(billing)}`;
@@ -1513,12 +1577,28 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.showSignup !== undefined) setView("signup");
   if (event.target.dataset.showSignin !== undefined) setView("auth");
   if (event.target.dataset.closePaymentDialog !== undefined) $("#recordPaymentDialog").close();
+  if (event.target.dataset.closeConfirmDialog !== undefined) $("#confirmDialog").close();
+  if (event.target.dataset.openDrawer !== undefined) openDrawer();
+  if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
+  if (event.target.closest("[data-enable-notifications]")) await enableNotifications();
+  if (event.target.dataset.retryLoad !== undefined) {
+    setView("loading");
+    await loadApp().catch((error) => {
+      console.error(error);
+      showToast(error.message);
+      showAppError(error);
+    });
+  }
+  if (event.target.dataset.signOutError !== undefined) {
+    await supabase.auth.signOut();
+  }
 
   const adminTab = event.target.dataset.adminTab;
   if (adminTab) {
     state.adminTab = adminTab;
     setRoute("admin", adminTab);
     renderAdminTabs();
+    closeDrawer();
   }
 
   const familyTab = event.target.dataset.familyTab;
@@ -1526,6 +1606,7 @@ document.addEventListener("click", async (event) => {
     state.familyTab = familyTab;
     setRoute("family", familyTab);
     renderFamilyTabs();
+    closeDrawer();
   }
 
   const recordPaymentKey = event.target.dataset.recordPayment;
@@ -1538,7 +1619,11 @@ document.addEventListener("click", async (event) => {
   if (toggleObligationId) await updateObligationStatus(toggleObligationId, event.target.dataset.nextStatus);
 
   const deleteObligationId = event.target.dataset.deleteObligation;
-  if (deleteObligationId && confirm("Delete this recurring obligation and its saved payment records?")) {
+  if (deleteObligationId && await confirmAction({
+    title: "Delete obligation?",
+    message: "This deletes the recurring obligation and its saved payment records.",
+    action: "Delete"
+  })) {
     await deleteRow("payment_items", deleteObligationId, async () => {
       await loadFamilyData();
       renderFamilyApp();
@@ -1549,7 +1634,11 @@ document.addEventListener("click", async (event) => {
   if (memberId) await updateMemberStatus(memberId, event.target.dataset.nextStatus);
 
   const deleteMemberId = event.target.dataset.deleteMember;
-  if (deleteMemberId && confirm("Delete this family member?")) {
+  if (deleteMemberId && await confirmAction({
+    title: "Delete family member?",
+    message: "This removes the member from the household roster.",
+    action: "Delete"
+  })) {
     await deleteRow("family_members", deleteMemberId, async () => {
       await loadFamilyData();
       renderFamilyApp();
@@ -1557,7 +1646,11 @@ document.addEventListener("click", async (event) => {
   }
 
   const deleteRecordId = event.target.dataset.deleteRecord;
-  if (deleteRecordId && confirm("Delete this payment record?")) {
+  if (deleteRecordId && await confirmAction({
+    title: "Delete payment record?",
+    message: "This removes the saved payment from the selected period.",
+    action: "Delete"
+  })) {
     await deleteRow("payment_records", deleteRecordId, async () => {
       await loadPaymentRecords();
       renderFamilyApp();
@@ -1565,7 +1658,11 @@ document.addEventListener("click", async (event) => {
   }
 
   const deleteHeadId = event.target.dataset.deleteHead;
-  if (deleteHeadId && confirm("Revoke this user access row?")) {
+  if (deleteHeadId && await confirmAction({
+    title: "Revoke user access?",
+    message: "This removes the admin settings row for this user.",
+    action: "Revoke"
+  })) {
     await deleteRow("family_heads", deleteHeadId, async () => {
       await loadAdminData();
       renderAdmin();
@@ -1585,7 +1682,11 @@ document.addEventListener("click", async (event) => {
   if (toggleFamilyStatusId) await updateFamilyStatus(toggleFamilyStatusId, event.target.dataset.nextStatus);
 
   const deletePaymentId = event.target.dataset.deletePayment;
-  if (deletePaymentId && confirm("Delete this platform payment record?")) {
+  if (deletePaymentId && await confirmAction({
+    title: "Delete platform payment?",
+    message: "This removes the subscription payment record from admin finance.",
+    action: "Delete"
+  })) {
     await deleteRow("payments", deletePaymentId, async () => {
       await loadAdminData();
       renderAdmin();
@@ -1593,7 +1694,11 @@ document.addEventListener("click", async (event) => {
   }
 
   const deleteAdminNoteId = event.target.dataset.deleteAdminNote;
-  if (deleteAdminNoteId && confirm("Delete this support note?")) {
+  if (deleteAdminNoteId && await confirmAction({
+    title: "Delete support note?",
+    message: "This removes the note from the household support timeline.",
+    action: "Delete"
+  })) {
     await deleteRow("admin_support_notes", deleteAdminNoteId, async () => {
       await loadAdminData();
       renderAdmin();
@@ -1642,5 +1747,9 @@ window.addEventListener("hashchange", () => {
 init().catch((error) => {
   console.error(error);
   showToast(error.message);
-  if (!state.session) setView("auth");
+  if (state.session) {
+    showAppError(error);
+  } else {
+    setView("auth");
+  }
 });

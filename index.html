@@ -4,7 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Family recurring payment tracker powered by Supabase." />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#ecfeff" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Ledger" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -12,9 +13,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/pwa-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css" />
-    <script src="config.js?v=10"></script>
-    <script type="module" src="app.js?v=10"></script>
+    <link rel="stylesheet" href="styles.css?v=12" />
+    <script src="config.js?v=12"></script>
+    <script type="module" src="app.js?v=12"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -31,6 +32,18 @@
       <section id="configWarning" class="notice hidden">
         <strong>Connect Supabase first.</strong>
         Update <code>config.js</code> with your Supabase project URL and publishable key, then run the SQL in <code>supabase/schema.sql</code>.
+      </section>
+
+      <section id="appErrorView" class="setup-panel hidden" aria-labelledby="appErrorTitle">
+        <div class="panel-heading">
+          <p class="eyebrow">Loading stopped</p>
+          <h1 id="appErrorTitle">The workspace could not open</h1>
+        </div>
+        <p id="appErrorMessage" class="muted-copy">A database or permission error stopped the app from loading.</p>
+        <div class="button-row">
+          <button class="primary" type="button" data-retry-load>Try again</button>
+          <button type="button" data-sign-out-error>Sign out</button>
+        </div>
       </section>
 
       <section id="authView" class="auth-panel hidden" aria-labelledby="authTitle">
@@ -128,10 +141,33 @@
 
       <section id="adminView" class="hidden">
         <div class="app-shell">
+          <div class="mobile-bar">
+            <div class="mobile-brand">
+              <img src="assets/ledger-mark.svg" alt="" width="38" height="38" />
+              <div>
+                <strong>Household Ledger</strong>
+                <span>Admin console</span>
+              </div>
+            </div>
+            <div class="mobile-actions">
+              <button class="icon-button" type="button" aria-label="Notifications" data-enable-notifications>
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+              </button>
+              <button class="icon-button" type="button" aria-label="Open menu" data-open-drawer>Menu</button>
+            </div>
+          </div>
           <header class="app-nav">
-            <div>
+            <div class="sidebar-brand">
+              <img src="assets/ledger-mark.svg" alt="" width="52" height="52" />
+              <button class="icon-button drawer-close" type="button" aria-label="Close menu" data-close-drawer>Close</button>
+            </div>
+            <div class="sidebar-account">
               <p class="eyebrow">Admin console</p>
               <h1>Platform control</h1>
+              <span class="mini-badge">Operations</span>
             </div>
             <nav class="tabs" aria-label="Admin sections">
               <button class="tab-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
@@ -140,8 +176,13 @@
               <button class="tab-button" type="button" data-admin-tab="finance">Finance</button>
               <button class="tab-button" type="button" data-admin-tab="support">Support</button>
             </nav>
-            <button id="adminSignOutButton" type="button">Sign out</button>
+            <div class="sidebar-footer">
+              <button type="button">Contact support</button>
+              <button id="adminSignOutButton" type="button">Sign out</button>
+              <small>2026 Household Ledger</small>
+            </div>
           </header>
+          <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
 
           <section class="screen-panel" data-admin-panel="dashboard">
             <header class="topbar">
@@ -245,8 +286,30 @@
 
       <section id="appView" class="hidden">
         <div class="app-shell">
+          <div class="mobile-bar">
+            <div class="mobile-brand">
+              <img src="assets/ledger-mark.svg" alt="" width="38" height="38" />
+              <div>
+                <strong id="mobileHouseholdTitle">Household</strong>
+                <span>Payment workspace</span>
+              </div>
+            </div>
+            <div class="mobile-actions">
+              <button class="icon-button" id="mobileNotificationsButton" type="button" aria-label="Notifications" data-enable-notifications>
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                </svg>
+              </button>
+              <button class="icon-button" type="button" aria-label="Open menu" data-open-drawer>Menu</button>
+            </div>
+          </div>
           <header class="app-nav">
-            <div>
+            <div class="sidebar-brand">
+              <img src="assets/ledger-mark.svg" alt="" width="52" height="52" />
+              <button class="icon-button drawer-close" type="button" aria-label="Close menu" data-close-drawer>Close</button>
+            </div>
+            <div class="sidebar-account">
               <p class="eyebrow">Family workspace</p>
               <h1 id="householdTitle">Household</h1>
               <span id="headBillingBadge" class="mini-badge">free</span>
@@ -264,7 +327,12 @@
               <button id="exportCsvButton" type="button">Export CSV</button>
               <button id="signOutButton" type="button">Sign out</button>
             </div>
+            <div class="sidebar-footer">
+              <button type="button">Contact support</button>
+              <small>2026 Household Ledger</small>
+            </div>
           </header>
+          <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
 
           <section class="screen-panel" data-family-panel="dashboard">
             <header class="topbar">
@@ -381,6 +449,20 @@
         <div class="button-row full">
           <button class="primary" type="submit">Save payment</button>
           <button type="button" data-close-payment-dialog>Cancel</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="confirmDialog" class="payment-dialog confirm-dialog">
+      <form id="confirmDialogForm" method="dialog" class="form-grid">
+        <div class="panel-heading full">
+          <p class="eyebrow">Confirm action</p>
+          <h3 id="confirmDialogTitle">Are you sure?</h3>
+          <p id="confirmDialogMessage" class="muted-copy"></p>
+        </div>
+        <div class="button-row full">
+          <button id="confirmDialogConfirm" class="danger" type="submit">Confirm</button>
+          <button type="button" data-close-confirm-dialog>Cancel</button>
         </div>
       </form>
     </dialog>

@@ -1,9 +1,9 @@
-const CACHE_NAME = "household-ledger-v4";
+const CACHE_NAME = "household-ledger-v6";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./offline.html",
-  "./styles.css",
+  "./styles.css?v=12",
   "./app.js",
   "./config.js",
   "./manifest.webmanifest",
