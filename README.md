@@ -1,22 +1,25 @@
-# Household Ledger
+# Mushavo Budget
 
-A static recurring family payments tracker powered by Supabase Auth and Postgres. It is designed for households that need to track what must be paid, who is responsible, when it is due, how much has been paid, and what is still outstanding.
+A static recurring personal and family payments tracker powered by Supabase Auth and Postgres. It is designed for users who need to track what must be paid, who is responsible, when it is due, how much has been paid, and what is still outstanding.
 
 ## Current Features
 
 - Email/password sign up and sign in
 - Installable PWA for phones and desktop browsers
 - Protected refresh state with no login-page flash
-- URL-aware workspace tabs such as `#family/obligations` and `#admin/households`
+- URL-aware workspace tabs such as `#family/payments` and `#admin/households`
 - Admin dashboard for household health, overdue dues, platform payments, support notes, and access control
 - Admin can unlock member access, suspend/reactivate households, and record platform subscription payments
-- Household dashboard with due totals, outstanding balance, overdue count, and assigned-to-me count
-- Recurring payment items for monthly, quarterly, yearly, once-off, and every-N-month obligations
+- Simple dashboard with due this month, outstanding, overdue, assigned-to-me, and the payment list
+- Free accounts can create up to 5 payments
+- Personal and family payment scopes
+- Recurring payment items for monthly, quarterly, yearly, once-off, and every-N-month payments
 - Responsible family member assignment
 - Monthly due schedule with upcoming, due soon, overdue, partial, and paid states
 - Partial and full payment records
 - Member contact fields for email/phone and future reminders
-- My payments view for members whose login email matches their family member email
+- Family invitations for registered users, with accept/reject flow
+- In-app notifications for invitations and reminder visibility
 - In-app reminder visibility and browser notification permission prompt
 - Reports by category, payment reliability, active obligations, yearly expected totals, and payment history
 - CSV export for the selected month/filter
@@ -51,7 +54,7 @@ on conflict (user_id) do nothing;
 9. Open `config.js` and set your publishable Supabase details:
 
 ```js
-window.EXPENSE_TRACKER_CONFIG = {
+window.MUSHAVO_BUDGET_CONFIG = {
   supabaseUrl: "https://YOUR-PROJECT-REF.supabase.co",
   supabasePublishableKey: "YOUR-SUPABASE-PUBLISHABLE-KEY"
 };
@@ -61,18 +64,20 @@ Use the publishable key only. Never put a Supabase service role or secret key in
 
 ## How Access Works
 
-Anyone can sign up and create a household. Free users can create household-level recurring obligations.
+Anyone can sign up for free and sign in immediately. Free users can create up to 5 personal payments.
 
-Adding additional family members is locked until the platform admin unlocks member access from Admin `Households` or Admin `Users`.
+Adding or inviting family members is locked until the platform admin unlocks member access from Admin `Households` or Admin `Users`.
 
-Family members can later sign up with their own email. If their login email matches the email saved on their family member profile, they can read their household and see assigned payments in `My payments`.
+Family members must register with Mushavo Budget before they can be invited. If an email has not registered yet, the inviter sees a friendly message asking that person to sign up first.
 
 ## Main Household Workflow
 
-1. Create a household.
-2. Ask the platform admin to unlock member access if you need family members.
-3. Add family members with email/phone details.
-4. Add recurring payment obligations:
+1. Sign up, then sign in.
+2. Add up to 5 personal payments on the free account.
+3. Create a family from `Members` when you are ready.
+4. Ask the platform admin to unlock member access if you need family members.
+5. Invite registered users by email or add roster members manually after unlock.
+6. Add recurring payments:
    - payment name
    - amount
    - category
@@ -80,9 +85,9 @@ Family members can later sign up with their own email. If their login email matc
    - recurrence
    - due day
    - reminder days
-5. Use `Schedule` to see what is due this month.
-6. Record partial or full payments.
-7. Use `Reports` to review paid rate, outstanding dues, category totals, and history.
+7. Use `Dashboard` and `Payments` to see what is due this month.
+8. Record partial or full payments.
+9. Use `Reports` to review paid rate, outstanding dues, category totals, and history.
 
 ## Reminder Architecture
 

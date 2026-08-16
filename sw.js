@@ -1,11 +1,11 @@
-const CACHE_NAME = "household-ledger-v7";
+const CACHE_NAME = "mushavo-budget-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./offline.html",
-  "./styles.css?v=12",
-  "./app.js?v=13",
-  "./config.js?v=13",
+  "./styles.css?v=14",
+  "./app.js?v=14",
+  "./config.js?v=14",
   "./manifest.webmanifest",
   "./assets/ledger-mark.svg",
   "./assets/pwa-icon.svg"

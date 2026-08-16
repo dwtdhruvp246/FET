@@ -1,6 +1,6 @@
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
-const config = window.EXPENSE_TRACKER_CONFIG || {};
+const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
 const placeholderValues = ["YOUR-PROJECT-REF", "YOUR-SUPABASE-PUBLISHABLE-KEY"];
 const isConfigured =
   config.supabaseUrl &&
@@ -22,6 +22,8 @@ const state = {
   members: [],
   paymentItems: [],
   paymentRecords: [],
+  familyInvitations: [],
+  notifications: [],
   heads: [],
   adminFamilies: [],
   adminMembers: [],
@@ -51,7 +53,7 @@ const views = {
 };
 
 const adminTabs = new Set(["dashboard", "households", "users", "finance", "support"]);
-const familyTabs = new Set(["dashboard", "obligations", "schedule", "my", "members", "reports"]);
+const familyTabs = new Set(["dashboard", "payments", "reports", "members", "settings"]);
 const currencyNames = {
   USD: "en-US",
   ZAR: "en-ZA",
@@ -146,6 +148,14 @@ function friendlyMessage(message = "") {
     return "That record already exists. Update the existing one instead.";
   }
   return text;
+}
+
+function appName() {
+  return "Mushavo Budget";
+}
+
+function familyCurrency() {
+  return state.family?.currency || state.paymentItems[0]?.currency || "USD";
 }
 
 function openDrawer() {
@@ -288,6 +298,8 @@ function resetState() {
   state.members = [];
   state.paymentItems = [];
   state.paymentRecords = [];
+  state.familyInvitations = [];
+  state.notifications = [];
   state.heads = [];
   state.adminFamilies = [];
   state.adminMembers = [];
@@ -319,11 +331,6 @@ async function loadApp() {
   }
 
   await loadFamily();
-  if (!state.family) {
-    setView("setup");
-    return;
-  }
-
   await loadFamilyData();
   syncRouteForWorkspace("family");
   setView("app");
@@ -339,7 +346,7 @@ async function ensureProfile() {
 
   await query(
     "profile upsert",
-    supabase.from("profiles").upsert({ id: user.id, full_name: fullName }, { onConflict: "id" })
+    supabase.from("profiles").upsert({ id: user.id, full_name: fullName, email: user.email?.toLowerCase() }, { onConflict: "id" })
   );
 
   state.profile = await query(
@@ -372,10 +379,14 @@ async function loadFamily() {
 }
 
 async function loadFamilyData() {
-  await Promise.all([loadMembers(), loadPaymentItems(), loadPaymentRecords()]);
+  await Promise.all([loadMembers(), loadPaymentItems(), loadPaymentRecords(), loadInvitations(), loadNotifications()]);
 }
 
 async function loadMembers() {
+  if (!state.family) {
+    state.members = [];
+    return;
+  }
   state.members = await query(
     "members load",
     supabase
@@ -392,7 +403,6 @@ async function loadPaymentItems() {
     supabase
       .from("payment_items")
       .select("*")
-      .eq("family_id", state.family.id)
       .order("created_at", { ascending: false })
   );
 }
@@ -403,9 +413,29 @@ async function loadPaymentRecords() {
     supabase
       .from("payment_records")
       .select("*")
-      .eq("family_id", state.family.id)
       .order("payment_date", { ascending: false })
       .order("created_at", { ascending: false })
+  );
+}
+
+async function loadInvitations() {
+  state.familyInvitations = await query(
+    "family invitations load",
+    supabase
+      .from("family_invitations")
+      .select("*, families(name, owner_email)")
+      .order("created_at", { ascending: false })
+  );
+}
+
+async function loadNotifications() {
+  state.notifications = await query(
+    "notifications load",
+    supabase
+      .from("notifications")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(30)
   );
 }
 
@@ -449,11 +479,12 @@ function renderFamilyApp() {
   renderFamilyHeader();
   renderMemberAccess();
   renderMemberOptions();
+  renderPaymentScope();
   renderDashboard();
   renderObligations();
-  renderSchedule();
-  renderMyPayments();
   renderMembers();
+  renderInvitations();
+  renderSettings();
   renderReports();
 }
 
@@ -467,9 +498,10 @@ function renderFamilyTabs() {
 }
 
 function renderFamilyHeader() {
-  $("#householdTitle").textContent = state.family.name;
-  $("#mobileHouseholdTitle").textContent = state.family.name;
-  const billing = state.headApproval?.billing_status || "free";
+  const title = state.family?.name || "Personal budget";
+  $("#householdTitle").textContent = title;
+  $("#mobileHouseholdTitle").textContent = title;
+  const billing = state.headApproval?.can_add_members ? "Starter - Active" : "Active - Free";
   $("#headBillingBadge").textContent = billing;
   $("#headBillingBadge").className = `mini-badge ${badgeClass(billing)}`;
   $("#dashboardMonthTitle").textContent = parseDate(monthStart(state.filterMonth)).toLocaleString("en", {
@@ -479,7 +511,7 @@ function renderFamilyHeader() {
 }
 
 function canAddMembers() {
-  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+  return Boolean(state.family && state.headApproval?.status === "active" && state.headApproval?.can_add_members);
 }
 
 function renderMemberAccess() {
@@ -488,13 +520,17 @@ function renderMemberAccess() {
   $("#memberForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowed;
   });
+  $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
+    field.disabled = !allowed;
+  });
+  $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", Boolean(state.family));
 }
 
 function renderMemberOptions() {
   const obligationMember = $("#obligationMember");
   const recordPaidBy = $("#recordPaidBy");
-  obligationMember.innerHTML = `<option value="">Household account</option>`;
-  recordPaidBy.innerHTML = `<option value="">Household account</option>`;
+  obligationMember.innerHTML = `<option value="">No family member</option>`;
+  recordPaidBy.innerHTML = `<option value="">Personal account</option>`;
 
   activeMembers().forEach((member) => {
     const option = document.createElement("option");
@@ -507,6 +543,14 @@ function renderMemberOptions() {
     payer.textContent = `${member.name} (${member.role})`;
     recordPaidBy.append(payer);
   });
+}
+
+function renderPaymentScope() {
+  const scope = $("#paymentScope");
+  if (!scope) return;
+  const familyOption = scope.querySelector('option[value="family"]');
+  familyOption.disabled = !state.family;
+  if (!state.family && scope.value === "family") scope.value = "personal";
 }
 
 function activeMembers() {
@@ -580,7 +624,7 @@ function renderDashboard() {
   const outstanding = occurrences.reduce((sum, item) => sum + item.outstanding, 0);
   const overdue = occurrences.filter((item) => item.status === "overdue");
   const myDue = myOccurrences(occurrences).filter((item) => item.status !== "paid");
-  const currency = state.family.currency || "USD";
+  const currency = familyCurrency();
   const percentage = due > 0 ? Math.min((paid / due) * 100, 100) : 0;
 
   $("#dueAmount").textContent = money(due, currency);
@@ -636,7 +680,7 @@ function renderMemberResponsibility(occurrences) {
       <div class="avatar" style="background:${escapeHtml(row.member.avatar_color || "#2563EB")}">${memberInitials(row.member.name)}</div>
       <div>
         <strong>${escapeHtml(row.member.name)}</strong>
-        <span>${row.count} due items &middot; ${money(row.outstanding, state.family.currency)} outstanding</span>
+        <span>${row.count} due items &middot; ${money(row.outstanding, familyCurrency())} outstanding</span>
         <div class="meter small-meter"><span style="width:${percent}%"></span></div>
       </div>
     `;
@@ -664,7 +708,8 @@ function renderObligationCard(item) {
       <span>${escapeHtml(item.category)} &middot; ${recurrenceLabel(item)} &middot; Due day ${item.due_day}</span>
       <div class="badge-row">
         ${statusBadge(item.status || "active")}
-        <span class="mini-badge">${escapeHtml(member?.name || "Household account")}</span>
+        <span class="mini-badge">${escapeHtml(item.visibility === "family" ? "Family" : "Personal")}</span>
+        <span class="mini-badge">${escapeHtml(member?.name || "No assigned member")}</span>
         <span class="mini-badge">Remind ${item.reminder_days_before || 0} days before</span>
       </div>
     </div>
@@ -707,8 +752,10 @@ function renderMyPayments() {
 function myOccurrences(occurrences) {
   const email = state.session.user.email?.toLowerCase();
   const matchingMember = state.members.find((member) => member.email?.toLowerCase() === email);
-  if (!matchingMember) return [];
-  return occurrences.filter((occurrence) => occurrence.item.responsible_member_id === matchingMember.id);
+  return occurrences.filter((occurrence) =>
+    occurrence.item.visibility === "personal" ||
+    (matchingMember && occurrence.item.responsible_member_id === matchingMember.id)
+  );
 }
 
 function renderOccurrenceCard(occurrence, withAction = false) {
@@ -730,7 +777,7 @@ function renderOccurrenceCard(occurrence, withAction = false) {
     </div>
     <div class="record-side">
       <strong>${money(occurrence.amount, occurrence.item.currency)}</strong>
-      ${withAction && occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Record payment</button>` : ""}
+      ${withAction ? `<div class="row-actions"><button type="button" data-edit-obligation="${occurrence.item.id}">Edit</button>${occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Check</button>` : ""}</div>` : ""}
     </div>
   `;
   return article;
@@ -760,6 +807,167 @@ function renderMembers() {
     `;
     list.append(item);
   });
+}
+
+function renderInvitations() {
+  const list = $("#invitationsList");
+  if (!list) return;
+  if (!state.familyInvitations.length) {
+    list.innerHTML = emptyState("No family invitations", "Invites you send or receive will appear here.");
+    return;
+  }
+  list.innerHTML = "";
+  state.familyInvitations.forEach((invite) => {
+    const incoming = invite.invitee_email?.toLowerCase() === state.session.user.email?.toLowerCase();
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `
+      <div class="record-main">
+        <strong>${escapeHtml(invite.families?.name || state.family?.name || "Family")}</strong>
+        <span>${incoming ? "You were invited" : `Invited ${escapeHtml(invite.invitee_email)}`} &middot; ${escapeHtml(invite.role)} &middot; ${new Date(invite.created_at).toLocaleDateString()}</span>
+        <div class="badge-row">${statusBadge(invite.status)}</div>
+      </div>
+      <div class="record-side">
+        ${incoming && invite.status === "pending" ? `<div class="row-actions"><button class="primary" type="button" data-accept-invite="${invite.id}">Accept</button><button type="button" data-reject-invite="${invite.id}">Reject</button></div>` : ""}
+      </div>
+    `;
+    list.append(article);
+  });
+}
+
+function renderSettings() {
+  const plan = hasPaidPlan() ? "Starter - Active" : "Active - Free";
+  const paymentCount = userCreatedPaymentCount();
+  $("#settingsPlanBadge").textContent = plan;
+  $("#settingsPlanBadge").className = `mini-badge ${badgeClass(plan)}`;
+  $("#settingsPaymentLimit").textContent = hasPaidPlan() ? "Unlimited payments unlocked" : `${paymentCount}/5 free payments used`;
+  $("#settingsMemberAccess").textContent = canAddMembers() ? "Family member access unlocked" : "Family member access locked";
+  $("#settingsEmail").textContent = state.session.user.email || "-";
+  renderNotifications();
+}
+
+function renderNotifications() {
+  const list = $("#notificationsList");
+  if (!list) return;
+  const unreadCount = state.notifications.filter((item) => !item.read_at).length;
+  $("#notificationCount").textContent = unreadCount;
+  if (!state.notifications.length) {
+    list.innerHTML = emptyState("No notifications", "Invites and payment reminders will appear here.");
+    return;
+  }
+  list.innerHTML = "";
+  state.notifications.forEach((notification) => {
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `
+      <div class="record-main">
+        <strong>${escapeHtml(notification.title)}</strong>
+        <span>${escapeHtml(notification.body)}</span>
+        <div class="badge-row">${statusBadge(notification.read_at ? "read" : "new")}</div>
+      </div>
+      <div class="record-side">
+        ${notification.read_at ? "" : `<button type="button" data-read-notification="${notification.id}">Mark read</button>`}
+      </div>
+    `;
+    list.append(article);
+  });
+}
+
+async function inviteMember(event) {
+  event.preventDefault();
+  assertSupabase();
+  if (!state.family) {
+    showToast("Create a family before inviting members.");
+    return;
+  }
+  if (!canAddMembers()) {
+    showToast("Member invites are a paid feature. Ask the admin to unlock family member access.");
+    return;
+  }
+  const email = $("#inviteEmail").value.trim().toLowerCase();
+  const name = $("#inviteName").value.trim();
+  if (!email) {
+    showToast("Enter the member email address.");
+    return;
+  }
+  try {
+    const registered = await query(
+      "registered user check",
+      supabase.from("profiles").select("id, full_name, email").ilike("email", email).limit(1)
+    );
+    if (!registered.length) {
+      showToast(`That email has not registered with ${appName()}. Ask them to sign up first.`);
+      return;
+    }
+    const invitation = await query(
+      "family invitation create",
+      supabase
+        .from("family_invitations")
+        .insert({
+          family_id: state.family.id,
+          invited_by: state.session.user.id,
+          invitee_email: email,
+          invitee_name: name || registered[0].full_name || null,
+          role: $("#inviteRole").value,
+          status: "pending"
+        })
+        .select()
+        .single()
+    );
+    await query(
+      "invite notification create",
+      supabase.from("notifications").insert({
+        email,
+        created_by: state.session.user.id,
+        family_id: state.family.id,
+        invitation_id: invitation.id,
+        type: "family_invite",
+        title: "Family invitation",
+        body: `${state.profile.full_name} invited you to join ${state.family.name}.`
+      })
+    );
+    $("#inviteForm").reset();
+    await loadFamilyData();
+    renderFamilyApp();
+    showToast("Invitation sent.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function respondToInvitation(invitationId, status) {
+  const invitation = state.familyInvitations.find((item) => item.id === invitationId);
+  if (!invitation) return;
+  try {
+    await query(
+      "invitation response",
+      supabase
+        .from("family_invitations")
+        .update({ status, responded_at: new Date().toISOString() })
+        .eq("id", invitationId)
+    );
+    if (status === "accepted") {
+      await query(
+        "accepted member create",
+        supabase.from("family_members").insert({
+          family_id: invitation.family_id,
+          user_id: state.session.user.id,
+          created_by: state.session.user.id,
+          name: invitation.invitee_name || state.profile?.full_name || state.session.user.email,
+          role: invitation.role,
+          email: state.session.user.email?.toLowerCase(),
+          avatar_color: "#10B981",
+          status: "active"
+        })
+      );
+    }
+    await loadFamily();
+    await loadFamilyData();
+    renderFamilyApp();
+    showToast(status === "accepted" ? "Family invitation accepted." : "Family invitation rejected.");
+  } catch (error) {
+    showToast(error.message);
+  }
 }
 
 function renderReports() {
@@ -839,7 +1047,7 @@ function renderFamilyPaymentRecord(record) {
       <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(record.payment_method || "Method not set")} &middot; ${escapeHtml(record.reference_number || "No reference")}</span>
       ${record.notes ? `<small>${escapeHtml(record.notes)}</small>` : ""}
     </div>
-    <div class="record-side"><strong>${money(record.amount, item?.currency || state.family.currency)}</strong><button type="button" data-delete-record="${record.id}">Delete</button></div>
+    <div class="record-side"><strong>${money(record.amount, item?.currency || familyCurrency())}</strong><button type="button" data-delete-record="${record.id}">Delete</button></div>
   `;
   return article;
 }
@@ -1139,21 +1347,75 @@ async function createFamily(event) {
   }
 }
 
+async function createFamilyFromMembers(event) {
+  event.preventDefault();
+  assertSupabase();
+  const user = state.session.user;
+  const name = $("#memberFamilyName").value.trim();
+  if (!name) return;
+  try {
+    const family = await query(
+      "family create",
+      supabase
+        .from("families")
+        .insert({
+          owner_id: user.id,
+          owner_email: user.email?.toLowerCase(),
+          name,
+          monthly_budget: Number($("#memberFamilyBudget").value || 0),
+          currency: $("#memberFamilyCurrency").value
+        })
+        .select()
+        .single()
+    );
+    await query(
+      "owner member create",
+      supabase.from("family_members").insert({
+        family_id: family.id,
+        user_id: user.id,
+        created_by: user.id,
+        name: state.profile?.full_name || user.email,
+        email: user.email?.toLowerCase(),
+        role: "Owner",
+        avatar_color: "#2563EB"
+      })
+    );
+    state.family = family;
+    $("#memberFamilyForm").reset();
+    await loadFamilyData();
+    renderFamilyApp();
+    showToast("Family created.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function saveObligation(event) {
   event.preventDefault();
   assertSupabase();
   const amount = Number($("#obligationAmount").value);
+  const scope = $("#paymentScope").value;
   if (!amount || amount <= 0) {
     showToast("Enter an amount due above zero.");
     return;
   }
+  if (scope === "family" && !state.family) {
+    showToast("Create or join a family before saving a family payment.");
+    return;
+  }
+  if (!state.editingObligationId && !hasPaidPlan() && userCreatedPaymentCount() >= 5) {
+    showToast("Free accounts can add up to 5 payments. Ask the admin to unlock your plan for more.");
+    return;
+  }
   const payload = {
-    family_id: state.family.id,
+    family_id: scope === "family" ? state.family.id : null,
+    owner_id: state.session.user.id,
+    visibility: scope,
     name: $("#obligationName").value.trim(),
     category: $("#obligationCategory").value,
     amount,
     currency: $("#obligationCurrency").value,
-    responsible_member_id: $("#obligationMember").value || null,
+    responsible_member_id: scope === "family" ? $("#obligationMember").value || null : null,
     recurrence_type: $("#recurrenceType").value,
     recurrence_interval: Number($("#recurrenceInterval").value || 1),
     due_day: Number($("#dueDay").value || 1),
@@ -1170,10 +1432,10 @@ async function saveObligation(event) {
   try {
     if (state.editingObligationId) {
       await query("payment item update", supabase.from("payment_items").update(payload).eq("id", state.editingObligationId));
-      showToast("Obligation updated.");
+      showToast("Payment updated.");
     } else {
       await query("payment item create", supabase.from("payment_items").insert(payload));
-      showToast("Obligation saved.");
+      showToast("Payment saved.");
     }
     resetObligationForm();
     await loadFamilyData();
@@ -1187,15 +1449,16 @@ function startEditObligation(itemId) {
   const item = state.paymentItems.find((paymentItem) => paymentItem.id === itemId);
   if (!item) return;
   state.editingObligationId = item.id;
-  state.familyTab = "obligations";
-  setRoute("family", "obligations");
+  state.familyTab = "payments";
+  setRoute("family", "payments");
   renderFamilyTabs();
-  $("#obligationTitle").textContent = "Edit obligation";
+  $("#obligationTitle").textContent = "Edit payment";
   $("#obligationSubmitButton").textContent = "Save changes";
   $("#cancelEditObligationButton").classList.remove("hidden");
   $("#obligationName").value = item.name;
   $("#obligationAmount").value = item.amount;
   $("#obligationCurrency").value = item.currency;
+  $("#paymentScope").value = item.visibility || (item.family_id ? "family" : "personal");
   $("#obligationCategory").value = item.category;
   $("#obligationMember").value = item.responsible_member_id || "";
   $("#recurrenceType").value = item.recurrence_type;
@@ -1214,9 +1477,20 @@ function resetObligationForm() {
   $("#dueDay").value = 1;
   $("#reminderDays").value = 3;
   $("#obligationCurrency").value = state.family?.currency || "USD";
-  $("#obligationTitle").textContent = "Add obligation";
-  $("#obligationSubmitButton").textContent = "Save obligation";
+  $("#paymentScope").value = state.family ? "family" : "personal";
+  $("#obligationTitle").textContent = "Add payment";
+  $("#obligationSubmitButton").textContent = "Save payment";
   $("#cancelEditObligationButton").classList.add("hidden");
+  renderPaymentScope();
+}
+
+function hasPaidPlan() {
+  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+}
+
+function userCreatedPaymentCount() {
+  const userId = state.session?.user?.id;
+  return state.paymentItems.filter((item) => item.created_by === userId && item.status !== "inactive").length;
 }
 
 async function addMember(event) {
@@ -1279,11 +1553,13 @@ async function savePaymentRecord(event) {
     await query(
       "payment record create",
       supabase.from("payment_records").insert({
-        family_id: state.family.id,
+        family_id: item.family_id || null,
+        owner_id: state.session.user.id,
+        visibility: item.visibility || (item.family_id ? "family" : "personal"),
         payment_item_id: item.id,
         period_start: $("#recordPeriodStart").value,
         due_date: $("#recordDueDate").value,
-        paid_by_member_id: $("#recordPaidBy").value || null,
+        paid_by_member_id: item.visibility === "family" ? $("#recordPaidBy").value || null : null,
         amount,
         payment_date: $("#recordPaymentDate").value,
         payment_method: $("#recordMethod").value,
@@ -1510,7 +1786,7 @@ function exportCsv() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `household-payments-${state.filterMonth}.csv`;
+  link.download = `mushavo-budget-${state.filterMonth}.csv`;
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -1523,9 +1799,24 @@ async function enableNotifications() {
   const result = await Notification.requestPermission();
   if (result === "granted") {
     showToast("Reminder notifications enabled for this browser.");
+    showDueBrowserNotifications();
   } else {
     showToast("Notifications were not enabled. In-app reminders still work.");
   }
+}
+
+function showDueBrowserNotifications() {
+  if (Notification.permission !== "granted") return;
+  const dueItems = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth)
+    .filter((occurrence) => ["overdue", "due-soon", "partial"].includes(occurrence.status))
+    .slice(0, 5);
+  dueItems.forEach((occurrence) => {
+    const title = occurrence.status === "overdue" ? "Payment overdue" : "Payment reminder";
+    new Notification(title, {
+      body: `${occurrence.item.name}: ${money(occurrence.outstanding, occurrence.item.currency)} outstanding`,
+      tag: `mushavo-${occurrence.key}`
+    });
+  });
 }
 
 function memberById(id) {
@@ -1631,14 +1922,14 @@ document.addEventListener("click", async (event) => {
 
   const deleteObligationId = event.target.dataset.deleteObligation;
   if (deleteObligationId && await confirmAction({
-    title: "Delete obligation?",
-    message: "This deletes the recurring obligation and its saved payment records.",
+    title: "Delete payment?",
+    message: "This deletes the recurring payment and its saved payment records.",
     action: "Delete"
   })) {
     await deleteRow("payment_items", deleteObligationId, async () => {
       await loadFamilyData();
       renderFamilyApp();
-    }, "Obligation deleted.");
+    }, "Payment deleted.");
   }
 
   const memberId = event.target.dataset.toggleMember;
@@ -1715,11 +2006,26 @@ document.addEventListener("click", async (event) => {
       renderAdmin();
     }, "Support note deleted.");
   }
+
+  const acceptInviteId = event.target.dataset.acceptInvite;
+  if (acceptInviteId) await respondToInvitation(acceptInviteId, "accepted");
+
+  const rejectInviteId = event.target.dataset.rejectInvite;
+  if (rejectInviteId) await respondToInvitation(rejectInviteId, "rejected");
+
+  const readNotificationId = event.target.dataset.readNotification;
+  if (readNotificationId) {
+    await query("notification read", supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", readNotificationId));
+    await loadNotifications();
+    renderSettings();
+  }
 });
 
 $("#authForm").addEventListener("submit", signIn);
 $("#signupForm").addEventListener("submit", signUp);
 $("#familyForm").addEventListener("submit", createFamily);
+$("#memberFamilyForm").addEventListener("submit", createFamilyFromMembers);
+$("#inviteForm").addEventListener("submit", inviteMember);
 $("#obligationForm").addEventListener("submit", saveObligation);
 $("#memberForm").addEventListener("submit", addMember);
 $("#recordPaymentForm").addEventListener("submit", savePaymentRecord);
@@ -1744,15 +2050,14 @@ $("#monthFilter").addEventListener("change", (event) => {
 });
 $("#statusFilter").addEventListener("change", (event) => {
   state.filterStatus = event.target.value;
-  renderSchedule();
-  renderMyPayments();
+  renderFamilyApp();
 });
 $("#adminHouseholdSearch").addEventListener("input", renderAdminFamilies);
 
 window.addEventListener("hashchange", () => {
   applyRouteFromHash();
   if (state.isAdmin) renderAdminTabs();
-  if (state.family) renderFamilyTabs();
+  if (state.session && !state.isAdmin) renderFamilyTabs();
 });
 
 init().catch((error) => {

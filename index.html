@@ -3,19 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Family recurring payment tracker powered by Supabase." />
+    <meta name="description" content="Mushavo Budget helps families track personal and shared recurring payments." />
     <meta name="theme-color" content="#ecfeff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Ledger" />
+    <meta name="apple-mobile-web-app-title" content="Mushavo" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Household Ledger</title>
+    <title>Mushavo Budget</title>
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/pwa-icon.svg" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=12" />
-    <script src="config.js?v=13"></script>
-    <script type="module" src="app.js?v=13"></script>
+    <link rel="stylesheet" href="styles.css?v=14" />
+    <script src="config.js?v=14"></script>
+    <script type="module" src="app.js?v=14"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -48,9 +48,9 @@
 
       <section id="authView" class="auth-panel hidden" aria-labelledby="authTitle">
         <div class="panel-heading">
-          <p class="eyebrow">Household Ledger</p>
-          <h1 id="authTitle">Sign in to manage recurring family payments</h1>
-          <p class="muted-copy">Track dues, assign responsibility, record partial payments, and keep every household obligation visible.</p>
+          <p class="eyebrow">Mushavo Budget</p>
+          <h1 id="authTitle">Sign in to manage your payments</h1>
+          <p class="muted-copy">Track personal and family payments, see what is due, and keep everyone clear on responsibility.</p>
         </div>
 
         <form id="authForm" class="form-grid">
@@ -73,7 +73,7 @@
         <div class="panel-heading">
           <p class="eyebrow">Free account</p>
           <h1 id="signupTitle">Create your login</h1>
-          <p class="muted-copy">Start with a household workspace. Member access can be unlocked by the platform admin.</p>
+          <p class="muted-copy">Start free with up to 5 payments. Family member access can be unlocked by the platform admin.</p>
         </div>
 
         <form id="signupForm" class="form-grid">
@@ -145,7 +145,7 @@
             <div class="mobile-brand">
               <img src="assets/ledger-mark.svg" alt="" width="38" height="38" />
               <div>
-                <strong>Household Ledger</strong>
+                <strong>Mushavo Budget</strong>
                 <span>Admin console</span>
               </div>
             </div>
@@ -179,7 +179,7 @@
             <div class="sidebar-footer">
               <button type="button">Contact support</button>
               <button id="adminSignOutButton" type="button">Sign out</button>
-              <small>2026 Household Ledger</small>
+              <small>2026 Mushavo Budget</small>
             </div>
           </header>
           <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
@@ -316,11 +316,10 @@
             </div>
             <nav class="tabs" aria-label="Family sections">
               <button class="tab-button active" type="button" data-family-tab="dashboard">Dashboard</button>
-              <button class="tab-button" type="button" data-family-tab="obligations">Obligations</button>
-              <button class="tab-button" type="button" data-family-tab="schedule">Schedule</button>
-              <button class="tab-button" type="button" data-family-tab="my">My payments</button>
+              <button class="tab-button" type="button" data-family-tab="payments">Payments</button>
               <button class="tab-button" type="button" data-family-tab="members">Members</button>
               <button class="tab-button" type="button" data-family-tab="reports">Reports</button>
+              <button class="tab-button" type="button" data-family-tab="settings">Settings</button>
             </nav>
             <div class="topbar-actions">
               <button id="enableNotificationsButton" type="button">Enable reminders</button>
@@ -329,7 +328,7 @@
             </div>
             <div class="sidebar-footer">
               <button type="button">Contact support</button>
-              <small>2026 Household Ledger</small>
+              <small>2026 Mushavo Budget</small>
             </div>
           </header>
           <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
@@ -361,13 +360,14 @@
             </section>
           </section>
 
-          <section class="screen-panel hidden" data-family-panel="obligations">
-            <header class="topbar"><div><p class="eyebrow">Payment items</p><h2>Recurring obligations</h2></div></header>
+          <section class="screen-panel hidden" data-family-panel="payments">
+            <header class="topbar"><div><p class="eyebrow">Payment items</p><h2>Payments</h2></div></header>
             <section class="content-grid">
               <section class="tool-panel" aria-labelledby="obligationTitle">
-                <div class="panel-heading inline"><div><p class="eyebrow">Create</p><h3 id="obligationTitle">Add obligation</h3></div><button id="cancelEditObligationButton" class="hidden" type="button">Cancel edit</button></div>
+                <div class="panel-heading inline"><div><p class="eyebrow">Create</p><h3 id="obligationTitle">Add payment</h3></div><button id="cancelEditObligationButton" class="hidden" type="button">Cancel edit</button></div>
                 <form id="obligationForm" class="form-grid">
                   <label class="full" for="obligationName">Payment name<input id="obligationName" required placeholder="Rent, electricity, school fees..." /></label>
+                  <label for="paymentScope">Show this payment in<select id="paymentScope"><option value="personal">Personal budget</option><option value="family">Family budget</option></select></label>
                   <label for="obligationAmount">Amount due<input id="obligationAmount" type="number" min="0.01" step="0.01" required placeholder="1000" /></label>
                   <label for="obligationCurrency">Currency<select id="obligationCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
                   <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
@@ -378,10 +378,10 @@
                   <label for="startDate">Start date<input id="startDate" type="date" required /></label>
                   <label for="reminderDays">Remind days before<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
                   <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
-                  <button id="obligationSubmitButton" class="primary full" type="submit">Save obligation</button>
+                  <button id="obligationSubmitButton" class="primary full" type="submit">Save payment</button>
                 </form>
               </section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Active list</p><h3>Recurring payment items</h3></div><div id="obligationsList" class="record-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Active list</p><h3>Payments to track</h3></div><div id="obligationsList" class="record-list"></div></section>
             </section>
           </section>
 
@@ -396,14 +396,32 @@
           </section>
 
           <section class="screen-panel hidden" data-family-panel="members">
-            <header class="topbar"><div><p class="eyebrow">Family</p><h2>Members and reminder contacts</h2></div></header>
+            <header class="topbar"><div><p class="eyebrow">Family</p><h2>Members and invitations</h2></div></header>
             <section class="content-grid">
+              <section class="tool-panel" aria-labelledby="createFamilyTitle">
+                <div class="panel-heading"><p class="eyebrow">Family workspace</p><h3 id="createFamilyTitle">Create your family</h3></div>
+                <form id="memberFamilyForm" class="form-grid">
+                  <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
+                  <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
+                  <label for="memberFamilyCurrency">Currency<select id="memberFamilyCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+                  <button class="primary full" type="submit">Create family</button>
+                </form>
+              </section>
               <section id="memberAccessNotice" class="notice hidden">
                 <strong>Family-member access is locked.</strong>
-                Admin unlock is required before adding relatives. You can still track household-level obligations.
+                Admin unlock is required before inviting or adding relatives. Free accounts can still track 5 personal payments.
+              </section>
+              <section class="tool-panel" aria-labelledby="inviteTitle">
+                <div class="panel-heading"><p class="eyebrow">Invite</p><h3 id="inviteTitle">Invite a registered user</h3></div>
+                <form id="inviteForm" class="form-grid">
+                  <label for="inviteName">Name<input id="inviteName" placeholder="Avery" /></label>
+                  <label for="inviteEmail">Email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
+                  <label class="full" for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
+                  <button class="primary full" type="submit">Send invite</button>
+                </form>
               </section>
               <section class="tool-panel" aria-labelledby="membersTitle">
-                <div class="panel-heading"><p class="eyebrow">Member profile</p><h3 id="membersTitle">Add member</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Manual roster</p><h3 id="membersTitle">Add member</h3></div>
                 <form id="memberForm" class="form-grid">
                   <label for="memberName">Name<input id="memberName" required placeholder="Avery" /></label>
                   <label for="memberRole">Role<select id="memberRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
@@ -414,6 +432,7 @@
                 </form>
               </section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3></div><div id="membersList" class="record-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Invitations</p><h3>Join requests and invites</h3></div><div id="invitationsList" class="record-list"></div></section>
             </section>
           </section>
 
@@ -428,6 +447,24 @@
             <section class="content-grid">
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due by category</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="settings">
+            <header class="topbar"><div><p class="eyebrow">Settings</p><h2>Account and notifications</h2></div></header>
+            <section class="stats-grid" aria-label="Account status">
+              <article class="stat-card"><span class="stat-label">Plan</span><strong id="settingsPlanBadge" class="mini-badge">Active - Free</strong><small id="settingsPaymentLimit">0/5 free payments used</small></article>
+              <article class="stat-card"><span class="stat-label">Member access</span><strong id="settingsMemberAccess">Locked</strong><small>Admin unlock controls this feature</small></article>
+              <article class="stat-card"><span class="stat-label">Signed in as</span><strong id="settingsEmail">-</strong><small>Your login email</small></article>
+              <article class="stat-card"><span class="stat-label">Unread</span><strong id="notificationCount">0</strong><small>In-app notifications</small></article>
+            </section>
+            <section class="content-grid">
+              <section class="tool-panel">
+                <div class="panel-heading"><p class="eyebrow">Reminders</p><h3>Notification delivery</h3></div>
+                <p class="muted-copy">Mushavo Budget shows in-app notifications for invites and reminders. Browser reminders work while the app is installed or open. Email or WhatsApp reminders can be added later with Supabase Edge Functions and Resend.</p>
+                <button id="settingsEnableNotificationsButton" class="primary" type="button" data-enable-notifications>Enable browser reminders</button>
+              </section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
             </section>
           </section>
         </div>
