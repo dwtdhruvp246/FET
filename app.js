@@ -164,6 +164,13 @@ function familyCurrency() {
   return state.family?.currency || state.paymentItems[0]?.currency || "USD";
 }
 
+function hasJoinableFamilyInvitation() {
+  return state.familyInvitations.some((invitation) =>
+    invitation.invitee_email?.toLowerCase() === state.session?.user?.email?.toLowerCase() &&
+    ["pending", "accepted"].includes(invitation.status)
+  );
+}
+
 function openDrawer() {
   const activeView = state.isAdmin ? views.admin : views.app;
   activeView?.classList.add("drawer-open");
@@ -407,10 +414,16 @@ async function loadApp() {
     return;
   }
 
+  await Promise.all([loadInvitations(), loadNotifications()]);
+
   if (state.headApproval?.status === "suspended") {
-    setView("suspended");
-    stopRealtime();
-    return;
+    if (hasJoinableFamilyInvitation()) {
+      showToast("You can join an invited family without an active subscription.");
+    } else {
+      setView("suspended");
+      stopRealtime();
+      return;
+    }
   }
 
   await loadFamily();
@@ -920,12 +933,12 @@ function renderInvitations() {
 }
 
 function renderSettings() {
-  const plan = hasPaidPlan() ? "Starter - Active" : "Active - Free";
+  const plan = hasPaidPlan() ? "Starter - Active" : hasJoinableFamilyInvitation() ? "Family member - Free" : "Active - Free";
   const paymentCount = userCreatedPaymentCount();
   $("#settingsPlanBadge").textContent = plan;
   $("#settingsPlanBadge").className = `mini-badge ${badgeClass(plan)}`;
   $("#settingsPaymentLimit").textContent = hasPaidPlan() ? "Unlimited payments unlocked" : `${paymentCount}/5 free payments used`;
-  $("#settingsMemberAccess").textContent = canAddMembers() ? "Family member access unlocked" : "Family member access locked";
+  $("#settingsMemberAccess").textContent = canAddMembers() ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
   renderNotifications();
 }

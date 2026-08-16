@@ -69,6 +69,8 @@ Anyone can sign up for free and sign in immediately. Free users can create up to
 
 Adding or inviting family members is locked until the platform admin unlocks member access from Admin `Households` or Admin `Users`.
 
+Invited users do not need an active subscription to join a family. They only need a registered Mushavo Budget login matching the invited email, then they can accept or reject the invitation from `Members`.
+
 Family members must register with Mushavo Budget before they can be invited. If an email has not registered yet, the inviter sees a friendly message asking that person to sign up first.
 
 ## Main Household Workflow
