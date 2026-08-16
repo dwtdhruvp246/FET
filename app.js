@@ -38,6 +38,12 @@ const state = {
   filterStatus: "all"
 };
 
+const realtime = {
+  channel: null,
+  refreshTimer: null,
+  refreshInFlight: false
+};
+
 const $ = (selector) => document.querySelector(selector);
 
 const views = {
@@ -243,6 +249,77 @@ function isSameAuthUser(previousSession, nextSession) {
   return Boolean(previousSession?.user?.id && previousSession.user.id === nextSession?.user?.id);
 }
 
+function realtimeTablesForCurrentView() {
+  const sharedTables = ["profiles", "family_heads", "families", "family_members", "payment_items", "payment_records", "family_invitations", "notifications"];
+  if (!state.isAdmin) return sharedTables;
+  return [...sharedTables, "payments", "admin_support_notes"];
+}
+
+function stopRealtime() {
+  if (realtime.refreshTimer) {
+    window.clearTimeout(realtime.refreshTimer);
+    realtime.refreshTimer = null;
+  }
+  realtime.refreshInFlight = false;
+  if (!supabase || !realtime.channel) return;
+  supabase.removeChannel(realtime.channel);
+  realtime.channel = null;
+}
+
+function startRealtime() {
+  if (!supabase || !state.session) return;
+  stopRealtime();
+  if (state.session.access_token) supabase.realtime.setAuth(state.session.access_token);
+  const channelName = `mushavo-budget:${state.session.user.id}:${state.isAdmin ? "admin" : "family"}`;
+  const channel = supabase.channel(channelName);
+
+  realtimeTablesForCurrentView().forEach((table) => {
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table },
+      (payload) => queueRealtimeRefresh(payload)
+    );
+  });
+
+  realtime.channel = channel.subscribe((status) => {
+    if (status === "CHANNEL_ERROR") {
+      console.warn("Realtime channel error. Check that tables are enabled in the supabase_realtime publication.");
+    }
+  });
+}
+
+function queueRealtimeRefresh(payload) {
+  console.debug("Realtime change received", payload.table, payload.eventType);
+  if (realtime.refreshTimer) window.clearTimeout(realtime.refreshTimer);
+  realtime.refreshTimer = window.setTimeout(() => {
+    refreshVisibleData().catch((error) => {
+      console.error("Realtime refresh failed", error);
+      showToast(error.message);
+    });
+  }, 180);
+}
+
+async function refreshVisibleData() {
+  if (!state.session || realtime.refreshInFlight) return;
+  const sessionId = state.session.user.id;
+  realtime.refreshInFlight = true;
+  try {
+    if (state.isAdmin) {
+      await loadAdminData();
+      if (state.session?.user?.id !== sessionId) return;
+      renderAdmin();
+      return;
+    }
+    await loadAccess();
+    await loadFamily();
+    await loadFamilyData();
+    if (state.session?.user?.id !== sessionId) return;
+    renderFamilyApp();
+  } finally {
+    realtime.refreshInFlight = false;
+  }
+}
+
 async function query(label, promise) {
   const { data, error } = await promise;
   if (error) {
@@ -269,12 +346,14 @@ async function init() {
     state.session = session;
 
     if (session && isSameAuthUser(previousSession, session)) {
+      if (session.access_token) supabase.realtime.setAuth(session.access_token);
       return;
     }
 
     if (session) {
       setView("loading");
       resetState();
+      state.session = session;
       await loadApp();
       return;
     }
@@ -291,6 +370,8 @@ async function init() {
 }
 
 function resetState() {
+  stopRealtime();
+  state.session = null;
   state.profile = null;
   state.isAdmin = false;
   state.headApproval = null;
@@ -322,11 +403,13 @@ async function loadApp() {
     syncRouteForWorkspace("admin");
     setView("admin");
     renderAdmin();
+    startRealtime();
     return;
   }
 
   if (state.headApproval?.status === "suspended") {
     setView("suspended");
+    stopRealtime();
     return;
   }
 
@@ -335,6 +418,7 @@ async function loadApp() {
   syncRouteForWorkspace("family");
   setView("app");
   renderFamilyApp();
+  startRealtime();
 }
 
 async function ensureProfile() {
@@ -2059,6 +2143,8 @@ window.addEventListener("hashchange", () => {
   if (state.isAdmin) renderAdminTabs();
   if (state.session && !state.isAdmin) renderFamilyTabs();
 });
+
+window.addEventListener("beforeunload", stopRealtime);
 
 init().catch((error) => {
   console.error(error);

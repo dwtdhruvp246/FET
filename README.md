@@ -20,6 +20,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 - Member contact fields for email/phone and future reminders
 - Family invitations for registered users, with accept/reject flow
 - In-app notifications for invitations and reminder visibility
+- Supabase Realtime refreshes visible pages after inserts, updates, and deletes
 - In-app reminder visibility and browser notification permission prompt
 - Reports by category, payment reliability, active obligations, yearly expected totals, and payment history
 - CSV export for the selected month/filter
@@ -30,7 +31,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 
 1. Create a Supabase project.
 2. In Supabase SQL Editor, run `supabase/schema.sql`.
-3. If you already ran an older version, run the latest `supabase/schema.sql` again. It adds the recurring-payment tables and member contact columns.
+3. If you already ran an older version, run the latest `supabase/schema.sql` again. It adds the recurring-payment tables, member contact columns, invitation/notification tables, and enables the app tables in the `supabase_realtime` publication.
 4. In Supabase Auth settings, turn off email confirmation while Resend/email delivery is not configured:
    - Authentication
    - Providers
