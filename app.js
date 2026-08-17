@@ -44,6 +44,8 @@ const realtime = {
   refreshInFlight: false
 };
 
+let deferredInstallPrompt = null;
+
 const $ = (selector) => document.querySelector(selector);
 
 const views = {
@@ -83,6 +85,32 @@ function registerServiceWorker() {
       console.warn("Service worker registration failed", error);
     });
   });
+}
+
+function isStandaloneApp() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function updateInstallButtons() {
+  document.querySelectorAll("[data-install-app]").forEach((button) => {
+    button.classList.toggle("hidden", isStandaloneApp());
+  });
+}
+
+async function installApp() {
+  if (isStandaloneApp()) {
+    showToast("Mushavo Budget is already installed on this device.");
+    return;
+  }
+  if (!deferredInstallPrompt) {
+    showToast("If the install prompt is not available, use your browser menu or Share button and choose Add to Home Screen.");
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  const result = await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  updateInstallButtons();
+  showToast(result.outcome === "accepted" ? "Mushavo Budget install started." : "Install was dismissed.");
 }
 
 function toDateValue(date) {
@@ -1980,6 +2008,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
   if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
   if (event.target.closest("[data-enable-notifications]")) await enableNotifications();
+  if (event.target.closest("[data-install-app]")) await installApp();
   if (event.target.dataset.retryLoad !== undefined) {
     setView("loading");
     await loadApp().catch((error) => {
@@ -2158,6 +2187,20 @@ window.addEventListener("hashchange", () => {
 });
 
 window.addEventListener("beforeunload", stopRealtime);
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  updateInstallButtons();
+});
+
+window.addEventListener("appinstalled", () => {
+  deferredInstallPrompt = null;
+  updateInstallButtons();
+  showToast("Mushavo Budget was installed.");
+});
+
+updateInstallButtons();
 
 init().catch((error) => {
   console.error(error);

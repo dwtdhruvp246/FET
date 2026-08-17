@@ -11,11 +11,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Mushavo Budget</title>
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="assets/pwa-icon.svg" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css?v=14" />
-    <script src="config.js?v=16"></script>
-    <script type="module" src="app.js?v=16"></script>
+    <script src="config.js?v=17"></script>
+    <script type="module" src="app.js?v=17"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -462,7 +462,10 @@
               <section class="tool-panel">
                 <div class="panel-heading"><p class="eyebrow">Reminders</p><h3>Notification delivery</h3></div>
                 <p class="muted-copy">Mushavo Budget shows in-app notifications for invites and reminders. Browser reminders work while the app is installed or open. Email or WhatsApp reminders can be added later with Supabase Edge Functions and Resend.</p>
-                <button id="settingsEnableNotificationsButton" class="primary" type="button" data-enable-notifications>Enable browser reminders</button>
+                <div class="button-row">
+                  <button id="settingsInstallButton" class="primary" type="button" data-install-app>Install app</button>
+                  <button id="settingsEnableNotificationsButton" type="button" data-enable-notifications>Enable browser reminders</button>
+                </div>
               </section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
             </section>

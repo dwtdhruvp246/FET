@@ -129,8 +129,8 @@ Then open `http://localhost:8000`.
 
 After the site is published on GitHub Pages, open it on your phone:
 
-- Android Chrome: open the site, tap the menu, then tap `Install app` or `Add to Home screen`.
-- iPhone Safari: open the site, tap Share, then tap `Add to Home Screen`.
+- Android Chrome: open the site and use the `Install app` button in `Settings`, or tap the browser menu and choose `Install app` / `Add to Home screen`.
+- iPhone Safari: open the site, tap Share, then tap `Add to Home Screen`. iOS Safari does not show the same automatic install prompt that Android Chrome does.
 
 PWA installation requires HTTPS. GitHub Pages provides HTTPS.
 

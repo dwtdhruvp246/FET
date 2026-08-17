@@ -1,14 +1,17 @@
-const CACHE_NAME = "mushavo-budget-v3";
+const CACHE_NAME = "mushavo-budget-v4";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./offline.html",
   "./styles.css?v=14",
-  "./app.js?v=16",
-  "./config.js?v=16",
+  "./app.js?v=17",
+  "./config.js?v=17",
   "./manifest.webmanifest",
   "./assets/ledger-mark.svg",
-  "./assets/pwa-icon.svg"
+  "./assets/pwa-icon.svg",
+  "./assets/pwa-icon-192.png",
+  "./assets/pwa-icon-512.png",
+  "./assets/apple-touch-icon.png"
 ];
 
 self.addEventListener("install", (event) => {
