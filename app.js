@@ -179,6 +179,9 @@ function friendlyMessage(message = "") {
     return "The network connection failed. Check your internet connection and try again.";
   }
   if (text.includes("duplicate key")) {
+    if (text.includes("family_invitations")) {
+      return "That user already has a pending invite for this family.";
+    }
     return "That record already exists. Update the existing one instead.";
   }
   return text;
@@ -1007,7 +1010,6 @@ async function inviteMember(event) {
     return;
   }
   const email = $("#inviteEmail").value.trim().toLowerCase();
-  const name = $("#inviteName").value.trim();
   if (!email) {
     showToast("Enter the member email address.");
     return;
@@ -1029,7 +1031,7 @@ async function inviteMember(event) {
           family_id: state.family.id,
           invited_by: state.session.user.id,
           invitee_email: email,
-          invitee_name: name || registered[0].full_name || null,
+          invitee_name: registered[0].full_name || null,
           role: $("#inviteRole").value,
           status: "pending"
         })

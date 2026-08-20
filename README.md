@@ -79,7 +79,7 @@ Family members must register with Mushavo Budget before they can be invited. If 
 2. Add up to 5 personal payments on the free account.
 3. Create a family from `Members` when you are ready.
 4. Ask the platform admin to unlock member access if you need family members.
-5. Invite registered users by email. Members cannot be added manually.
+5. Invite registered users by email and role. Members cannot be added manually.
 6. Add recurring payments:
    - payment name
    - amount
