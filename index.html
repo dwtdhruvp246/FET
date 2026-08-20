@@ -14,8 +14,8 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css?v=14" />
-    <script src="config.js?v=17"></script>
-    <script type="module" src="app.js?v=17"></script>
+    <script src="config.js?v=18"></script>
+    <script type="module" src="app.js?v=18"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -409,7 +409,7 @@
               </section>
               <section id="memberAccessNotice" class="notice hidden">
                 <strong>Family-member access is locked.</strong>
-                Admin unlock is required before inviting or adding relatives. Free accounts can still track 5 personal payments.
+                Admin unlock is required before inviting relatives. Family members join only by accepting an invitation.
               </section>
               <section class="tool-panel" aria-labelledby="inviteTitle">
                 <div class="panel-heading"><p class="eyebrow">Invite</p><h3 id="inviteTitle">Invite a registered user</h3></div>
@@ -418,17 +418,6 @@
                   <label for="inviteEmail">Email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
                   <label class="full" for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
                   <button class="primary full" type="submit">Send invite</button>
-                </form>
-              </section>
-              <section class="tool-panel" aria-labelledby="membersTitle">
-                <div class="panel-heading"><p class="eyebrow">Manual roster</p><h3 id="membersTitle">Add member</h3></div>
-                <form id="memberForm" class="form-grid">
-                  <label for="memberName">Name<input id="memberName" required placeholder="Avery" /></label>
-                  <label for="memberRole">Role<select id="memberRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
-                  <label for="memberEmail">Email<input id="memberEmail" type="email" placeholder="member@example.com" /></label>
-                  <label for="memberPhone">Phone<input id="memberPhone" type="tel" placeholder="+27..." /></label>
-                  <label for="memberColor">Color<input id="memberColor" type="color" value="#2563EB" /></label>
-                  <button class="primary full" type="submit">Add member</button>
                 </form>
               </section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3></div><div id="membersList" class="record-list"></div></section>

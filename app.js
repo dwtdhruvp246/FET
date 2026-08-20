@@ -642,9 +642,6 @@ function canAddMembers() {
 function renderMemberAccess() {
   const allowed = canAddMembers();
   $("#memberAccessNotice").classList.toggle("hidden", allowed);
-  $("#memberForm").querySelectorAll("input, select, button").forEach((field) => {
-    field.disabled = !allowed;
-  });
   $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowed;
   });
@@ -911,7 +908,7 @@ function renderOccurrenceCard(occurrence, withAction = false) {
 function renderMembers() {
   const list = $("#membersList");
   if (!state.members.length) {
-    list.innerHTML = emptyState("No family members yet", "Add members with email or phone details so reminders can target the right person.");
+    list.innerHTML = emptyState("No family members yet", "Invite registered users and they will appear here after accepting.");
     return;
   }
   list.innerHTML = "";
@@ -1618,39 +1615,6 @@ function userCreatedPaymentCount() {
   return state.paymentItems.filter((item) => item.created_by === userId && item.status !== "inactive").length;
 }
 
-async function addMember(event) {
-  event.preventDefault();
-  assertSupabase();
-  if (!canAddMembers()) {
-    showToast("Admin approval is required before adding family members.");
-    return;
-  }
-  const name = $("#memberName").value.trim();
-  if (!name) return;
-  try {
-    await query(
-      "member create",
-      supabase.from("family_members").insert({
-        family_id: state.family.id,
-        created_by: state.session.user.id,
-        name,
-        role: $("#memberRole").value,
-        email: $("#memberEmail").value.trim().toLowerCase() || null,
-        phone: $("#memberPhone").value.trim() || null,
-        avatar_color: $("#memberColor").value,
-        status: "active"
-      })
-    );
-    $("#memberForm").reset();
-    $("#memberColor").value = "#2563EB";
-    await loadFamilyData();
-    renderFamilyApp();
-    showToast("Member added.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
 function openRecordPayment(key) {
   const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
   const occurrence = occurrences.find((item) => item.key === key);
@@ -2153,7 +2117,6 @@ $("#familyForm").addEventListener("submit", createFamily);
 $("#memberFamilyForm").addEventListener("submit", createFamilyFromMembers);
 $("#inviteForm").addEventListener("submit", inviteMember);
 $("#obligationForm").addEventListener("submit", saveObligation);
-$("#memberForm").addEventListener("submit", addMember);
 $("#recordPaymentForm").addEventListener("submit", savePaymentRecord);
 $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPlatformPayment);
