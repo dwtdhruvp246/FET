@@ -18,7 +18,8 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 - Monthly due schedule with upcoming, due soon, overdue, partial, and paid states
 - Partial and full payment records
 - Member contact fields for email/phone and future reminders
-- Family invitations for registered users, with accept/reject flow
+- `Family & Members` workspace with family details and registered-user invitations
+- Atomic family creation and invitation accept/reject database functions
 - In-app notifications for invitations and reminder visibility
 - Supabase Realtime refreshes visible pages after inserts, updates, and deletes
 - In-app reminder visibility and browser notification permission prompt
@@ -67,9 +68,11 @@ Use the publishable key only. Never put a Supabase service role or secret key in
 
 Anyone can sign up for free and sign in immediately. Free users can create up to 5 personal payments.
 
-Adding or inviting family members is locked until the platform admin unlocks member access from Admin `Households` or Admin `Users`.
+Creating a family is locked until the platform admin gives the user an active family membership with member access enabled. The database checks both `status = active` and `can_add_members = true`; platform payment status is not used for this permission.
 
-Invited users do not need an active subscription to join a family. They only need a registered Mushavo Budget login matching the invited email, then they can accept or reject the invitation from `Members`.
+Only the owner of a family with that active membership can send invitations. Family creation, invitation creation, notification creation, and invitation responses are handled by protected database functions so the rules cannot be bypassed from the browser.
+
+Invited users do not need an active membership or subscription to join a family. They only need a registered Mushavo Budget login matching the invited email, then they can accept or reject the invitation from `Family & Members`.
 
 Family members must register with Mushavo Budget before they can be invited. If an email has not registered yet, the inviter sees a friendly message asking that person to sign up first.
 
@@ -77,10 +80,11 @@ Family members must register with Mushavo Budget before they can be invited. If 
 
 1. Sign up, then sign in.
 2. Add up to 5 personal payments on the free account.
-3. Create a family from `Members` when you are ready.
-4. Ask the platform admin to unlock member access if you need family members.
+3. Ask the platform admin to activate family access for your account.
+4. Create your family and add its name, monthly budget, and currency from `Family & Members`.
 5. Invite registered users by email and role. Members cannot be added manually.
-6. Add recurring payments:
+6. The invited user signs in and accepts or rejects the notification from `Family & Members`.
+7. Add recurring payments:
    - payment name
    - amount
    - category
@@ -88,9 +92,9 @@ Family members must register with Mushavo Budget before they can be invited. If 
    - recurrence
    - due day
    - reminder days
-7. Use `Dashboard` and `Payments` to see what is due this month.
-8. Record partial or full payments.
-9. Use `Reports` to review paid rate, outstanding dues, category totals, and history.
+8. Use `Dashboard` and `Payments` to see what is due this month.
+9. Record partial or full payments.
+10. Use `Reports` to review paid rate, outstanding dues, category totals, and history.
 
 ## Reminder Architecture
 

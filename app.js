@@ -176,6 +176,27 @@ function showAppError(error) {
 
 function friendlyMessage(message = "") {
   const text = `${message}`;
+  if (text.includes("ACTIVE_FAMILY_MEMBERSHIP_REQUIRED")) {
+    return "An active Mushavo Budget membership is required to create a family or invite members.";
+  }
+  if (text.includes("USER_NOT_REGISTERED")) {
+    return "That user is not registered on Mushavo Budget. Ask them to sign up before sending an invitation.";
+  }
+  if (text.includes("CANNOT_INVITE_YOURSELF")) {
+    return "You cannot invite your own email address.";
+  }
+  if (text.includes("ALREADY_FAMILY_MEMBER")) {
+    return "That user is already part of this family.";
+  }
+  if (text.includes("INVITATION_ALREADY_PENDING")) {
+    return "That user already has a pending invitation for this family.";
+  }
+  if (text.includes("INVITATION_NOT_AVAILABLE")) {
+    return "This invitation is no longer available. Refresh the page to see its latest status.";
+  }
+  if (text.includes("FAMILY_ALREADY_EXISTS")) {
+    return "You already created a family workspace.";
+  }
   if (text.includes("infinite recursion")) {
     return "A database access rule needs to be updated before this workspace can open.";
   }
@@ -647,16 +668,30 @@ function renderFamilyHeader() {
 }
 
 function canAddMembers() {
-  return Boolean(state.family && state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+  return Boolean(
+    canCreateFamily() &&
+    state.family &&
+    state.family.owner_id === state.session?.user?.id
+  );
+}
+
+function canCreateFamily() {
+  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
 }
 
 function renderMemberAccess() {
-  const allowed = canAddMembers();
-  $("#memberAccessNotice").classList.toggle("hidden", allowed);
-  $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
-    field.disabled = !allowed;
+  const allowedToInvite = canAddMembers();
+  const allowedToCreate = canCreateFamily();
+  const hasFamily = Boolean(state.family);
+  $("#familyCreationNotice").classList.toggle("hidden", hasFamily || allowedToCreate);
+  $("#memberAccessNotice").classList.toggle("hidden", !hasFamily || allowedToInvite);
+  $("#memberFamilyForm").querySelectorAll("input, select, button").forEach((field) => {
+    field.disabled = !allowedToCreate;
   });
-  $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", Boolean(state.family));
+  $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
+    field.disabled = !allowedToInvite;
+  });
+  $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", hasFamily);
 }
 
 function renderMemberOptions() {
@@ -1014,7 +1049,7 @@ async function inviteMember(event) {
     return;
   }
   if (!canAddMembers()) {
-    showToast("Member invites are a paid feature. Ask the admin to unlock family member access.");
+    showToast("An active family membership is required to invite members.");
     return;
   }
   const email = $("#inviteEmail").value.trim().toLowerCase();
@@ -1023,39 +1058,12 @@ async function inviteMember(event) {
     return;
   }
   try {
-    const registered = await query(
-      "registered user check",
-      supabase.from("profiles").select("id, full_name, email").ilike("email", email).limit(1)
-    );
-    if (!registered.length) {
-      showToast(`That email has not registered with ${appName()}. Ask them to sign up first.`);
-      return;
-    }
-    const invitation = await query(
-      "family invitation create",
-      supabase
-        .from("family_invitations")
-        .insert({
-          family_id: state.family.id,
-          invited_by: state.session.user.id,
-          invitee_email: email,
-          invitee_name: registered[0].full_name || null,
-          role: $("#inviteRole").value,
-          status: "pending"
-        })
-        .select()
-        .single()
-    );
     await query(
-      "invite notification create",
-      supabase.from("notifications").insert({
-        email,
-        created_by: state.session.user.id,
-        family_id: state.family.id,
-        invitation_id: invitation.id,
-        type: "family_invite",
-        title: "Family invitation",
-        body: `${state.profile.full_name} invited you to join ${state.family.name}.`
+      "family invitation create",
+      supabase.rpc("invite_family_member", {
+        p_family_id: state.family.id,
+        p_email: email,
+        p_role: $("#inviteRole").value
       })
     );
     $("#inviteForm").reset();
@@ -1073,26 +1081,12 @@ async function respondToInvitation(invitationId, status) {
   try {
     await query(
       "invitation response",
-      supabase
-        .from("family_invitations")
-        .update({ status, responded_at: new Date().toISOString() })
-        .eq("id", invitationId)
+      supabase.rpc("respond_to_family_invitation", {
+        p_invitation_id: invitationId,
+        p_accept: status === "accepted"
+      })
     );
-    if (status === "accepted") {
-      await query(
-        "accepted member create",
-        supabase.from("family_members").insert({
-          family_id: invitation.family_id,
-          user_id: state.session.user.id,
-          created_by: state.session.user.id,
-          name: invitation.invitee_name || state.profile?.full_name || state.session.user.email,
-          role: invitation.role,
-          email: state.session.user.email?.toLowerCase(),
-          avatar_color: "#10B981",
-          status: "active"
-        })
-      );
-    }
+    await loadAccess();
     await loadFamily();
     await loadFamilyData();
     renderFamilyApp();
@@ -1100,6 +1094,22 @@ async function respondToInvitation(invitationId, status) {
   } catch (error) {
     showToast(error.message);
   }
+}
+
+async function createFamilyWorkspace(name, monthlyBudget, currency) {
+  if (!canCreateFamily()) {
+    showToast("An active family membership is required to create a family.");
+    return false;
+  }
+  await query(
+    "family create",
+    supabase.rpc("create_family_workspace", {
+      p_name: name,
+      p_monthly_budget: Number(monthlyBudget || 0),
+      p_currency: currency
+    })
+  );
+  return true;
 }
 
 function renderReports() {
@@ -1415,37 +1425,15 @@ async function signIn(event) {
 async function createFamily(event) {
   event.preventDefault();
   assertSupabase();
-  const user = state.session.user;
   const name = $("#familyName").value.trim();
   if (!name) return;
   try {
-    const family = await query(
-      "family create",
-      supabase
-        .from("families")
-        .insert({
-          owner_id: user.id,
-          owner_email: user.email?.toLowerCase(),
-          name,
-          monthly_budget: Number($("#familyBudget").value || 0),
-          currency: $("#familyCurrency").value
-        })
-        .select()
-        .single()
+    const created = await createFamilyWorkspace(
+      name,
+      $("#familyBudget").value,
+      $("#familyCurrency").value
     );
-    state.family = family;
-    await query(
-      "owner member create",
-      supabase.from("family_members").insert({
-        family_id: family.id,
-        user_id: user.id,
-        created_by: user.id,
-        name: state.profile?.full_name || user.email,
-        email: user.email?.toLowerCase(),
-        role: "Owner",
-        avatar_color: "#2563EB"
-      })
-    );
+    if (!created) return;
     await loadApp();
     showToast("Household created.");
   } catch (error) {
@@ -1456,40 +1444,17 @@ async function createFamily(event) {
 async function createFamilyFromMembers(event) {
   event.preventDefault();
   assertSupabase();
-  const user = state.session.user;
   const name = $("#memberFamilyName").value.trim();
   if (!name) return;
   try {
-    const family = await query(
-      "family create",
-      supabase
-        .from("families")
-        .insert({
-          owner_id: user.id,
-          owner_email: user.email?.toLowerCase(),
-          name,
-          monthly_budget: Number($("#memberFamilyBudget").value || 0),
-          currency: $("#memberFamilyCurrency").value
-        })
-        .select()
-        .single()
+    const created = await createFamilyWorkspace(
+      name,
+      $("#memberFamilyBudget").value,
+      $("#memberFamilyCurrency").value
     );
-    await query(
-      "owner member create",
-      supabase.from("family_members").insert({
-        family_id: family.id,
-        user_id: user.id,
-        created_by: user.id,
-        name: state.profile?.full_name || user.email,
-        email: user.email?.toLowerCase(),
-        role: "Owner",
-        avatar_color: "#2563EB"
-      })
-    );
-    state.family = family;
+    if (!created) return;
     $("#memberFamilyForm").reset();
-    await loadFamilyData();
-    renderFamilyApp();
+    await loadApp();
     showToast("Family created.");
   } catch (error) {
     showToast(error.message);

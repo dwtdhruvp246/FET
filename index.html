@@ -15,7 +15,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css?v=16" />
     <script src="config.js?v=19"></script>
-    <script type="module" src="app.js?v=20"></script>
+    <script type="module" src="app.js?v=21"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -286,7 +286,7 @@
             <nav class="tabs" aria-label="Family sections">
               <button class="tab-button active" type="button" data-family-tab="dashboard">Dashboard</button>
               <button class="tab-button" type="button" data-family-tab="payments">Payments</button>
-              <button class="tab-button" type="button" data-family-tab="members">Members</button>
+              <button class="tab-button" type="button" data-family-tab="members">Family &amp; Members</button>
               <button class="tab-button" type="button" data-family-tab="reports">Reports</button>
               <button class="tab-button" type="button" data-family-tab="settings">Settings</button>
             </nav>
@@ -365,10 +365,14 @@
           </section>
 
           <section class="screen-panel hidden" data-family-panel="members">
-            <header class="topbar"><div><p class="eyebrow">Family</p><h2>Members and invitations</h2></div></header>
+            <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2></div></header>
             <section class="content-grid">
+              <section id="familyCreationNotice" class="notice hidden">
+                <strong>Active membership required.</strong>
+                The Mushavo Budget admin must activate family access before you can create a family. You can still accept an invitation without an active membership.
+              </section>
               <section class="tool-panel" aria-labelledby="createFamilyTitle">
-                <div class="panel-heading"><p class="eyebrow">Family workspace</p><h3 id="createFamilyTitle">Create your family</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Family details</p><h3 id="createFamilyTitle">Create your family</h3><p class="muted-copy">Add the family name, expected monthly payments, and preferred currency.</p></div>
                 <form id="memberFamilyForm" class="form-grid">
                   <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
                   <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
@@ -378,10 +382,10 @@
               </section>
               <section id="memberAccessNotice" class="notice hidden">
                 <strong>Family-member access is locked.</strong>
-                Admin unlock is required before inviting relatives. Family members join only by accepting an invitation.
+                Only an active family owner can send invitations. Invited users do not need an active membership, but they must already have a Mushavo Budget account.
               </section>
               <section class="tool-panel" aria-labelledby="inviteTitle">
-                <div class="panel-heading"><p class="eyebrow">Invite</p><h3 id="inviteTitle">Invite a registered user</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Invite</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">We will check the email, then send an in-app invitation that the user can accept or reject.</p></div>
                 <form id="inviteForm" class="form-grid">
                   <label for="inviteEmail">Email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
                   <label class="full" for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
