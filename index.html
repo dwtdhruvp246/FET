@@ -13,9 +13,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=16" />
+    <link rel="stylesheet" href="styles.css?v=17" />
     <script src="config.js?v=19"></script>
-    <script type="module" src="app.js?v=21"></script>
+    <script type="module" src="app.js?v=22"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -198,6 +198,7 @@
                   <label for="headMonthlyFee">Monthly platform fee<input id="headMonthlyFee" type="number" min="0" step="0.01" placeholder="0" /></label>
                   <label for="headFeeCurrency">Fee currency<select id="headFeeCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
                   <label for="headBillingStatus">Billing status<select id="headBillingStatus"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></label>
+                  <label for="headFamilyLimit">Maximum families<input id="headFamilyLimit" type="number" min="0" max="100" step="1" value="1" required /></label>
                   <label class="checkbox-label full"><input id="headCanAddMembers" type="checkbox" /> Allow this user to add family members</label>
                   <button class="primary full" type="submit">Save user access</button>
                 </form>
@@ -281,6 +282,7 @@
             <div class="sidebar-account">
               <p class="eyebrow">Family workspace</p>
               <h1 id="householdTitle">Household</h1>
+              <label class="workspace-picker">Switch family<select data-family-selector aria-label="Switch family"></select></label>
               <span id="headBillingBadge" class="mini-badge">free</span>
             </div>
             <nav class="tabs" aria-label="Family sections">
@@ -368,17 +370,22 @@
             <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2></div></header>
             <section class="content-grid">
               <section id="familyCreationNotice" class="notice hidden">
-                <strong>Active membership required.</strong>
-                The Mushavo Budget admin must activate family access before you can create a family. You can still accept an invitation without an active membership.
+                <strong id="familyCreationNoticeTitle">Active membership required.</strong>
+                <span id="familyCreationNoticeText">The Mushavo Budget admin must activate family access before you can create a family.</span>
               </section>
               <section class="tool-panel" aria-labelledby="createFamilyTitle">
-                <div class="panel-heading"><p class="eyebrow">Family details</p><h3 id="createFamilyTitle">Create your family</h3><p class="muted-copy">Add the family name, expected monthly payments, and preferred currency.</p></div>
+                <div class="panel-heading"><p class="eyebrow">Family details</p><h3 id="createFamilyTitle">Create another family</h3><p class="muted-copy">Add the family name, expected monthly payments, and preferred currency. Your admin controls how many families you can own.</p></div>
                 <form id="memberFamilyForm" class="form-grid">
                   <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
                   <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
                   <label for="memberFamilyCurrency">Currency<select id="memberFamilyCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
                   <button class="primary full" type="submit">Create family</button>
                 </form>
+              </section>
+              <section id="selectedFamilyPanel" class="tool-panel hidden" aria-labelledby="selectedFamilyTitle">
+                <div class="panel-heading"><p class="eyebrow">Selected family</p><h3 id="selectedFamilyTitle">Family details</h3><p id="selectedFamilyMeta" class="muted-copy"></p></div>
+                <button class="danger" type="button" data-delete-family>Delete this family</button>
+                <p class="muted-copy">Deleting a family permanently removes its members, invitations, payment items, payment records, notifications, budgets, and expenses from the database.</p>
               </section>
               <section id="memberAccessNotice" class="notice hidden">
                 <strong>Family-member access is locked.</strong>
@@ -387,8 +394,9 @@
               <section class="tool-panel" aria-labelledby="inviteTitle">
                 <div class="panel-heading"><p class="eyebrow">Invite</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">We will check the email, then send an in-app invitation that the user can accept or reject.</p></div>
                 <form id="inviteForm" class="form-grid">
+                  <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
                   <label for="inviteEmail">Email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
-                  <label class="full" for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
+                  <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
                   <button class="primary full" type="submit">Send invite</button>
                 </form>
               </section>

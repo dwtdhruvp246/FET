@@ -18,6 +18,7 @@ const state = {
   profile: null,
   isAdmin: false,
   headApproval: null,
+  families: [],
   family: null,
   members: [],
   paymentItems: [],
@@ -177,7 +178,22 @@ function showAppError(error) {
 function friendlyMessage(message = "") {
   const text = `${message}`;
   if (text.includes("ACTIVE_FAMILY_MEMBERSHIP_REQUIRED")) {
-    return "An active Mushavo Budget membership is required to create a family or invite members.";
+    return "An active Mushavo Budget membership is required for this action.";
+  }
+  if (text.includes("FAMILY_LIMIT_REACHED")) {
+    return "You have reached your family limit. Ask the Mushavo Budget admin to increase it.";
+  }
+  if (text.includes("MEMBER_MANAGEMENT_ACCESS_REQUIRED")) {
+    return "Your active membership does not currently include permission to manage family members.";
+  }
+  if (text.includes("CANNOT_REMOVE_FAMILY_OWNER")) {
+    return "The family owner cannot be removed. Delete the entire family instead if you no longer need it.";
+  }
+  if (text.includes("MEMBER_NOT_FOUND")) {
+    return "That member is no longer available in this family.";
+  }
+  if (text.includes("FAMILY_NOT_FOUND")) {
+    return "That family no longer exists or you do not own it.";
   }
   if (text.includes("USER_NOT_REGISTERED")) {
     return "That user is not registered on Mushavo Budget. Ask them to sign up before sending an invitation.";
@@ -442,6 +458,7 @@ function resetState() {
   state.profile = null;
   state.isAdmin = false;
   state.headApproval = null;
+  state.families = [];
   state.family = null;
   state.members = [];
   state.paymentItems = [];
@@ -528,11 +545,54 @@ async function loadAccess() {
 }
 
 async function loadFamily() {
-  const families = await query(
-    "family load",
-    supabase.from("families").select("*").order("created_at", { ascending: true }).limit(1)
+  const [families, memberships] = await Promise.all([
+    query(
+      "families load",
+      supabase.from("families").select("*").order("created_at", { ascending: true })
+    ),
+    query(
+      "family memberships load",
+      supabase.from("family_members").select("family_id, user_id, email, role, status")
+    )
+  ]);
+  const userId = state.session.user.id;
+  const userEmail = state.session.user.email?.toLowerCase();
+  const joinedFamilyIds = new Set(
+    memberships
+      .filter((member) =>
+        member.status === "active" &&
+        (member.user_id === userId || member.email?.toLowerCase() === userEmail)
+      )
+      .map((member) => member.family_id)
   );
-  state.family = families[0] || null;
+  state.families = families.filter((family) => family.owner_id === userId || joinedFamilyIds.has(family.id));
+  const storedFamilyId = window.localStorage.getItem(selectedFamilyStorageKey());
+  state.family =
+    state.families.find((family) => family.id === storedFamilyId) ||
+    state.families.find((family) => family.id === state.family?.id) ||
+    state.families[0] ||
+    null;
+  persistSelectedFamily();
+}
+
+function selectedFamilyStorageKey() {
+  return `mushavo-budget:selected-family:${state.session?.user?.id || "guest"}`;
+}
+
+function persistSelectedFamily() {
+  const key = selectedFamilyStorageKey();
+  if (state.family?.id) window.localStorage.setItem(key, state.family.id);
+  else window.localStorage.removeItem(key);
+}
+
+async function selectFamily(familyId) {
+  const family = state.families.find((item) => item.id === familyId);
+  if (!family || family.id === state.family?.id) return;
+  state.family = family;
+  state.editingObligationId = null;
+  persistSelectedFamily();
+  await loadFamilyData();
+  renderFamilyApp();
 }
 
 async function loadFamilyData() {
@@ -555,23 +615,21 @@ async function loadMembers() {
 }
 
 async function loadPaymentItems() {
-  state.paymentItems = await query(
-    "payment items load",
-    supabase
-      .from("payment_items")
-      .select("*")
-      .order("created_at", { ascending: false })
-  );
+  let request = supabase.from("payment_items").select("*");
+  request = state.family
+    ? request.or(`visibility.eq.personal,family_id.eq.${state.family.id}`)
+    : request.eq("visibility", "personal");
+  state.paymentItems = await query("payment items load", request.order("created_at", { ascending: false }));
 }
 
 async function loadPaymentRecords() {
+  let request = supabase.from("payment_records").select("*");
+  request = state.family
+    ? request.or(`visibility.eq.personal,family_id.eq.${state.family.id}`)
+    : request.eq("visibility", "personal");
   state.paymentRecords = await query(
     "payment records load",
-    supabase
-      .from("payment_records")
-      .select("*")
-      .order("payment_date", { ascending: false })
-      .order("created_at", { ascending: false })
+    request.order("payment_date", { ascending: false }).order("created_at", { ascending: false })
   );
 }
 
@@ -658,9 +716,10 @@ function renderFamilyHeader() {
   const title = state.family?.name || "Personal budget";
   $("#householdTitle").textContent = title;
   $("#mobileHouseholdTitle").textContent = title;
-  const billing = state.headApproval?.can_add_members ? "Starter - Active" : "Active - Free";
+  const billing = hasActiveMembership() ? "Subscription - Active" : "Active - Free";
   $("#headBillingBadge").textContent = billing;
   $("#headBillingBadge").className = `mini-badge ${badgeClass(billing)}`;
+  renderFamilySelectors();
   $("#dashboardMonthTitle").textContent = parseDate(monthStart(state.filterMonth)).toLocaleString("en", {
     month: "long",
     year: "numeric"
@@ -668,30 +727,97 @@ function renderFamilyHeader() {
 }
 
 function canAddMembers() {
-  return Boolean(
-    canCreateFamily() &&
-    state.family &&
-    state.family.owner_id === state.session?.user?.id
-  );
+  return canManageMembersForFamily(state.family?.id);
 }
 
 function canCreateFamily() {
-  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+  return hasActiveMembership() && ownedFamilies().length < familyLimit();
+}
+
+function hasActiveMembership() {
+  return state.headApproval?.status === "active";
+}
+
+function familyLimit() {
+  return Math.max(0, Number(state.headApproval?.family_limit ?? 1));
+}
+
+function ownedFamilies() {
+  return state.families.filter((family) => family.owner_id === state.session?.user?.id);
+}
+
+function canManageMembersForFamily(familyId) {
+  const family = state.families.find((item) => item.id === familyId);
+  return Boolean(
+    family &&
+    family.owner_id === state.session?.user?.id &&
+    hasActiveMembership() &&
+    state.headApproval?.can_add_members
+  );
+}
+
+function renderFamilySelectors() {
+  document.querySelectorAll("[data-family-selector]").forEach((select) => {
+    select.innerHTML = "";
+    if (!state.families.length) {
+      select.append(new Option("Personal budget", ""));
+      select.disabled = true;
+      return;
+    }
+    state.families.forEach((family) => select.append(new Option(family.name, family.id)));
+    select.value = state.family?.id || state.families[0].id;
+    select.disabled = state.families.length < 2;
+  });
 }
 
 function renderMemberAccess() {
-  const allowedToInvite = canAddMembers();
   const allowedToCreate = canCreateFamily();
-  const hasFamily = Boolean(state.family);
-  $("#familyCreationNotice").classList.toggle("hidden", hasFamily || allowedToCreate);
-  $("#memberAccessNotice").classList.toggle("hidden", !hasFamily || allowedToInvite);
+  const owned = ownedFamilies();
+  const manageableFamilies = owned.filter((family) => canManageMembersForFamily(family.id));
+  const familyCount = owned.length;
+  const limit = familyLimit();
+  const creationNotice = $("#familyCreationNotice");
+  creationNotice.classList.toggle("hidden", allowedToCreate);
+  if (!allowedToCreate) {
+    if (!hasActiveMembership()) {
+      $("#familyCreationNoticeTitle").textContent = "Active subscription required.";
+      $("#familyCreationNoticeText").textContent = "The Mushavo Budget admin must activate your membership before you can create a family. You can still join a family by invitation.";
+    } else {
+      $("#familyCreationNoticeTitle").textContent = "Family limit reached.";
+      $("#familyCreationNoticeText").textContent = `You currently own ${familyCount} of ${limit} allowed families. Ask the admin to increase your family limit.`;
+    }
+  }
   $("#memberFamilyForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowedToCreate;
   });
+  $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", !allowedToCreate);
+
+  const inviteFamily = $("#inviteFamily");
+  const previousInviteFamily = inviteFamily.value;
+  inviteFamily.innerHTML = "";
+  manageableFamilies.forEach((family) => inviteFamily.append(new Option(family.name, family.id)));
+  inviteFamily.value = manageableFamilies.some((family) => family.id === previousInviteFamily)
+    ? previousInviteFamily
+    : manageableFamilies.find((family) => family.id === state.family?.id)?.id || manageableFamilies[0]?.id || "";
+  const allowedToInvite = manageableFamilies.length > 0;
   $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowedToInvite;
   });
-  $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", hasFamily);
+  const memberNotice = $("#memberAccessNotice");
+  memberNotice.classList.toggle("hidden", allowedToInvite);
+  if (!allowedToInvite) {
+    memberNotice.innerHTML = owned.length
+      ? "<strong>Member management is locked.</strong> The admin must activate member access before you can invite or remove family members."
+      : "<strong>Only a family owner can manage members.</strong> You can participate in families you joined, but only their owner can invite or remove members.";
+  }
+
+  const selectedFamilyPanel = $("#selectedFamilyPanel");
+  const ownsSelectedFamily = state.family?.owner_id === state.session?.user?.id;
+  selectedFamilyPanel.classList.toggle("hidden", !ownsSelectedFamily);
+  if (ownsSelectedFamily) {
+    $("#selectedFamilyTitle").textContent = state.family.name;
+    $("#selectedFamilyMeta").textContent = `${money(state.family.monthly_budget, state.family.currency)} expected each month · ${familyCount} of ${limit} family slots used`;
+  }
 }
 
 function renderMemberOptions() {
@@ -960,6 +1086,11 @@ function renderMembers() {
   list.innerHTML = "";
   state.members.forEach((member) => {
     const assignedCount = state.paymentItems.filter((item) => item.responsible_member_id === member.id).length;
+    const isOwner = member.role === "Owner" || member.user_id === state.family?.owner_id;
+    const isSignedInUser =
+      member.user_id === state.session.user.id ||
+      member.email?.toLowerCase() === state.session.user.email?.toLowerCase();
+    const canRemove = canAddMembers() && member.status === "active" && !isOwner && !isSignedInUser;
     const item = document.createElement("article");
     item.className = "record-card";
     item.innerHTML = `
@@ -967,10 +1098,10 @@ function renderMembers() {
       <div class="record-main">
         <strong>${escapeHtml(member.name)}</strong>
         <span>${escapeHtml(member.role)} &middot; ${escapeHtml(member.email || "No email")} &middot; ${escapeHtml(member.phone || "No phone")}</span>
-        <div class="badge-row">${statusBadge(member.status || "active")}<span class="mini-badge">${assignedCount} assigned</span></div>
+        <div class="badge-row">${statusBadge(member.status === "inactive" ? "removed" : "active")}<span class="mini-badge">${assignedCount} assigned</span></div>
       </div>
       <div class="record-side">
-        ${canAddMembers() ? `<div class="row-actions"><button type="button" data-toggle-member="${member.id}" data-next-status="${member.status === "active" ? "inactive" : "active"}">${member.status === "active" ? "Mark inactive" : "Reactivate"}</button><button type="button" data-delete-member="${member.id}">Delete</button></div>` : ""}
+        ${canRemove ? `<button type="button" data-remove-member="${member.id}">Remove from family</button>` : ""}
       </div>
     `;
     list.append(item);
@@ -1006,10 +1137,11 @@ function renderInvitations() {
 function renderSettings() {
   const plan = hasPaidPlan() ? "Starter - Active" : hasJoinableFamilyInvitation() ? "Family member - Free" : "Active - Free";
   const paymentCount = userCreatedPaymentCount();
+  const canManageAnyFamily = ownedFamilies().some((family) => canManageMembersForFamily(family.id));
   $("#settingsPlanBadge").textContent = plan;
   $("#settingsPlanBadge").className = `mini-badge ${badgeClass(plan)}`;
   $("#settingsPaymentLimit").textContent = hasPaidPlan() ? "Unlimited payments unlocked" : `${paymentCount}/5 free payments used`;
-  $("#settingsMemberAccess").textContent = canAddMembers() ? "Can invite family members" : "Can join invited families";
+  $("#settingsMemberAccess").textContent = canManageAnyFamily ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
   renderNotifications();
 }
@@ -1044,12 +1176,13 @@ function renderNotifications() {
 async function inviteMember(event) {
   event.preventDefault();
   assertSupabase();
-  if (!state.family) {
-    showToast("Create a family before inviting members.");
+  const familyId = $("#inviteFamily").value;
+  if (!familyId) {
+    showToast("Choose the family you want this user to join.");
     return;
   }
-  if (!canAddMembers()) {
-    showToast("An active family membership is required to invite members.");
+  if (!canManageMembersForFamily(familyId)) {
+    showToast("Your active membership must include member access before you can send invitations.");
     return;
   }
   const email = $("#inviteEmail").value.trim().toLowerCase();
@@ -1061,7 +1194,7 @@ async function inviteMember(event) {
     await query(
       "family invitation create",
       supabase.rpc("invite_family_member", {
-        p_family_id: state.family.id,
+        p_family_id: familyId,
         p_email: email,
         p_role: $("#inviteRole").value
       })
@@ -1086,6 +1219,9 @@ async function respondToInvitation(invitationId, status) {
         p_accept: status === "accepted"
       })
     );
+    if (status === "accepted") {
+      window.localStorage.setItem(selectedFamilyStorageKey(), invitation.family_id);
+    }
     await loadAccess();
     await loadFamily();
     await loadFamilyData();
@@ -1098,10 +1234,12 @@ async function respondToInvitation(invitationId, status) {
 
 async function createFamilyWorkspace(name, monthlyBudget, currency) {
   if (!canCreateFamily()) {
-    showToast("An active family membership is required to create a family.");
-    return false;
+    showToast(hasActiveMembership()
+      ? "You have reached your family limit. Ask the admin to increase it."
+      : "An active subscription is required to create a family.");
+    return null;
   }
-  await query(
+  const familyId = await query(
     "family create",
     supabase.rpc("create_family_workspace", {
       p_name: name,
@@ -1109,7 +1247,8 @@ async function createFamilyWorkspace(name, monthlyBudget, currency) {
       p_currency: currency
     })
   );
-  return true;
+  window.localStorage.setItem(selectedFamilyStorageKey(), familyId);
+  return familyId;
 }
 
 function renderReports() {
@@ -1267,8 +1406,13 @@ function renderAdminFamilies() {
   list.innerHTML = "";
   families.forEach((family) => {
     const head = findHeadForFamily(family);
+    const ownerFamilyCount = state.adminFamilies.filter((item) =>
+      (item.owner_email || "").toLowerCase() === (family.owner_email || "").toLowerCase()
+    ).length;
     const itemCount = state.adminPaymentItems.filter((item) => item.family_id === family.id && item.status !== "inactive").length;
-    const memberCount = state.adminMembers.filter((member) => member.family_id === family.id).length;
+    const familyMembers = state.adminMembers.filter((member) => member.family_id === family.id);
+    const memberCount = familyMembers.filter((member) => member.status !== "inactive").length;
+    const removedMemberCount = familyMembers.filter((member) => member.status === "inactive").length;
     const occurrences = generateOccurrences(
       state.adminPaymentItems.filter((item) => item.family_id === family.id),
       state.adminPaymentRecords.filter((record) => record.family_id === family.id),
@@ -1280,11 +1424,12 @@ function renderAdminFamilies() {
     article.innerHTML = `
       <div class="record-main">
         <strong>${escapeHtml(family.name)}</strong>
-        <span>${escapeHtml(family.owner_email || "Owner email not stored")} &middot; ${memberCount} members &middot; ${itemCount} obligations</span>
+        <span>${escapeHtml(family.owner_email || "Owner email not stored")} &middot; ${memberCount} active members${removedMemberCount ? ` &middot; ${removedMemberCount} removed` : ""} &middot; ${itemCount} obligations</span>
         <div class="badge-row">
           ${statusBadge(head?.can_add_members ? "members unlocked" : "member access locked")}
           ${statusBadge(head?.status || "free signup")}
           ${statusBadge(head?.billing_status || "payment not set")}
+          <span class="mini-badge">${ownerFamilyCount}/${Number(head?.family_limit ?? 0)} family limit</span>
           ${overdue ? statusBadge(`${overdue} overdue`) : '<span class="mini-badge active">clear</span>'}
         </div>
       </div>
@@ -1308,16 +1453,21 @@ function renderHeads() {
   }
   list.innerHTML = "";
   state.heads.forEach((head) => {
+    const ownedCount = state.adminFamilies.filter((family) =>
+      (family.owner_email || "").toLowerCase() === head.email.toLowerCase()
+    ).length;
     const article = document.createElement("article");
     article.className = "record-card";
     article.innerHTML = `
       <div class="record-main">
         <strong>${escapeHtml(head.full_name)}</strong>
         <span>${escapeHtml(head.email)} &middot; ${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>
-        <div class="badge-row">${statusBadge(head.status)}${statusBadge(head.billing_status)}${statusBadge(head.can_add_members ? "members unlocked" : "free")}</div>
+        <div class="badge-row">${statusBadge(head.status)}${statusBadge(head.billing_status)}${statusBadge(head.can_add_members ? "members unlocked" : "members locked")}<span class="mini-badge">${ownedCount}/${Number(head.family_limit ?? 1)} families</span></div>
       </div>
       <div class="record-side">
         <div class="row-actions">
+          <label class="inline-number-control">Family limit<input data-family-limit-input="${head.id}" type="number" min="0" max="100" step="1" value="${Number(head.family_limit ?? 1)}" /></label>
+          <button type="button" data-save-family-limit="${head.id}">Save limit</button>
           <button type="button" data-toggle-member-access="${head.id}" data-next-member-access="${head.can_add_members ? "false" : "true"}">${head.can_add_members ? "Lock members" : "Unlock members"}</button>
           <button type="button" data-toggle-head="${head.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">${head.status === "active" ? "Suspend" : "Reactivate"}</button>
           <button type="button" data-delete-head="${head.id}">Revoke</button>
@@ -1556,7 +1706,7 @@ function resetObligationForm() {
 }
 
 function hasPaidPlan() {
-  return Boolean(state.headApproval?.status === "active" && state.headApproval?.can_add_members);
+  return hasActiveMembership();
 }
 
 function userCreatedPaymentCount() {
@@ -1626,10 +1776,15 @@ async function addHead(event) {
     monthly_fee: Number($("#headMonthlyFee").value || 0),
     fee_currency: $("#headFeeCurrency").value,
     billing_status: $("#headBillingStatus").value,
+    family_limit: Math.max(0, Number($("#headFamilyLimit").value || 0)),
     can_add_members: $("#headCanAddMembers").checked,
     status: "active"
   };
   if (!payload.full_name || !email) return;
+  if (!Number.isInteger(payload.family_limit) || payload.family_limit < 0 || payload.family_limit > 100) {
+    showToast("Enter a whole-number family limit between 0 and 100.");
+    return;
+  }
   try {
     const existingRows = await query("head duplicate check", supabase.from("family_heads").select("id").ilike("email", email).limit(1));
     if (existingRows[0]) {
@@ -1725,6 +1880,23 @@ async function updateHeadMemberAccess(headId, nextValue) {
   }
 }
 
+async function updateHeadFamilyLimit(headId) {
+  const input = document.querySelector(`[data-family-limit-input="${headId}"]`);
+  const familyLimitValue = Number(input?.value);
+  if (!Number.isInteger(familyLimitValue) || familyLimitValue < 0 || familyLimitValue > 100) {
+    showToast("Enter a whole-number family limit between 0 and 100.");
+    return;
+  }
+  try {
+    await query("family limit update", supabase.from("family_heads").update({ family_limit: familyLimitValue }).eq("id", headId));
+    await loadAdminData();
+    renderAdmin();
+    showToast("Family limit updated.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 async function updateFamilyMemberAccess(familyId, nextValue) {
   const family = state.adminFamilies.find((item) => item.id === familyId);
   if (!family?.owner_email) {
@@ -1746,6 +1918,7 @@ async function updateFamilyMemberAccess(familyId, nextValue) {
           monthly_fee: 0,
           fee_currency: family.currency || "USD",
           billing_status: "unpaid",
+          family_limit: 1,
           can_add_members: true,
           status: "active"
         })
@@ -1769,12 +1942,38 @@ async function updateFamilyStatus(familyId, nextStatus) {
   await updateHeadStatus(existingHead.id, nextStatus);
 }
 
-async function updateMemberStatus(memberId, nextStatus) {
+async function removeFamilyMember(memberId) {
+  if (!state.family) return;
   try {
-    await query("member status update", supabase.from("family_members").update({ status: nextStatus }).eq("id", memberId));
-    await loadMembers();
+    await query(
+      "family member remove",
+      supabase.rpc("remove_family_member", {
+        p_family_id: state.family.id,
+        p_member_id: memberId
+      })
+    );
+    await loadFamilyData();
     renderFamilyApp();
-    showToast(nextStatus === "active" ? "Member reactivated." : "Member marked inactive.");
+    showToast("Member removed from the family. Their membership record was retained as inactive.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function deleteSelectedFamily() {
+  if (!state.family) return;
+  const familyId = state.family.id;
+  try {
+    await query(
+      "family delete",
+      supabase.rpc("delete_family_workspace", { p_family_id: familyId })
+    );
+    window.localStorage.removeItem(selectedFamilyStorageKey());
+    state.family = null;
+    await loadFamily();
+    await loadFamilyData();
+    renderFamilyApp();
+    showToast("Family permanently deleted from the database.");
   } catch (error) {
     showToast(error.message);
   }
@@ -1969,19 +2168,21 @@ document.addEventListener("click", async (event) => {
     }, "Payment deleted.");
   }
 
-  const memberId = event.target.dataset.toggleMember;
-  if (memberId) await updateMemberStatus(memberId, event.target.dataset.nextStatus);
-
-  const deleteMemberId = event.target.dataset.deleteMember;
-  if (deleteMemberId && await confirmAction({
-    title: "Delete family member?",
-    message: "This removes the member from the household roster.",
-    action: "Delete"
+  const removeMemberId = event.target.dataset.removeMember;
+  if (removeMemberId && await confirmAction({
+    title: "Remove this member?",
+    message: "They will lose access to this family. Their membership record will remain in the database as inactive and can be restored by inviting them again.",
+    action: "Remove"
   })) {
-    await deleteRow("family_members", deleteMemberId, async () => {
-      await loadFamilyData();
-      renderFamilyApp();
-    }, "Member deleted.");
+    await removeFamilyMember(removeMemberId);
+  }
+
+  if (event.target.dataset.deleteFamily !== undefined && state.family && await confirmAction({
+    title: `Delete ${state.family.name}?`,
+    message: "This permanently deletes the family and all of its family data from the database. This cannot be undone.",
+    action: "Delete family"
+  })) {
+    await deleteSelectedFamily();
   }
 
   const deleteRecordId = event.target.dataset.deleteRecord;
@@ -2013,6 +2214,9 @@ document.addEventListener("click", async (event) => {
 
   const toggleMemberAccessId = event.target.dataset.toggleMemberAccess;
   if (toggleMemberAccessId) await updateHeadMemberAccess(toggleMemberAccessId, event.target.dataset.nextMemberAccess);
+
+  const saveFamilyLimitId = event.target.dataset.saveFamilyLimit;
+  if (saveFamilyLimitId) await updateHeadFamilyLimit(saveFamilyLimitId);
 
   const toggleFamilyMemberAccessId = event.target.dataset.toggleFamilyMemberAccess;
   if (toggleFamilyMemberAccessId) await updateFamilyMemberAccess(toggleFamilyMemberAccessId, event.target.dataset.nextMemberAccess);
@@ -2088,6 +2292,11 @@ $("#statusFilter").addEventListener("change", (event) => {
   renderFamilyApp();
 });
 $("#adminHouseholdSearch").addEventListener("input", renderAdminFamilies);
+document.querySelectorAll("[data-family-selector]").forEach((select) => {
+  select.addEventListener("change", (event) => {
+    selectFamily(event.target.value).catch((error) => showToast(error.message));
+  });
+});
 
 window.addEventListener("hashchange", () => {
   applyRouteFromHash();

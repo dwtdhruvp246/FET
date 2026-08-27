@@ -97,7 +97,6 @@ button.primary,
 
 button.danger,
 button[data-delete-obligation],
-button[data-delete-member],
 button[data-delete-record],
 button[data-delete-head],
 button[data-delete-payment],
@@ -307,6 +306,18 @@ code {
   gap: 10px;
 }
 
+.inline-number-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.inline-number-control input {
+  width: 78px;
+  min-height: 44px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 292px minmax(0, 1fr);
@@ -351,6 +362,18 @@ code {
   align-content: start;
   gap: 9px;
   margin-top: 18px;
+}
+
+.workspace-picker {
+  gap: 6px;
+  margin-top: 4px;
+  font-size: 0.76rem;
+}
+
+.workspace-picker select {
+  min-height: 42px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .app-nav h1 {
