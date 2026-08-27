@@ -158,9 +158,9 @@ code {
 }
 
 .workspace {
-  width: min(1500px, 100%);
-  margin: 0 auto;
-  padding: 24px;
+  width: 100%;
+  margin: 0;
+  padding: clamp(16px, 1.5vw, 28px);
 }
 
 .hidden {
