@@ -53,7 +53,6 @@ const views = {
   configWarning: $("#configWarning"),
   appError: $("#appErrorView"),
   auth: $("#authView"),
-  signup: $("#signupView"),
   setup: $("#setupView"),
   suspended: $("#suspendedView"),
   admin: $("#adminView"),
@@ -153,6 +152,14 @@ function money(amount, currency = "USD") {
 function setView(viewName) {
   Object.values(views).forEach((view) => view.classList.add("hidden"));
   if (viewName) views[viewName].classList.remove("hidden");
+}
+
+function showSignupSuccessMessage() {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get("signup") !== "success") return;
+  url.searchParams.delete("signup");
+  window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  showToast("Account created successfully. Sign in with your new account.");
 }
 
 function showToast(message) {
@@ -404,6 +411,7 @@ async function init() {
     await loadApp();
   } else {
     setView("auth");
+    showSignupSuccessMessage();
   }
 }
 
@@ -1404,32 +1412,6 @@ async function signIn(event) {
   }
 }
 
-async function signUp(event) {
-  event.preventDefault();
-  assertSupabase();
-  const fullName = $("#signupName").value.trim();
-  const email = $("#signupEmail").value.trim();
-  const password = $("#signupPassword").value;
-  const confirmPassword = $("#signupPasswordConfirm").value;
-  if (!fullName || !email || !password) {
-    showToast("Enter your name, email, and password.");
-    return;
-  }
-  if (password !== confirmPassword) {
-    showToast("Passwords do not match.");
-    return;
-  }
-  try {
-    await query("sign up", supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } }));
-    await supabase.auth.signOut();
-    $("#signupForm").reset();
-    setView("auth");
-    showToast("Account created. You can sign in now.");
-  } catch (error) {
-    showToast(error.message);
-  }
-}
-
 async function createFamily(event) {
   event.preventDefault();
   assertSupabase();
@@ -1967,8 +1949,6 @@ function escapeHtml(value) {
 }
 
 document.addEventListener("click", async (event) => {
-  if (event.target.dataset.showSignup !== undefined) setView("signup");
-  if (event.target.dataset.showSignin !== undefined) setView("auth");
   if (event.target.dataset.closePaymentDialog !== undefined) $("#recordPaymentDialog").close();
   if (event.target.dataset.closeConfirmDialog !== undefined) $("#confirmDialog").close();
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
@@ -2114,7 +2094,6 @@ document.addEventListener("click", async (event) => {
 });
 
 $("#authForm").addEventListener("submit", signIn);
-$("#signupForm").addEventListener("submit", signUp);
 $("#familyForm").addEventListener("submit", createFamily);
 $("#memberFamilyForm").addEventListener("submit", createFamilyFromMembers);
 $("#inviteForm").addEventListener("submit", inviteMember);

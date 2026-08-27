@@ -139,6 +139,7 @@ PWA installation requires HTTPS. GitHub Pages provides HTTPS.
 Upload all visible files and folders, including:
 
 - `index.html`
+- `signup.html`
 - `app.js`
 - `styles.css`
 - `config.js`

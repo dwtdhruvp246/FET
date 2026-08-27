@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Create a Mushavo Budget account." />
+    <meta name="theme-color" content="#ecfeff" />
+    <title>Create account | Mushavo Budget</title>
+    <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="styles.css?v=16" />
+    <script src="config.js?v=19"></script>
+  </head>
+  <body>
+    <main class="workspace">
+      <section id="configWarning" class="notice hidden" role="alert">
+        <strong>Connect Supabase first.</strong>
+        Update <code>config.js</code> with your Supabase project URL and publishable key.
+      </section>
+
+      <section class="auth-panel" aria-labelledby="signupTitle">
+        <div class="panel-heading">
+          <img class="brand-mark" src="assets/ledger-mark.svg" alt="" width="64" height="64" />
+          <p class="eyebrow">Free account</p>
+          <h1 id="signupTitle">Create your Mushavo Budget login</h1>
+          <p class="muted-copy">Start free with up to 5 payments. You can create a family or join one after receiving an invitation.</p>
+        </div>
+
+        <form id="signupForm" class="form-grid">
+          <label class="full" for="signupName">
+            Full name
+            <input id="signupName" autocomplete="name" required placeholder="Your name" />
+          </label>
+          <label for="signupEmail">
+            Email
+            <input id="signupEmail" type="email" autocomplete="email" required placeholder="you@example.com" />
+          </label>
+          <label for="signupPassword">
+            Password
+            <input id="signupPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="At least 6 characters" />
+          </label>
+          <label class="full" for="signupPasswordConfirm">
+            Confirm password
+            <input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="Repeat your password" />
+          </label>
+          <div class="button-row">
+            <button id="signupSubmitButton" class="primary" type="submit">Sign up</button>
+            <a class="button-link" href="index.html">Back to sign in</a>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+    <script type="module">
+      import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
+
+      const config = window.MUSHAVO_BUDGET_CONFIG || {};
+      const placeholders = ["YOUR-PROJECT-REF", "YOUR-SUPABASE-PUBLISHABLE-KEY"];
+      const isConfigured =
+        config.supabaseUrl &&
+        config.supabasePublishableKey &&
+        !placeholders.some((value) => `${config.supabaseUrl} ${config.supabasePublishableKey}`.includes(value));
+      const form = document.querySelector("#signupForm");
+      const submitButton = document.querySelector("#signupSubmitButton");
+      const toast = document.querySelector("#toast");
+
+      function showMessage(message) {
+        toast.textContent = message;
+        toast.classList.remove("hidden");
+        window.setTimeout(() => toast.classList.add("hidden"), 4200);
+      }
+
+      if (!isConfigured) {
+        document.querySelector("#configWarning").classList.remove("hidden");
+        form.querySelectorAll("input, button").forEach((field) => {
+          field.disabled = true;
+        });
+      } else {
+        const supabase = createClient(config.supabaseUrl, config.supabasePublishableKey);
+
+        form.addEventListener("submit", async (event) => {
+          event.preventDefault();
+          const fullName = document.querySelector("#signupName").value.trim();
+          const email = document.querySelector("#signupEmail").value.trim().toLowerCase();
+          const password = document.querySelector("#signupPassword").value;
+          const confirmation = document.querySelector("#signupPasswordConfirm").value;
+
+          if (password !== confirmation) {
+            showMessage("Passwords do not match.");
+            return;
+          }
+
+          submitButton.disabled = true;
+          submitButton.textContent = "Creating account...";
+
+          try {
+            const { data, error } = await supabase.auth.signUp({
+              email,
+              password,
+              options: { data: { full_name: fullName } }
+            });
+            if (error) throw error;
+            if (data.session) await supabase.auth.signOut();
+            window.location.replace("./index.html?signup=success");
+          } catch (error) {
+            showMessage(error.message || "The account could not be created. Please try again.");
+            submitButton.disabled = false;
+            submitButton.textContent = "Sign up";
+          }
+        });
+      }
+    </script>
+  </body>
+</html>

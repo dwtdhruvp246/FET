@@ -48,7 +48,8 @@ textarea {
   font: inherit;
 }
 
-button {
+button,
+.button-link {
   min-height: 44px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
@@ -56,17 +57,23 @@ button {
   background: rgba(255, 255, 255, 0.74);
   color: #334155;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
   touch-action: manipulation;
   transition: background 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
-button:hover {
+button:hover,
+.button-link:hover {
   border-color: rgba(16, 185, 129, 0.45);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 12px 24px rgba(15, 118, 110, 0.11);
 }
 
-button:active {
+button:active,
+.button-link:active {
   transform: scale(0.985);
 }
 
@@ -74,12 +81,14 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
+.button-link:focus-visible,
 .skip-link:focus-visible {
   outline: 3px solid rgba(16, 185, 129, 0.34);
   outline-offset: 2px;
 }
 
-button.primary {
+button.primary,
+.button-link.primary {
   border-color: transparent;
   background: linear-gradient(135deg, var(--primary), var(--primary-dark));
   color: #ffffff;

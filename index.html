@@ -13,9 +13,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=15" />
+    <link rel="stylesheet" href="styles.css?v=16" />
     <script src="config.js?v=19"></script>
-    <script type="module" src="app.js?v=19"></script>
+    <script type="module" src="app.js?v=20"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -64,38 +64,7 @@
           </label>
           <div class="button-row">
             <button class="primary" type="submit">Sign in</button>
-            <button type="button" data-show-signup>Create account</button>
-          </div>
-        </form>
-      </section>
-
-      <section id="signupView" class="auth-panel hidden" aria-labelledby="signupTitle">
-        <div class="panel-heading">
-          <p class="eyebrow">Free account</p>
-          <h1 id="signupTitle">Create your login</h1>
-          <p class="muted-copy">Start free with up to 5 payments. Family member access can be unlocked by the platform admin.</p>
-        </div>
-
-        <form id="signupForm" class="form-grid">
-          <label class="full" for="signupName">
-            Full name
-            <input id="signupName" autocomplete="name" required placeholder="Your name" />
-          </label>
-          <label for="signupEmail">
-            Email
-            <input id="signupEmail" type="email" autocomplete="email" required placeholder="you@example.com" />
-          </label>
-          <label for="signupPassword">
-            Password
-            <input id="signupPassword" type="password" autocomplete="new-password" minlength="6" required placeholder="At least 6 characters" />
-          </label>
-          <label class="full" for="signupPasswordConfirm">
-            Confirm password
-            <input id="signupPasswordConfirm" type="password" autocomplete="new-password" minlength="6" required placeholder="Repeat your password" />
-          </label>
-          <div class="button-row">
-            <button class="primary" type="submit">Create account</button>
-            <button type="button" data-show-signin>Back to sign in</button>
+            <a class="button-link" href="signup.html">Create account</a>
           </div>
         </form>
       </section>
