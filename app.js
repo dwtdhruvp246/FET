@@ -946,25 +946,52 @@ function renderDashboard() {
 function renderPriorityDueList(occurrences) {
   const list = $("#priorityDueList");
   const statusPriority = { overdue: 0, partial: 1, "due-soon": 2, upcoming: 3, paid: 4 };
-  const currentOpen = occurrences
-    .filter((item) => item.status !== "paid")
-    .sort((a, b) => statusPriority[a.status] - statusPriority[b.status] || a.dueDate.localeCompare(b.dueDate))
-    .slice(0, 6);
-  const nextMonth = generateOccurrences(
-    state.paymentItems,
-    state.paymentRecords,
-    offsetMonthValue(state.filterMonth, 1)
-  )
-    .filter((item) => item.status !== "paid")
-    .slice(0, Math.max(4, 10 - currentOpen.length))
-    .map((item) => ({ ...item, isNextMonth: true }));
-  const priority = [...currentOpen, ...nextMonth].slice(0, 10);
-  if (!priority.length) {
-    list.innerHTML = emptyState("Nothing due", "Current and next-month recurring payments will appear here.");
+  const monthGroups = [];
+
+  for (let monthOffset = 0; monthOffset <= 6 && monthGroups.length < 4; monthOffset += 1) {
+    const monthValue = offsetMonthValue(state.filterMonth, monthOffset);
+    const monthOccurrences = (monthOffset === 0
+      ? occurrences
+      : generateOccurrences(state.paymentItems, state.paymentRecords, monthValue))
+      .filter((item) => item.status !== "paid")
+      .sort((a, b) => statusPriority[a.status] - statusPriority[b.status] || a.dueDate.localeCompare(b.dueDate))
+      .slice(0, monthOffset === 0 ? 6 : 4);
+
+    if (monthOccurrences.length) monthGroups.push({ monthOffset, monthValue, occurrences: monthOccurrences });
+  }
+
+  if (!monthGroups.length) {
+    list.innerHTML = emptyState("Nothing due", "Upcoming recurring payments will appear here grouped by month.");
     return;
   }
+
   list.innerHTML = "";
-  priority.forEach((occurrence) => list.append(renderOccurrenceCard(occurrence, true)));
+  monthGroups.forEach((group, groupIndex) => {
+    const section = document.createElement("section");
+    section.className = `due-month-group month-accent-${groupIndex % 4}`;
+    section.dataset.month = group.monthValue;
+    const monthTitle = parseDate(monthStart(group.monthValue)).toLocaleString("en", {
+      month: "long",
+      year: "numeric"
+    });
+    const totalOutstanding = formatCurrencyTotals(group.occurrences.map((occurrence) => ({
+      currency: occurrence.item.currency,
+      amount: occurrence.outstanding
+    })));
+    section.innerHTML = `
+      <header class="due-month-header">
+        <div>
+          <span>${group.monthOffset === 0 ? "Selected month" : "Upcoming month"}</span>
+          <h4>${escapeHtml(monthTitle)}</h4>
+        </div>
+        <small>${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} &middot; ${escapeHtml(totalOutstanding)} outstanding</small>
+      </header>
+      <div class="due-month-items"></div>
+    `;
+    const items = section.querySelector(".due-month-items");
+    group.occurrences.forEach((occurrence) => items.append(renderOccurrenceCard(occurrence, true)));
+    list.append(section);
+  });
 }
 
 function renderMemberResponsibility(occurrences) {
@@ -1086,7 +1113,6 @@ function renderOccurrenceCard(occurrence, withAction = false) {
       <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
       <div class="badge-row">
         ${statusBadge(occurrence.status)}
-        ${occurrence.isNextMonth ? '<span class="mini-badge upcoming">Next month</span>' : ""}
         <span class="mini-badge">${money(occurrence.paid, occurrence.item.currency)} paid</span>
       </div>
     </div>
