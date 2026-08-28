@@ -549,6 +549,84 @@ code {
   text-transform: none;
 }
 
+.dashboard-stats-grid {
+  gap: 14px;
+  margin-top: 24px;
+}
+
+.dashboard-stat {
+  --stat-accent: #0f766e;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  container-type: inline-size;
+  min-height: 132px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  padding: 17px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.065);
+}
+
+.dashboard-stat::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: var(--stat-accent);
+  content: "";
+  opacity: 0.82;
+}
+
+.dashboard-stat-due {
+  --stat-accent: #0f766e;
+}
+
+.dashboard-stat-outstanding {
+  --stat-accent: #0284c7;
+}
+
+.dashboard-stat-overdue {
+  --stat-accent: #dc2626;
+}
+
+.dashboard-stat-assigned {
+  --stat-accent: #7c3aed;
+}
+
+.dashboard-stat .stat-label,
+.dashboard-stat small,
+.dashboard-stat strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-stat .stat-label {
+  color: var(--muted-strong);
+  font-size: 0.76rem;
+  letter-spacing: 0.01em;
+}
+
+.dashboard-stat strong {
+  margin: 12px 0 8px;
+  font-size: clamp(1.35rem, 2.1vw, 1.85rem);
+  line-height: 1.05;
+  overflow-wrap: normal;
+}
+
+.dashboard-stat small {
+  margin-top: auto;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.dashboard-stat .meter {
+  height: 7px;
+  margin-top: 1px;
+}
+
 .meter {
   height: 9px;
   overflow: hidden;
@@ -1212,13 +1290,14 @@ input[type="file"] {
 
   .dashboard-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 9px;
+    gap: 10px;
+    margin-top: 20px;
   }
 
-  .dashboard-stats-grid .stat-card {
-    min-height: 108px;
+  .dashboard-stats-grid .dashboard-stat {
+    min-height: 112px;
     border-radius: 18px;
-    padding: 11px;
+    padding: 12px;
   }
 
   .dashboard-stats-grid .stat-label,
@@ -1231,12 +1310,12 @@ input[type="file"] {
 
   .dashboard-stats-grid .stat-label,
   .dashboard-stats-grid .stat-card small {
-    font-size: clamp(0.61rem, 2.8vw, 0.72rem);
+    font-size: clamp(0.62rem, 2.7vw, 0.7rem);
   }
 
   .dashboard-stats-grid .stat-card strong {
-    margin: 8px 0 7px;
-    font-size: clamp(1rem, 6.2vw, 1.45rem);
+    margin: 9px 0 7px;
+    font-size: clamp(1rem, 5.4vw, 1.28rem);
     line-height: 1.05;
     overflow-wrap: normal;
   }
@@ -1425,7 +1504,7 @@ input[type="file"] {
   }
 
   .dashboard-stats-grid .stat-card {
-    min-height: 102px;
+    min-height: 106px;
     padding: 9px;
   }
 
