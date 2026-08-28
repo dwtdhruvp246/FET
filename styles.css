@@ -1089,6 +1089,59 @@ code {
   right: -5px;
 }
 
+.notification-status-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(240, 253, 250, 0.74);
+}
+
+.notification-status-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.notification-status-card span,
+.notification-status-card small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.notification-status-card strong {
+  overflow-wrap: anywhere;
+}
+
+.notification-status-card p,
+.notification-status-card small {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.notification-preferences {
+  margin-top: 18px;
+}
+
+.notification-actions {
+  margin-top: 16px;
+}
+
+.notification-privacy-note {
+  margin: 14px 0 0;
+}
+
+.notification-deep-link-target {
+  border-color: rgba(13, 148, 136, 0.72);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.18), var(--shadow);
+}
+
 .paid-label {
   align-self: center;
   color: #047857;
@@ -1326,6 +1379,16 @@ input[type="file"] {
 
   .notification-dialog {
     padding: 18px;
+  }
+
+  .notification-status-card {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+
+  .notification-status-card p,
+  .notification-status-card small {
+    grid-column: 1;
   }
 
   .due-month-group {
