@@ -47,6 +47,10 @@ const realtime = {
 
 let deferredInstallPrompt = null;
 
+const PAYMENT_PROOF_BUCKET = "payment-proofs";
+const PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
+const PAYMENT_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+
 const $ = (selector) => document.querySelector(selector);
 
 const views = {
@@ -132,6 +136,11 @@ function parseDate(value) {
 
 function monthStart(monthValue) {
   return `${monthValue}-01`;
+}
+
+function offsetMonthValue(monthValue, offset) {
+  const date = parseDate(monthStart(monthValue));
+  return toMonthValue(new Date(date.getFullYear(), date.getMonth() + offset, 1));
 }
 
 function monthDiff(fromDate, toDate) {
@@ -936,11 +945,22 @@ function renderDashboard() {
 
 function renderPriorityDueList(occurrences) {
   const list = $("#priorityDueList");
-  const priority = occurrences
-    .filter((item) => ["overdue", "due-soon", "partial"].includes(item.status))
-    .slice(0, 8);
+  const statusPriority = { overdue: 0, partial: 1, "due-soon": 2, upcoming: 3, paid: 4 };
+  const currentOpen = occurrences
+    .filter((item) => item.status !== "paid")
+    .sort((a, b) => statusPriority[a.status] - statusPriority[b.status] || a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 6);
+  const nextMonth = generateOccurrences(
+    state.paymentItems,
+    state.paymentRecords,
+    offsetMonthValue(state.filterMonth, 1)
+  )
+    .filter((item) => item.status !== "paid")
+    .slice(0, Math.max(4, 10 - currentOpen.length))
+    .map((item) => ({ ...item, isNextMonth: true }));
+  const priority = [...currentOpen, ...nextMonth].slice(0, 10);
   if (!priority.length) {
-    list.innerHTML = emptyState("Nothing urgent", "Upcoming recurring payments will appear here before they are due.");
+    list.innerHTML = emptyState("Nothing due", "Current and next-month recurring payments will appear here.");
     return;
   }
   list.innerHTML = "";
@@ -1066,12 +1086,13 @@ function renderOccurrenceCard(occurrence, withAction = false) {
       <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
       <div class="badge-row">
         ${statusBadge(occurrence.status)}
+        ${occurrence.isNextMonth ? '<span class="mini-badge upcoming">Next month</span>' : ""}
         <span class="mini-badge">${money(occurrence.paid, occurrence.item.currency)} paid</span>
       </div>
     </div>
     <div class="record-side">
       <strong>${money(occurrence.amount, occurrence.item.currency)}</strong>
-      ${withAction ? `<div class="row-actions"><button type="button" data-edit-obligation="${occurrence.item.id}">Edit</button>${occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Check</button>` : ""}</div>` : ""}
+      ${withAction ? `<div class="row-actions"><button type="button" data-edit-obligation="${occurrence.item.id}">Edit</button>${occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Record payment</button>` : '<span class="paid-label">Paid in full</span>'}</div>` : ""}
     </div>
   `;
   return article;
@@ -1147,30 +1168,83 @@ function renderSettings() {
 }
 
 function renderNotifications() {
-  const list = $("#notificationsList");
-  if (!list) return;
   const unreadCount = state.notifications.filter((item) => !item.read_at).length;
-  $("#notificationCount").textContent = unreadCount;
-  if (!state.notifications.length) {
+  const dueReminderCount = notificationDueOccurrences().length;
+  const alertCount = unreadCount + dueReminderCount;
+  if ($("#notificationCount")) $("#notificationCount").textContent = alertCount;
+  document.querySelectorAll("[data-notification-count]").forEach((badge) => {
+    badge.textContent = alertCount > 99 ? "99+" : alertCount;
+    badge.classList.toggle("hidden", alertCount === 0);
+  });
+  document.querySelectorAll("[data-open-notifications]").forEach((button) => {
+    button.setAttribute("aria-label", alertCount ? `Open notifications, ${alertCount} alerts` : "Open notifications");
+  });
+
+  renderNotificationList($("#notificationsList"));
+  renderNotificationList($("#notificationDialogList"), true);
+}
+
+function renderNotificationList(list, compact = false) {
+  if (!list) return;
+  const dueReminders = notificationDueOccurrences();
+  if (!state.notifications.length && !dueReminders.length) {
     list.innerHTML = emptyState("No notifications", "Invites and payment reminders will appear here.");
     return;
   }
   list.innerHTML = "";
-  state.notifications.forEach((notification) => {
+  dueReminders.forEach((occurrence) => {
     const article = document.createElement("article");
-    article.className = "record-card";
+    article.className = `record-card${compact ? " notification-card" : ""}`;
+    article.innerHTML = `
+      <div class="record-main">
+        <strong>${escapeHtml(occurrence.item.name)}</strong>
+        <span>${money(occurrence.outstanding, occurrence.item.currency)} outstanding &middot; due ${occurrence.dueDate}</span>
+        <div class="badge-row">${statusBadge(occurrence.status)}<span class="mini-badge">Payment reminder</span></div>
+      </div>
+      <div class="record-side"><button class="primary" type="button" data-record-payment="${occurrence.key}">Record payment</button></div>
+    `;
+    list.append(article);
+  });
+  state.notifications.forEach((notification) => {
+    const invitation = notification.invitation_id
+      ? state.familyInvitations.find((item) => item.id === notification.invitation_id)
+      : null;
+    const isPendingInvite = invitation
+      && invitation.status === "pending"
+      && invitation.invitee_email?.toLowerCase() === state.session.user.email?.toLowerCase();
+    const article = document.createElement("article");
+    article.className = `record-card${compact ? " notification-card" : ""}`;
     article.innerHTML = `
       <div class="record-main">
         <strong>${escapeHtml(notification.title)}</strong>
         <span>${escapeHtml(notification.body)}</span>
+        <small>${new Date(notification.created_at).toLocaleString()}</small>
         <div class="badge-row">${statusBadge(notification.read_at ? "read" : "new")}</div>
       </div>
       <div class="record-side">
+        ${isPendingInvite ? `<div class="row-actions"><button class="primary" type="button" data-accept-invite="${invitation.id}">Accept</button><button type="button" data-reject-invite="${invitation.id}">Reject</button></div>` : ""}
         ${notification.read_at ? "" : `<button type="button" data-read-notification="${notification.id}">Mark read</button>`}
       </div>
     `;
     list.append(article);
   });
+}
+
+function notificationDueOccurrences() {
+  const currentMonth = toMonthValue(new Date());
+  return [
+    ...generateOccurrences(state.paymentItems, state.paymentRecords, currentMonth),
+    ...generateOccurrences(state.paymentItems, state.paymentRecords, offsetMonthValue(currentMonth, 1))
+  ]
+    .filter((occurrence) => ["overdue", "due-soon", "partial"].includes(occurrence.status))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 8);
+}
+
+function openNotificationDialog() {
+  renderNotifications();
+  const dialog = $("#notificationDialog");
+  if (dialog && !dialog.open) dialog.showModal();
 }
 
 async function inviteMember(event) {
@@ -1327,8 +1401,15 @@ function renderFamilyPaymentRecord(record) {
       <strong>${escapeHtml(item?.name || "Payment")}</strong>
       <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(record.payment_method || "Method not set")} &middot; ${escapeHtml(record.reference_number || "No reference")}</span>
       ${record.notes ? `<small>${escapeHtml(record.notes)}</small>` : ""}
+      ${record.proof_name ? `<small>Proof: ${escapeHtml(record.proof_name)}${record.proof_size_bytes ? ` &middot; ${formatFileSize(record.proof_size_bytes)}` : ""}</small>` : ""}
     </div>
-    <div class="record-side"><strong>${money(record.amount, item?.currency || familyCurrency())}</strong><button type="button" data-delete-record="${record.id}">Delete</button></div>
+    <div class="record-side">
+      <strong>${money(record.amount, item?.currency || familyCurrency())}</strong>
+      <div class="row-actions">
+        ${record.proof_path ? `<button type="button" data-open-proof="${record.id}">View proof</button>` : ""}
+        <button type="button" data-delete-record="${record.id}">Delete</button>
+      </div>
+    </div>
   `;
   return article;
 }
@@ -1715,7 +1796,8 @@ function userCreatedPaymentCount() {
 }
 
 function openRecordPayment(key) {
-  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
+  const periodStart = key.slice(key.lastIndexOf(":") + 1);
+  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, periodStart.slice(0, 7));
   const occurrence = occurrences.find((item) => item.key === key);
   if (!occurrence) return;
   $("#recordItemId").value = occurrence.item.id;
@@ -1723,9 +1805,16 @@ function openRecordPayment(key) {
   $("#recordDueDate").value = occurrence.dueDate;
   $("#recordPaymentTitle").textContent = `Record ${occurrence.item.name}`;
   $("#recordPaymentMeta").textContent = `${money(occurrence.outstanding, occurrence.item.currency)} outstanding, due ${occurrence.dueDate}`;
+  $("#recordOutstanding").value = occurrence.outstanding.toFixed(2);
+  $("#recordPaymentType").value = "full";
   $("#recordAmount").value = occurrence.outstanding.toFixed(2);
+  $("#recordAmount").max = occurrence.outstanding.toFixed(2);
+  $("#recordAmount").readOnly = true;
   $("#recordPaidBy").value = occurrence.item.responsible_member_id || "";
   $("#recordPaymentDate").value = toDateValue(new Date());
+  $("#recordReference").value = "";
+  $("#recordNotes").value = "";
+  $("#recordProof").value = "";
   $("#recordPaymentDialog").showModal();
 }
 
@@ -1733,11 +1822,28 @@ async function savePaymentRecord(event) {
   event.preventDefault();
   const item = state.paymentItems.find((paymentItem) => paymentItem.id === $("#recordItemId").value);
   const amount = Number($("#recordAmount").value || 0);
+  const outstanding = Number($("#recordOutstanding").value || 0);
+  const proofFile = $("#recordProof").files?.[0] || null;
   if (!item || amount <= 0) {
     showToast("Choose a payment and enter an amount.");
     return;
   }
+  if (amount > outstanding + 0.005) {
+    showToast(`The payment cannot be more than the ${money(outstanding, item.currency)} outstanding balance.`);
+    return;
+  }
+  if (proofFile && !PAYMENT_PROOF_TYPES.has(proofFile.type)) {
+    showToast("Proof must be a JPG, PNG, WebP, or PDF file.");
+    return;
+  }
+  if (proofFile && proofFile.size > PAYMENT_PROOF_MAX_BYTES) {
+    showToast("Proof of payment must be 10 MB or smaller.");
+    return;
+  }
+
+  let uploadedProof = null;
   try {
+    if (proofFile) uploadedProof = await uploadPaymentProof(item, proofFile);
     await query(
       "payment record create",
       supabase.from("payment_records").insert({
@@ -1753,6 +1859,10 @@ async function savePaymentRecord(event) {
         payment_method: $("#recordMethod").value,
         reference_number: $("#recordReference").value.trim() || null,
         notes: $("#recordNotes").value.trim() || null,
+        proof_path: uploadedProof?.path || null,
+        proof_name: uploadedProof?.name || null,
+        proof_mime_type: uploadedProof?.type || null,
+        proof_size_bytes: uploadedProof?.size || null,
         recorded_by: state.session.user.id
       })
     );
@@ -1760,7 +1870,78 @@ async function savePaymentRecord(event) {
     $("#recordPaymentForm").reset();
     await loadPaymentRecords();
     renderFamilyApp();
-    showToast("Payment recorded.");
+    showToast(amount + 0.005 >= outstanding ? "Payment recorded as paid in full." : "Partial payment recorded.");
+  } catch (error) {
+    if (uploadedProof?.path) {
+      await supabase.storage.from(PAYMENT_PROOF_BUCKET).remove([uploadedProof.path]).catch(() => {});
+    }
+    showToast(error.message);
+  }
+}
+
+async function uploadPaymentProof(item, file) {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "receipt";
+  const userId = state.session.user.id;
+  const path = item.visibility === "family"
+    ? `families/${item.family_id}/${state.family.owner_id}/${userId}/${crypto.randomUUID()}-${safeName}`
+    : `personal/${userId}/${crypto.randomUUID()}-${safeName}`;
+  const { error } = await supabase.storage.from(PAYMENT_PROOF_BUCKET).upload(path, file, {
+    contentType: file.type,
+    upsert: false
+  });
+  if (error) throw error;
+  return { path, name: file.name, type: file.type, size: file.size };
+}
+
+async function openPaymentProof(recordId) {
+  const record = state.paymentRecords.find((item) => item.id === recordId);
+  if (!record?.proof_path) return;
+  try {
+    const { data, error } = await supabase.storage.from(PAYMENT_PROOF_BUCKET).createSignedUrl(record.proof_path, 60);
+    if (error) throw error;
+    const link = document.createElement("a");
+    link.href = data.signedUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.click();
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function deletePaymentRecord(recordId) {
+  const record = state.paymentRecords.find((item) => item.id === recordId);
+  try {
+    await query("payment_records delete", supabase.from("payment_records").delete().eq("id", recordId));
+    let proofCleanupFailed = false;
+    if (record?.proof_path) {
+      const { error } = await supabase.storage.from(PAYMENT_PROOF_BUCKET).remove([record.proof_path]);
+      proofCleanupFailed = Boolean(error);
+    }
+    await loadPaymentRecords();
+    renderFamilyApp();
+    showToast(proofCleanupFailed ? "Payment deleted. The receipt file still needs admin cleanup." : "Payment record deleted.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function deletePaymentItem(itemId) {
+  const proofPaths = state.paymentRecords
+    .filter((record) => record.payment_item_id === itemId && record.proof_path)
+    .map((record) => record.proof_path);
+  try {
+    await query("payment item delete", supabase.from("payment_items").delete().eq("id", itemId));
+    let proofCleanupFailed = false;
+    if (proofPaths.length) {
+      const { error } = await supabase.storage.from(PAYMENT_PROOF_BUCKET).remove(proofPaths);
+      proofCleanupFailed = Boolean(error);
+    }
+    await loadFamilyData();
+    renderFamilyApp();
+    showToast(proofCleanupFailed
+      ? "Payment deleted. Some receipt files still need admin cleanup."
+      : "Payment and its receipt files were deleted.");
   } catch (error) {
     showToast(error.message);
   }
@@ -1963,17 +2144,27 @@ async function removeFamilyMember(memberId) {
 async function deleteSelectedFamily() {
   if (!state.family) return;
   const familyId = state.family.id;
+  const proofPaths = state.paymentRecords
+    .filter((record) => record.family_id === familyId && record.proof_path)
+    .map((record) => record.proof_path);
   try {
     await query(
       "family delete",
       supabase.rpc("delete_family_workspace", { p_family_id: familyId })
     );
+    let proofCleanupFailed = false;
+    if (proofPaths.length) {
+      const { error } = await supabase.storage.from(PAYMENT_PROOF_BUCKET).remove(proofPaths);
+      proofCleanupFailed = Boolean(error);
+    }
     window.localStorage.removeItem(selectedFamilyStorageKey());
     state.family = null;
     await loadFamily();
     await loadFamilyData();
     renderFamilyApp();
-    showToast("Family permanently deleted from the database.");
+    showToast(proofCleanupFailed
+      ? "Family deleted from the database. Some receipt files still need admin cleanup."
+      : "Family and its receipt files were permanently deleted.");
   } catch (error) {
     showToast(error.message);
   }
@@ -2089,6 +2280,13 @@ function formatCurrencyTotals(rows) {
   return Object.entries(totals).map(([currency, amount]) => money(amount, currency)).join(" / ");
 }
 
+function formatFileSize(bytes) {
+  const size = Number(bytes || 0);
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function statusBadge(status) {
   return `<span class="mini-badge ${badgeClass(status)}">${escapeHtml(status)}</span>`;
 }
@@ -2115,8 +2313,10 @@ function escapeHtml(value) {
 document.addEventListener("click", async (event) => {
   if (event.target.dataset.closePaymentDialog !== undefined) $("#recordPaymentDialog").close();
   if (event.target.dataset.closeConfirmDialog !== undefined) $("#confirmDialog").close();
+  if (event.target.closest("[data-close-notifications]")) $("#notificationDialog").close();
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
   if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
+  if (event.target.closest("[data-open-notifications]")) openNotificationDialog();
   if (event.target.closest("[data-enable-notifications]")) await enableNotifications();
   if (event.target.closest("[data-install-app]")) await installApp();
   if (event.target.dataset.retryLoad !== undefined) {
@@ -2148,7 +2348,13 @@ document.addEventListener("click", async (event) => {
   }
 
   const recordPaymentKey = event.target.dataset.recordPayment;
-  if (recordPaymentKey) openRecordPayment(recordPaymentKey);
+  if (recordPaymentKey) {
+    if ($("#notificationDialog").open) $("#notificationDialog").close();
+    openRecordPayment(recordPaymentKey);
+  }
+
+  const openProofId = event.target.dataset.openProof;
+  if (openProofId) await openPaymentProof(openProofId);
 
   const editObligationId = event.target.dataset.editObligation;
   if (editObligationId) startEditObligation(editObligationId);
@@ -2162,10 +2368,7 @@ document.addEventListener("click", async (event) => {
     message: "This deletes the recurring payment and its saved payment records.",
     action: "Delete"
   })) {
-    await deleteRow("payment_items", deleteObligationId, async () => {
-      await loadFamilyData();
-      renderFamilyApp();
-    }, "Payment deleted.");
+    await deletePaymentItem(deleteObligationId);
   }
 
   const removeMemberId = event.target.dataset.removeMember;
@@ -2191,10 +2394,7 @@ document.addEventListener("click", async (event) => {
     message: "This removes the saved payment from the selected period.",
     action: "Delete"
   })) {
-    await deleteRow("payment_records", deleteRecordId, async () => {
-      await loadPaymentRecords();
-      renderFamilyApp();
-    }, "Payment record deleted.");
+    await deletePaymentRecord(deleteRecordId);
   }
 
   const deleteHeadId = event.target.dataset.deleteHead;
@@ -2268,6 +2468,14 @@ $("#memberFamilyForm").addEventListener("submit", createFamilyFromMembers);
 $("#inviteForm").addEventListener("submit", inviteMember);
 $("#obligationForm").addEventListener("submit", saveObligation);
 $("#recordPaymentForm").addEventListener("submit", savePaymentRecord);
+$("#recordPaymentType").addEventListener("change", (event) => {
+  const amountInput = $("#recordAmount");
+  const outstanding = Number($("#recordOutstanding").value || 0);
+  const isFullPayment = event.target.value === "full";
+  amountInput.readOnly = isFullPayment;
+  amountInput.value = isFullPayment ? outstanding.toFixed(2) : "";
+  if (!isFullPayment) amountInput.focus();
+});
 $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPlatformPayment);
 $("#adminNoteForm").addEventListener("submit", saveAdminNote);

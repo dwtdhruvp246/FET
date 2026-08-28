@@ -63,6 +63,8 @@ button,
   text-decoration: none;
   touch-action: manipulation;
   transition: background 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+  max-width: 100%;
+  white-space: normal;
 }
 
 button:hover,
@@ -120,6 +122,7 @@ input,
 select,
 textarea {
   width: 100%;
+  min-width: 0;
   min-height: 46px;
   border: 1px solid rgba(148, 163, 184, 0.26);
   border-radius: 14px;
@@ -257,6 +260,7 @@ code {
 
 .panel-heading {
   display: grid;
+  min-width: 0;
   gap: 10px;
   margin-bottom: 22px;
 }
@@ -269,6 +273,7 @@ code {
   margin: 0;
   color: var(--ink);
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .panel-heading h1 {
@@ -320,9 +325,17 @@ code {
 
 .app-shell {
   display: grid;
+  width: 100%;
   grid-template-columns: 292px minmax(0, 1fr);
   gap: 24px;
   align-items: start;
+}
+
+.app-shell > *,
+.topbar > *,
+.stats-grid > *,
+.content-grid > * {
+  min-width: 0;
 }
 
 .mobile-bar {
@@ -425,6 +438,7 @@ code {
 .screen-panel,
 .tool-panel,
 .ledger-panel {
+  min-width: 0;
   border-radius: var(--radius-xl);
   padding: 24px;
 }
@@ -497,7 +511,9 @@ code {
 }
 
 .stat-card {
+  min-width: 0;
   min-height: 142px;
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 24px;
   padding: 20px;
@@ -515,11 +531,21 @@ code {
 
 .stat-card strong {
   display: block;
+  max-width: 100%;
   margin: 11px 0 9px;
   color: var(--ink);
   font-size: clamp(1.65rem, 3vw, 2.45rem);
-  line-height: 1;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
+}
+
+.stat-card > .mini-badge,
+#settingsMemberAccess,
+#settingsEmail {
+  font-size: clamp(0.95rem, 1.35vw, 1.3rem);
+  line-height: 1.25;
+  text-transform: none;
 }
 
 .meter {
@@ -559,6 +585,7 @@ code {
 .record-card,
 .breakdown-item {
   display: grid;
+  min-width: 0;
   align-items: center;
   gap: 14px;
   border: 1px solid rgba(255, 255, 255, 0.7);
@@ -598,6 +625,8 @@ code {
 
 .record-side {
   display: grid;
+  min-width: 0;
+  max-width: 100%;
   gap: 9px;
   justify-items: end;
   text-align: right;
@@ -696,6 +725,69 @@ code {
   overflow: auto;
   border-radius: 28px;
   padding: 24px;
+}
+
+.notification-dialog {
+  width: min(720px, calc(100vw - 32px));
+}
+
+.notification-dialog .panel-heading {
+  margin-bottom: 16px;
+}
+
+.notification-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.notification-button,
+.notification-sidebar-button {
+  position: relative;
+}
+
+.notification-sidebar-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  text-align: left;
+}
+
+.notification-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  border: 2px solid white;
+  border-radius: 999px;
+  padding: 0 5px;
+  background: var(--danger);
+  color: white;
+  font-size: 0.67rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.notification-button .notification-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+}
+
+.paid-label {
+  align-self: center;
+  color: #047857;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.file-field small {
+  color: var(--muted);
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+input[type="file"] {
+  min-height: 52px;
+  padding: 8px;
 }
 
 .payment-dialog::backdrop {
@@ -851,7 +943,8 @@ code {
   }
 
   .record-card,
-  .admin-household-card {
+  .admin-household-card,
+  .notification-card {
     grid-template-columns: 1fr;
   }
 
@@ -872,6 +965,14 @@ code {
   .filters select,
   .button-row button {
     flex: 1 1 160px;
+  }
+
+  .stat-card strong {
+    font-size: clamp(1.35rem, 9vw, 2.1rem);
+  }
+
+  .notification-dialog {
+    padding: 18px;
   }
 }
 
