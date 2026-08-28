@@ -13,9 +13,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=19" />
+    <link rel="stylesheet" href="styles.css?v=20" />
     <script src="config.js?v=19"></script>
-    <script type="module" src="app.js?v=24"></script>
+    <script type="module" src="app.js?v=25"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -328,11 +328,11 @@
                 </select>
               </div>
             </header>
-            <section class="stats-grid" aria-label="Monthly payment summary">
-              <article class="stat-card meter-card"><span class="stat-label">Due this month</span><strong id="dueAmount">$0.00</strong><div class="meter"><span id="paidMeter"></span></div><small id="paidProgressText">No dues yet</small></article>
-              <article class="stat-card"><span class="stat-label">Outstanding</span><strong id="outstandingAmount">$0.00</strong><small id="outstandingText">Balance to collect</small></article>
-              <article class="stat-card"><span class="stat-label">Overdue</span><strong id="overdueCount">0</strong><small id="overdueText">Needs attention</small></article>
-              <article class="stat-card"><span class="stat-label">Assigned to me</span><strong id="myDueCount">0</strong><small>Current month obligations</small></article>
+            <section class="stats-grid dashboard-stats-grid" aria-label="Monthly payment summary">
+              <article class="stat-card meter-card"><span class="stat-label">Due this month</span><strong id="dueAmount" data-fit-text data-fit-min="12">$0.00</strong><div class="meter"><span id="paidMeter"></span></div><small id="paidProgressText">No dues yet</small></article>
+              <article class="stat-card"><span class="stat-label">Outstanding</span><strong id="outstandingAmount" data-fit-text data-fit-min="12">$0.00</strong><small id="outstandingText">Balance to collect</small></article>
+              <article class="stat-card"><span class="stat-label">Overdue</span><strong id="overdueCount" data-fit-text data-fit-min="12">0</strong><small id="overdueText">Needs attention</small></article>
+              <article class="stat-card"><span class="stat-label">Assigned to me</span><strong id="myDueCount" data-fit-text data-fit-min="12">0</strong><small>This month</small></article>
             </section>
             <section class="content-grid">
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Next up</p><h3>Due now and coming up</h3></div><div id="priorityDueList" class="record-list"></div></section>

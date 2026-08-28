@@ -46,6 +46,7 @@ const realtime = {
 };
 
 let deferredInstallPrompt = null;
+let dashboardFitFrame = null;
 
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
 const PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
@@ -941,6 +942,25 @@ function renderDashboard() {
 
   renderPriorityDueList(occurrences);
   renderMemberResponsibility(occurrences);
+  scheduleDashboardTextFit();
+}
+
+function scheduleDashboardTextFit() {
+  if (dashboardFitFrame) cancelAnimationFrame(dashboardFitFrame);
+  dashboardFitFrame = requestAnimationFrame(() => {
+    dashboardFitFrame = null;
+    const isMobile = window.matchMedia("(max-width: 680px)").matches;
+    document.querySelectorAll("[data-fit-text]").forEach((element) => {
+      element.style.removeProperty("font-size");
+      if (!isMobile || element.clientWidth <= 0) return;
+      const minimum = Number(element.dataset.fitMin || 11);
+      let size = Number.parseFloat(window.getComputedStyle(element).fontSize);
+      while (element.scrollWidth > element.clientWidth && size > minimum) {
+        size = Math.max(minimum, size - 0.5);
+        element.style.fontSize = `${size}px`;
+      }
+    });
+  });
 }
 
 function renderPriorityDueList(occurrences) {
@@ -984,7 +1004,7 @@ function renderPriorityDueList(occurrences) {
           <span>${group.monthOffset === 0 ? "Selected month" : "Upcoming month"}</span>
           <h4>${escapeHtml(monthTitle)}</h4>
         </div>
-        <small>${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} &middot; ${escapeHtml(totalOutstanding)} outstanding</small>
+        <small title="${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} · ${escapeHtml(totalOutstanding)} outstanding">${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} &middot; ${escapeHtml(totalOutstanding)} outstanding</small>
       </header>
       <div class="due-month-items"></div>
     `;
@@ -1000,29 +1020,109 @@ function renderMemberResponsibility(occurrences) {
     const assigned = occurrences.filter((occurrence) => occurrence.item.responsible_member_id === member.id);
     return {
       member,
+      key: member.id,
+      name: member.name,
+      role: member.role,
+      assigned,
       total: assigned.reduce((sum, item) => sum + item.amount, 0),
+      paid: assigned.reduce((sum, item) => sum + Math.min(item.paid, item.amount), 0),
       outstanding: assigned.reduce((sum, item) => sum + item.outstanding, 0),
-      count: assigned.length
+      overdueCount: assigned.filter((item) => item.status === "overdue").length,
+      partialCount: assigned.filter((item) => item.status === "partial").length,
+      dueSoonCount: assigned.filter((item) => item.status === "due-soon").length
     };
-  }).filter((row) => row.count > 0);
+  }).filter((row) => row.assigned.length > 0);
+
+  const householdAssigned = occurrences.filter((occurrence) =>
+    occurrence.item.visibility === "family" && !occurrence.item.responsible_member_id
+  );
+  if (householdAssigned.length) {
+    rows.push({
+      member: null,
+      key: "household",
+      name: "Household account",
+      role: "Unassigned family payments",
+      assigned: householdAssigned,
+      total: householdAssigned.reduce((sum, item) => sum + item.amount, 0),
+      paid: householdAssigned.reduce((sum, item) => sum + Math.min(item.paid, item.amount), 0),
+      outstanding: householdAssigned.reduce((sum, item) => sum + item.outstanding, 0),
+      overdueCount: householdAssigned.filter((item) => item.status === "overdue").length,
+      partialCount: householdAssigned.filter((item) => item.status === "partial").length,
+      dueSoonCount: householdAssigned.filter((item) => item.status === "due-soon").length
+    });
+  }
 
   if (!rows.length) {
     list.innerHTML = emptyState("No assigned dues", "Assign members to recurring obligations to see responsibility totals.");
     return;
   }
 
-  const maxTotal = Math.max(...rows.map((row) => row.total), 1);
+  const statusRank = { overdue: 0, partial: 1, "due soon": 2, "on track": 3, paid: 4 };
+  rows.forEach((row) => {
+    row.progress = row.total > 0 ? Math.min((row.paid / row.total) * 100, 100) : 0;
+    row.status = row.overdueCount
+      ? "overdue"
+      : row.partialCount
+        ? "partial"
+        : row.dueSoonCount
+          ? "due soon"
+          : row.outstanding > 0
+            ? "on track"
+            : "paid";
+  });
+  rows.sort((a, b) =>
+    statusRank[a.status] - statusRank[b.status]
+    || b.outstanding - a.outstanding
+    || a.name.localeCompare(b.name)
+  );
+
   list.innerHTML = "";
   rows.forEach((row) => {
-    const percent = Math.min((row.total / maxTotal) * 100, 100);
+    const nextDue = row.assigned
+      .filter((occurrence) => occurrence.status !== "paid")
+      .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
     const item = document.createElement("article");
-    item.className = "breakdown-item";
+    item.className = "workload-card";
+    const detailsId = `workload-details-${row.key}`;
     item.innerHTML = `
-      <div class="avatar" style="background:${escapeHtml(row.member.avatar_color || "#2563EB")}">${memberInitials(row.member.name)}</div>
-      <div>
-        <strong>${escapeHtml(row.member.name)}</strong>
-        <span>${row.count} due items &middot; ${money(row.outstanding, familyCurrency())} outstanding</span>
-        <div class="meter small-meter"><span style="width:${percent}%"></span></div>
+      <div class="workload-header">
+        <div class="avatar" style="background:${escapeHtml(row.member?.avatar_color || "#0F766E")}">${memberInitials(row.name)}</div>
+        <div class="workload-identity">
+          <strong title="${escapeHtml(row.name)}">${escapeHtml(row.name)}</strong>
+          <span title="${escapeHtml(row.role || "Family member")}">${escapeHtml(row.role || "Family member")}</span>
+        </div>
+        <div class="workload-status">${statusBadge(row.status)}</div>
+      </div>
+      <div class="workload-metrics">
+        <div><span>Assigned</span><strong>${row.assigned.length}</strong></div>
+        <div><span>Total due</span><strong data-fit-text data-fit-min="10">${money(row.total, familyCurrency())}</strong></div>
+        <div><span>Paid</span><strong data-fit-text data-fit-min="10">${money(row.paid, familyCurrency())}</strong></div>
+        <div><span>Outstanding</span><strong data-fit-text data-fit-min="10">${money(row.outstanding, familyCurrency())}</strong></div>
+      </div>
+      <div class="workload-progress">
+        <div class="meter small-meter"><span style="width:${row.progress}%"></span></div>
+        <span>${Math.round(row.progress)}% paid${row.overdueCount ? ` &middot; ${row.overdueCount} overdue` : ""}</span>
+      </div>
+      <div class="workload-next" title="${escapeHtml(nextDue ? `${nextDue.item.name}, due ${nextDue.dueDate}` : "All assigned payments are paid")}">
+        <strong>Next</strong>
+        <span>${nextDue ? `${escapeHtml(nextDue.item.name)} &middot; ${nextDue.dueDate}` : "All assigned payments are paid"}</span>
+      </div>
+      <div class="workload-actions">
+        <button type="button" data-toggle-workload="${row.key}" aria-expanded="false" aria-controls="${detailsId}">View payments</button>
+      </div>
+      <div id="${detailsId}" class="workload-details hidden">
+        ${row.assigned
+          .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+          .map((occurrence) => `
+            <div class="workload-detail-row">
+              <div>
+                <strong title="${escapeHtml(occurrence.item.name)}">${escapeHtml(occurrence.item.name)}</strong>
+                <span>${occurrence.dueDate} &middot; ${escapeHtml(occurrence.status)}</span>
+              </div>
+              <strong data-fit-text data-fit-min="10">${money(occurrence.outstanding, occurrence.item.currency)}</strong>
+              ${occurrence.status !== "paid" ? `<button type="button" data-record-payment="${occurrence.key}">Record</button>` : ""}
+            </div>
+          `).join("")}
       </div>
     `;
     list.append(item);
@@ -1109,15 +1209,15 @@ function renderOccurrenceCard(occurrence, withAction = false) {
       <span>${parseDate(occurrence.dueDate).toLocaleString("en", { month: "short" })}</span>
     </div>
     <div class="record-main">
-      <strong>${escapeHtml(occurrence.item.name)}</strong>
-      <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
+      <strong class="occurrence-name" title="${escapeHtml(occurrence.item.name)}">${escapeHtml(occurrence.item.name)}</strong>
+      <span class="occurrence-meta" title="${escapeHtml(member?.name || "Household account")} · ${escapeHtml(occurrence.item.category)} · ${money(occurrence.outstanding, occurrence.item.currency)} outstanding">${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
       <div class="badge-row">
         ${statusBadge(occurrence.status)}
         <span class="mini-badge">${money(occurrence.paid, occurrence.item.currency)} paid</span>
       </div>
     </div>
     <div class="record-side">
-      <strong>${money(occurrence.amount, occurrence.item.currency)}</strong>
+      <strong class="occurrence-amount" data-fit-text data-fit-min="10">${money(occurrence.amount, occurrence.item.currency)}</strong>
       ${withAction ? `<div class="row-actions"><button type="button" data-edit-obligation="${occurrence.item.id}">Edit</button>${occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Record payment</button>` : '<span class="paid-label">Paid in full</span>'}</div>` : ""}
     </div>
   `;
@@ -2370,6 +2470,7 @@ document.addEventListener("click", async (event) => {
     state.familyTab = familyTab;
     setRoute("family", familyTab);
     renderFamilyTabs();
+    scheduleDashboardTextFit();
     closeDrawer();
   }
 
@@ -2381,6 +2482,18 @@ document.addEventListener("click", async (event) => {
 
   const openProofId = event.target.dataset.openProof;
   if (openProofId) await openPaymentProof(openProofId);
+
+  const workloadToggle = event.target.closest("[data-toggle-workload]");
+  if (workloadToggle) {
+    const details = $(`#workload-details-${workloadToggle.dataset.toggleWorkload}`);
+    if (details) {
+      const expanded = workloadToggle.getAttribute("aria-expanded") === "true";
+      workloadToggle.setAttribute("aria-expanded", `${!expanded}`);
+      workloadToggle.textContent = expanded ? "View payments" : "Hide payments";
+      details.classList.toggle("hidden", expanded);
+      scheduleDashboardTextFit();
+    }
+  }
 
   const editObligationId = event.target.dataset.editObligation;
   if (editObligationId) startEditObligation(editObligationId);
@@ -2539,6 +2652,7 @@ window.addEventListener("hashchange", () => {
 });
 
 window.addEventListener("beforeunload", stopRealtime);
+window.addEventListener("resize", scheduleDashboardTextFit);
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
