@@ -26,7 +26,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 - Atomic family creation and invitation accept/reject database functions
 - Notification bell with an in-app inbox, unread count, and invitation actions
 - Supabase Realtime refreshes visible pages after inserts, updates, and deletes
-- In-app reminder visibility and browser notification permission prompt
+- In-app payment reminders in the notification bell and inbox
 - Reports by category, payment reliability, active obligations, yearly expected totals, and payment history
 - CSV export for the selected month/filter
 - Row Level Security policies for households, members, payment items, records, admin notes, and platform payments
@@ -36,7 +36,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 
 1. Create a Supabase project.
 2. In Supabase SQL Editor, run `supabase/schema.sql`.
-3. If you already ran an older version, run the latest complete `supabase/schema.sql` again. It adds the recurring-payment tables, member contact columns, invitation/notification tables, private payment-proof Storage bucket and policies, and enables the app tables in the `supabase_realtime` publication.
+3. If an earlier Web Push build was deployed, run `supabase/rollback-web-push.sql` once before running the current complete schema.
 4. In Supabase Auth settings, turn off email confirmation while Resend/email delivery is not configured:
    - Authentication
    - Providers
@@ -66,7 +66,7 @@ window.MUSHAVO_BUDGET_CONFIG = {
 };
 ```
 
-Use the publishable key only. Never put a Supabase service role or secret key in this frontend.
+Use the Supabase publishable key only. Never place the Supabase service-role key or any other server secret in frontend code.
 
 ## How Access Works
 
@@ -105,18 +105,9 @@ Deleting a family is different from removing a member. Only the family owner can
 10. Open a due item and record either a partial or full payment. Optionally attach a JPG, PNG, WebP, or PDF receipt up to 10 MB, or add payment details.
 11. Use `Reports` to review paid rate, outstanding dues, category totals, and history.
 
-## Reminder Architecture
+## In-App Reminders
 
-This static GitHub Pages app can show in-app reminders and ask for browser notification permission. It cannot send scheduled background emails by itself.
-
-For automatic email reminders later, add:
-
-- Supabase Edge Functions
-- Supabase scheduled jobs or cron
-- Resend
-- Reminder rules stored in Postgres
-
-The current schema already stores reminder timing on payment items so the app is ready for that next step.
+The notification bell and Settings inbox show invitations and payment reminders while the user is signed in. Web Push subscriptions, background delivery, VAPID keys, the reminder Edge Function, and the one-minute Cron job are not part of this version.
 
 ## Admin Workflow
 
@@ -142,7 +133,7 @@ Then open `http://localhost:8000`.
 
 After the site is published on GitHub Pages, open it on your phone:
 
-- Android Chrome: open the site and use the `Install app` button in `Settings`, or tap the browser menu and choose `Install app` / `Add to Home screen`.
+- Android Chrome: open the site, tap the browser menu, and choose `Install app` or `Add to Home screen`.
 - iPhone Safari: open the site, tap Share, then tap `Add to Home Screen`. iOS Safari does not show the same automatic install prompt that Android Chrome does.
 
 PWA installation requires HTTPS. GitHub Pages provides HTTPS.
@@ -162,6 +153,7 @@ Upload all visible files and folders, including:
 - `README.md`
 - `RECURRING_PAYMENTS_PLAN.md`
 - `supabase/schema.sql`
+- `supabase/rollback-web-push.sql` (only needed if the removed Web Push version was previously deployed)
 - `assets/ledger-mark.svg`
 - `assets/pwa-icon.svg`
 

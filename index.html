@@ -13,9 +13,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=21" />
-    <script src="config.js?v=22"></script>
-    <script type="module" src="app.js?v=25"></script>
+    <link rel="stylesheet" href="styles.css?v=23" />
+    <script src="config.js?v=21"></script>
+    <script type="module" src="app.js?v=27"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -119,12 +119,6 @@
               </div>
             </div>
             <div class="mobile-actions">
-              <button class="icon-button" type="button" aria-label="Notifications" data-enable-notifications>
-                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-              </button>
               <button class="icon-button" type="button" aria-label="Open menu" data-open-drawer>Menu</button>
             </div>
           </div>
@@ -302,7 +296,6 @@
                 <span>Notifications</span>
                 <span class="notification-count hidden" data-notification-count aria-hidden="true">0</span>
               </button>
-              <button id="enableNotificationsButton" type="button">Enable reminders</button>
               <button id="exportCsvButton" type="button">Export CSV</button>
               <button id="signOutButton" type="button">Sign out</button>
             </div>
@@ -436,15 +429,7 @@
               <article class="stat-card"><span class="stat-label">Signed in as</span><strong id="settingsEmail">-</strong><small>Your login email</small></article>
               <article class="stat-card"><span class="stat-label">Alerts</span><strong id="notificationCount">0</strong><small>Unread messages and due reminders</small></article>
             </section>
-            <section class="content-grid">
-              <section class="tool-panel">
-                <div class="panel-heading"><p class="eyebrow">Reminders</p><h3>Notification delivery</h3></div>
-                <p class="muted-copy">Mushavo Budget shows in-app notifications for invites and reminders. Browser reminders work while the app is installed or open. Email or WhatsApp reminders can be added later with Supabase Edge Functions and Resend.</p>
-                <div class="button-row">
-                  <button id="settingsInstallButton" class="primary" type="button" data-install-app>Install app</button>
-                  <button id="settingsEnableNotificationsButton" type="button" data-enable-notifications>Enable browser reminders</button>
-                </div>
-              </section>
+            <section class="content-grid settings-content-grid">
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
             </section>
           </section>

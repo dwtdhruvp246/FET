@@ -1089,6 +1089,15 @@ code {
   right: -5px;
 }
 
+.settings-content-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.notification-deep-link-target {
+  border-color: rgba(13, 148, 136, 0.72);
+  box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.18), var(--shadow);
+}
+
 .paid-label {
   align-self: center;
   color: #047857;

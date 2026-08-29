@@ -1,11 +1,12 @@
-const CACHE_NAME = "mushavo-budget-v17-no-web-push";
+const CACHE_NAME = "mushavo-budget-v16";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./signup.html",
   "./offline.html",
-  "./styles.css?v=21",
-  "./app.js?v=25",
+  "./styles.css?v=23",
+  "./app.js?v=27",
+  "./config.js?v=21",
   "./manifest.webmanifest",
   "./assets/ledger-mark.svg",
   "./assets/pwa-icon.svg",
@@ -15,42 +16,23 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil((async () => {
-    const cache = await caches.open(CACHE_NAME);
-
-    // Cache each file independently so a missing optional asset cannot block
-    // this rollback worker from replacing the previous Web Push worker.
-    await Promise.all(APP_SHELL.map(async (assetUrl) => {
-      try {
-        const request = new Request(assetUrl, { cache: "reload" });
-        const response = await fetch(request);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        await cache.put(request, response);
-      } catch (error) {
-        console.warn("[Mushavo SW] Precache skipped", assetUrl, error?.message || "request failed");
-      }
-    }));
-
-    await self.skipWaiting();
-  })());
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+  );
+  self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil((async () => {
-    const keys = await caches.keys();
-    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+  event.waitUntil(
+    caches.keys().then((keys) =>
+      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
+    )
+  );
+  self.clients.claim();
+});
 
-    // This rollback keeps the PWA but permanently removes its Web Push device
-    // subscription. In-app reminders continue to work through app.js.
-    try {
-      const subscription = await self.registration.pushManager?.getSubscription();
-      if (subscription) await subscription.unsubscribe();
-    } catch (error) {
-      console.warn("[Mushavo SW] Existing Web Push subscription could not be removed", error?.name || "unsubscribe failed");
-    }
-
-    await self.clients.claim();
-  })());
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
 });
 
 self.addEventListener("fetch", (event) => {
@@ -59,28 +41,9 @@ self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
-  // Never cache runtime configuration or the service worker. This prevents an
-  // old Supabase key or an old worker from surviving in newly opened tabs.
-  if (requestUrl.pathname.endsWith("/config.js") || requestUrl.pathname.endsWith("/sw.js")) {
-    event.respondWith(fetch(new Request(event.request, { cache: "no-store" })));
-    return;
-  }
-
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request)
-        .then(async (response) => {
-          if (response.ok) {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(event.request, response.clone());
-          }
-          return response;
-        })
-        .catch(async () =>
-          (await caches.match(event.request)) ||
-          (await caches.match("./index.html")) ||
-          caches.match("./offline.html")
-        )
+      fetch(event.request).catch(() => caches.match("./offline.html"))
     );
     return;
   }
@@ -89,10 +52,8 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((response) => {
-        if (response.ok) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        }
+        const copy = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
         return response;
       });
     })

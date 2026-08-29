@@ -45,7 +45,6 @@ const realtime = {
   refreshInFlight: false
 };
 
-let deferredInstallPrompt = null;
 let dashboardFitFrame = null;
 
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
@@ -85,37 +84,14 @@ registerServiceWorker();
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch((error) => {
-      console.warn("Service worker registration failed", error);
-    });
-  });
-}
-
-function isStandaloneApp() {
-  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
-}
-
-function updateInstallButtons() {
-  document.querySelectorAll("[data-install-app]").forEach((button) => {
-    button.classList.toggle("hidden", isStandaloneApp());
-  });
-}
-
-async function installApp() {
-  if (isStandaloneApp()) {
-    showToast("Mushavo Budget is already installed on this device.");
-    return;
-  }
-  if (!deferredInstallPrompt) {
-    showToast("If the install prompt is not available, use your browser menu or Share button and choose Add to Home Screen.");
-    return;
-  }
-  deferredInstallPrompt.prompt();
-  const result = await deferredInstallPrompt.userChoice;
-  deferredInstallPrompt = null;
-  updateInstallButtons();
-  showToast(result.outcome === "accepted" ? "Mushavo Budget install started." : "Install was dismissed.");
+  const startRegistration = () => {
+    navigator.serviceWorker
+      .register("./sw.js", { scope: "./", updateViaCache: "none" })
+      .then((registration) => registration.update().catch(() => {}))
+      .catch((error) => console.warn("Service worker registration failed", error));
+  };
+  if (document.readyState === "complete") startRegistration();
+  else window.addEventListener("load", startRegistration, { once: true });
 }
 
 function toDateValue(date) {
@@ -210,6 +186,9 @@ function friendlyMessage(message = "") {
   }
   if (text.includes("CANNOT_INVITE_YOURSELF")) {
     return "You cannot invite your own email address.";
+  }
+  if (text.includes("PUSH_SUBSCRIPTION_ENDPOINT_CONFLICT")) {
+    return "This browser subscription belongs to another signed-in account. Disable notifications for that account or reset this site's notification permission, then try again.";
   }
   if (text.includes("ALREADY_FAMILY_MEMBER")) {
     return "That user is already part of this family.";
@@ -518,6 +497,7 @@ async function loadApp() {
   syncRouteForWorkspace("family");
   setView("app");
   renderFamilyApp();
+  handleNotificationDeepLink();
   startRealtime();
 }
 
@@ -1143,6 +1123,7 @@ function renderObligationCard(item) {
   const member = memberById(item.responsible_member_id);
   const article = document.createElement("article");
   article.className = "record-card";
+  article.dataset.paymentItemId = item.id;
   article.innerHTML = `
     <div class="record-main">
       <strong>${escapeHtml(item.name)}</strong>
@@ -1166,6 +1147,19 @@ function renderObligationCard(item) {
     </div>
   `;
   return article;
+}
+
+function handleNotificationDeepLink() {
+  const url = new URL(window.location.href);
+  const paymentItemId = url.searchParams.get("payment_item");
+  if (!paymentItemId) return;
+  const target = document.querySelector(`[data-payment-item-id="${CSS.escape(paymentItemId)}"]`);
+  if (!target) return;
+  requestAnimationFrame(() => {
+    target.classList.add("notification-deep-link-target");
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => target.classList.remove("notification-deep-link-target"), 6000);
+  });
 }
 
 function renderSchedule() {
@@ -1349,6 +1343,7 @@ function renderNotificationList(list, compact = false) {
       </div>
       <div class="record-side">
         ${isPendingInvite ? `<div class="row-actions"><button class="primary" type="button" data-accept-invite="${invitation.id}">Accept</button><button type="button" data-reject-invite="${invitation.id}">Reject</button></div>` : ""}
+        ${notification.url ? `<button type="button" data-open-notification="${notification.id}">Open</button>` : ""}
         ${notification.read_at ? "" : `<button type="button" data-read-notification="${notification.id}">Mark read</button>`}
       </div>
     `;
@@ -2345,34 +2340,6 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
-async function enableNotifications() {
-  if (!("Notification" in window)) {
-    showToast("Browser notifications are not supported on this device.");
-    return;
-  }
-  const result = await Notification.requestPermission();
-  if (result === "granted") {
-    showToast("Reminder notifications enabled for this browser.");
-    showDueBrowserNotifications();
-  } else {
-    showToast("Notifications were not enabled. In-app reminders still work.");
-  }
-}
-
-function showDueBrowserNotifications() {
-  if (Notification.permission !== "granted") return;
-  const dueItems = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth)
-    .filter((occurrence) => ["overdue", "due-soon", "partial"].includes(occurrence.status))
-    .slice(0, 5);
-  dueItems.forEach((occurrence) => {
-    const title = occurrence.status === "overdue" ? "Payment overdue" : "Payment reminder";
-    new Notification(title, {
-      body: `${occurrence.item.name}: ${money(occurrence.outstanding, occurrence.item.currency)} outstanding`,
-      tag: `mushavo-${occurrence.key}`
-    });
-  });
-}
-
 function memberById(id) {
   return state.members.find((member) => member.id === id);
 }
@@ -2443,8 +2410,6 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
   if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
   if (event.target.closest("[data-open-notifications]")) openNotificationDialog();
-  if (event.target.closest("[data-enable-notifications]")) await enableNotifications();
-  if (event.target.closest("[data-install-app]")) await installApp();
   if (event.target.dataset.retryLoad !== undefined) {
     setView("loading");
     await loadApp().catch((error) => {
@@ -2599,6 +2564,15 @@ document.addEventListener("click", async (event) => {
     await loadNotifications();
     renderSettings();
   }
+
+  const openNotificationId = event.target.dataset.openNotification;
+  if (openNotificationId) {
+    const notification = state.notifications.find((item) => item.id === openNotificationId);
+    if (notification?.url) {
+      const target = new URL(notification.url, window.location.href);
+      if (target.origin === window.location.origin) window.location.assign(target.href);
+    }
+  }
 });
 
 $("#authForm").addEventListener("submit", signIn);
@@ -2623,7 +2597,6 @@ $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut(
 $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#suspendedSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#exportCsvButton").addEventListener("click", exportCsv);
-$("#enableNotificationsButton").addEventListener("click", enableNotifications);
 $("#paymentHead").addEventListener("change", (event) => {
   const option = event.target.selectedOptions[0];
   const amount = Number(option?.dataset.amount || 0);
@@ -2653,20 +2626,6 @@ window.addEventListener("hashchange", () => {
 
 window.addEventListener("beforeunload", stopRealtime);
 window.addEventListener("resize", scheduleDashboardTextFit);
-
-window.addEventListener("beforeinstallprompt", (event) => {
-  event.preventDefault();
-  deferredInstallPrompt = event;
-  updateInstallButtons();
-});
-
-window.addEventListener("appinstalled", () => {
-  deferredInstallPrompt = null;
-  updateInstallButtons();
-  showToast("Mushavo Budget was installed.");
-});
-
-updateInstallButtons();
 
 init().catch((error) => {
   console.error(error);
