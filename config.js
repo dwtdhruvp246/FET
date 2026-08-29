@@ -1,4 +1,4 @@
 window.MUSHAVO_BUDGET_CONFIG = {
   supabaseUrl: "https://kttkospkblwvguuwnhjj.supabase.co",
-  supabasePublishableKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzIiwicmVmIjoia3R0a29zcGtibHd2Z3V1d25oamoiLCJyb2xlIjoiYW5vbiIsImlhdCI6MTc4NjcwMjkwNCwiZXhwIjoyMTAyMjc4OTA0fQ._VMG9BwYjmvYRqPKSpgv6wjqMgbKTW13XnMZaF6H07Q"
+  supabasePublishableKey: "sb_publishable_HADR_IXZkxZ0whkzuWkSaA_iByN-G-I"
 };

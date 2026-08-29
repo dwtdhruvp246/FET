@@ -1,0 +1,10 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title">
+  <title id="title">Household Ledger mark</title>
+  <rect x="14" y="10" width="68" height="76" rx="12" fill="#12312F"/>
+  <path d="M29 25H67" stroke="#F6F3EA" stroke-width="5" stroke-linecap="round"/>
+  <path d="M29 41H58" stroke="#80D8C3" stroke-width="5" stroke-linecap="round"/>
+  <path d="M29 57H67" stroke="#F28C52" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="34" cy="72" r="5" fill="#F6F3EA"/>
+  <circle cx="48" cy="72" r="5" fill="#80D8C3"/>
+  <circle cx="62" cy="72" r="5" fill="#F28C52"/>
+</svg>

@@ -84,6 +84,12 @@ registerServiceWorker();
 
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
+  let reloadingForServiceWorker = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloadingForServiceWorker) return;
+    reloadingForServiceWorker = true;
+    window.location.reload();
+  });
   const startRegistration = () => {
     navigator.serviceWorker
       .register("./sw.js", { scope: "./", updateViaCache: "none" })

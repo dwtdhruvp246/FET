@@ -156,6 +156,9 @@ Upload all visible files and folders, including:
 - `supabase/rollback-web-push.sql` (only needed if the removed Web Push version was previously deployed)
 - `assets/ledger-mark.svg`
 - `assets/pwa-icon.svg`
+- `assets/pwa-icon-192.png`
+- `assets/pwa-icon-512.png`
+- `assets/apple-touch-icon.png`
 
 If you use Git from the terminal:
 

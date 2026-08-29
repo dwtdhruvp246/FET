@@ -1,12 +1,12 @@
-const CACHE_NAME = "mushavo-budget-v16";
+const CACHE_NAME = "mushavo-budget-v18";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./signup.html",
   "./offline.html",
-  "./styles.css?v=23",
-  "./app.js?v=27",
-  "./config.js?v=21",
+  "./styles.css?v=25",
+  "./app.js?v=29",
+  "./config.js?v=23",
   "./manifest.webmanifest",
   "./assets/ledger-mark.svg",
   "./assets/pwa-icon.svg",
@@ -15,20 +15,58 @@ const APP_SHELL = [
   "./assets/apple-touch-icon.png"
 ];
 
+const NETWORK_FIRST_FILES = new Set([
+  "index.html",
+  "signup.html",
+  "config.js",
+  "app.js",
+  "styles.css",
+  "manifest.webmanifest"
+]);
+
+async function cacheFreshResponse(request, cacheMode = "no-cache") {
+  const response = await fetch(request, { cache: cacheMode });
+  if (response.ok) {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }
+  return response;
+}
+
+async function networkFirst(request, fallback) {
+  try {
+    return await cacheFreshResponse(request, "no-store");
+  } catch (_error) {
+    return (await caches.match(request)) ||
+      (fallback ? await caches.match(fallback) : null) ||
+      Response.error();
+  }
+}
+
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
-  );
-  self.skipWaiting();
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    await Promise.allSettled(APP_SHELL.map(async (url) => {
+      const response = await fetch(url, { cache: "reload" });
+      if (response.ok) await cache.put(url, response);
+    }));
+    await self.skipWaiting();
+  })());
 });
 
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys
+      .filter((key) => key.startsWith("mushavo-budget-") && key !== CACHE_NAME)
+      .map((key) => caches.delete(key)));
+    await self.clients.claim();
+
+    // Reload tabs controlled by an older worker so they immediately receive
+    // the corrected configuration and asset paths without a hard refresh.
+    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    await Promise.allSettled(windows.map((client) => client.navigate(client.url)));
+  })());
 });
 
 self.addEventListener("message", (event) => {
@@ -42,20 +80,19 @@ self.addEventListener("fetch", (event) => {
   if (requestUrl.origin !== self.location.origin) return;
 
   if (event.request.mode === "navigate") {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match("./offline.html"))
-    );
+    event.respondWith(networkFirst(event.request, "./offline.html"));
     return;
   }
 
+  const fileName = requestUrl.pathname.split("/").pop();
+  if (NETWORK_FIRST_FILES.has(fileName)) {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  const refresh = cacheFreshResponse(event.request).catch(() => null);
+  event.waitUntil(refresh);
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return response;
-      });
-    })
+    caches.match(event.request).then(async (cached) => cached || (await refresh) || Response.error())
   );
 });
