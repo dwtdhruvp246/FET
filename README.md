@@ -26,8 +26,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 - Atomic family creation and invitation accept/reject database functions
 - Notification bell with an in-app inbox, unread count, and invitation actions
 - Supabase Realtime refreshes visible pages after inserts, updates, and deletes
-- Server-triggered Web Push reminders that continue when the PWA is closed
-- Per-device Push subscriptions, UTC scheduling, timezone preferences, delivery retries, and duplicate prevention
+- In-app reminder visibility and browser notification permission prompt
 - Reports by category, payment reliability, active obligations, yearly expected totals, and payment history
 - CSV export for the selected month/filter
 - Row Level Security policies for households, members, payment items, records, admin notes, and platform payments
@@ -37,7 +36,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 
 1. Create a Supabase project.
 2. In Supabase SQL Editor, run `supabase/schema.sql`.
-3. If you already ran an older version, either run `supabase/migrations/20260828090000_web_push_notifications.sql`, or run the latest complete `supabase/schema.sql` again. The complete schema includes all earlier features plus Web Push subscriptions, reminder outbox records, retries, diagnostics, and RLS policies.
+3. If you already ran an older version, run the latest complete `supabase/schema.sql` again. It adds the recurring-payment tables, member contact columns, invitation/notification tables, private payment-proof Storage bucket and policies, and enables the app tables in the `supabase_realtime` publication.
 4. In Supabase Auth settings, turn off email confirmation while Resend/email delivery is not configured:
    - Authentication
    - Providers
@@ -63,12 +62,11 @@ on conflict (user_id) do nothing;
 ```js
 window.MUSHAVO_BUDGET_CONFIG = {
   supabaseUrl: "https://YOUR-PROJECT-REF.supabase.co",
-  supabasePublishableKey: "YOUR-SUPABASE-PUBLISHABLE-KEY",
-  vapidPublicKey: "YOUR_VAPID_PUBLIC_KEY"
+  supabasePublishableKey: "YOUR-SUPABASE-PUBLISHABLE-KEY"
 };
 ```
 
-The VAPID public key is designed to be public. Use the Supabase publishable key only. Never put the VAPID private key, `CRON_SECRET`, Supabase service role key, or any other server secret in frontend code.
+Use the publishable key only. Never put a Supabase service role or secret key in this frontend.
 
 ## How Access Works
 
@@ -109,143 +107,16 @@ Deleting a family is different from removing a member. Only the family owner can
 
 ## Reminder Architecture
 
-### Root cause of the old failure
+This static GitHub Pages app can show in-app reminders and ask for browser notification permission. It cannot send scheduled background emails by itself.
 
-The earlier code called `Notification.requestPermission()` and created `new Notification(...)` objects only from reminder occurrences loaded in the dashboard. It did not create a Push API subscription, did not save a device endpoint, had no server scheduler or delivery queue, and the service worker had no `push` or `notificationclick` handler. Once the page was suspended or closed, no JavaScript remained alive to notice that a reminder was due.
+For automatic email reminders later, add:
 
-The new flow does not use browser timers as a scheduler:
+- Supabase Edge Functions
+- Supabase scheduled jobs or cron
+- Resend
+- Reminder rules stored in Postgres
 
-1. Payment reminder definitions remain in `payment_items`.
-2. Each user stores a timezone and local reminder time. `Africa/Harare` is the default.
-3. Supabase Cron calls `send-reminders` every minute.
-4. The database expands due recurring occurrences and stores their `scheduled_for` and `due_at` values as UTC `timestamptz` values.
-5. A unique occurrence/user key creates one outbox row and one in-app bell notification.
-6. The Edge Function sends Web Push to every active subscription for that user.
-7. Per-device delivery attempts retry temporary failures. HTTP 404/410 disables expired endpoints.
-8. The existing service worker receives the push, shows the operating-system notification, and opens or focuses the relevant Mushavo Budget screen when tapped.
-
-### Generate VAPID keys
-
-Run this once on a trusted computer. Keep the private key secret.
-
-```bash
-npx web-push generate-vapid-keys --json
-```
-
-Copy the returned public key into `config.js`. Do not copy the private key into any website file.
-
-### Configure Edge Function secrets
-
-Generate a separate long random cron secret, for example:
-
-```bash
-openssl rand -base64 48
-```
-
-Then configure and deploy with the Supabase CLI:
-
-```bash
-supabase login
-supabase link --project-ref YOUR_PROJECT_REF
-supabase secrets set VAPID_PUBLIC_KEY="YOUR_VAPID_PUBLIC_KEY"
-supabase secrets set VAPID_PRIVATE_KEY="YOUR_VAPID_PRIVATE_KEY"
-supabase secrets set VAPID_SUBJECT="mailto:YOUR-CONTACT-EMAIL@example.com"
-supabase secrets set CRON_SECRET="YOUR_LONG_RANDOM_CRON_SECRET"
-supabase functions deploy send-reminders --no-verify-jwt
-```
-
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are supplied to deployed Supabase Edge Functions automatically. The function uses the service role only on the server. Never copy it into `config.js`, the cron SQL, or browser storage.
-
-### Apply the database migration
-
-Choose one method:
-
-```bash
-supabase db push
-```
-
-Or paste the complete `supabase/schema.sql` into Supabase SQL Editor. For an existing database, the smaller `supabase/migrations/20260828090000_web_push_notifications.sql` contains only this Web Push upgrade.
-
-### Enable the one-minute Cron job
-
-1. Open `supabase/cron.sql`.
-2. Replace `YOUR_PROJECT_REF` and `REPLACE_WITH_THE_SAME_LONG_RANDOM_CRON_SECRET`.
-3. The cron secret must exactly match the Edge Function `CRON_SECRET`.
-4. Run the complete file in Supabase SQL Editor.
-5. Confirm the job and recent dispatch heartbeats:
-
-```sql
-select jobid, jobname, schedule, active
-from cron.job
-where jobname = 'mushavo-push-reminders-every-minute';
-
-select started_at, completed_at, status, due_count, attempted_count, accepted_count, diagnostic_code
-from public.notification_dispatch_runs
-order by started_at desc
-limit 10;
-```
-
-If no new dispatch run appears for more than two minutes, the cron is not reaching the function. Check `cron.job_run_details`, the Vault values, the deployed function name, and the function logs.
-
-### Notification settings and privacy
-
-Permission is requested only after the user presses `Enable notifications`. The settings page shows Notification API, Push API, service-worker, permission, and database-subscription status. Users can turn scheduled reminders on/off, select their timezone, choose their local reminder time, enable detailed previews, send a test, or disable only the current device.
-
-Privacy-safe previews are the default and do not show payment names or amounts. Detailed previews may show a payment name, but still do not include an amount. The in-app bell keeps the full reminder record under authenticated RLS access.
-
-On iPhone and iPad, install Mushavo Budget with Share → Add to Home Screen, open that installed app, then press `Enable notifications`. Web Push is not offered from a normal iOS browser tab.
-
-### Required acceptance tests
-
-Use a real HTTPS deployment. Browser Push cannot be fully proven by static code checks alone.
-
-1. Sign in, open Settings, and press `Enable notifications`. Confirm the permission status becomes Allowed and the device becomes Subscribed.
-2. In Supabase SQL Editor, confirm the signed-in user has one active row without displaying key values:
-
-```sql
-select id, user_id, platform, created_at, updated_at, last_used_at, disabled_at
-from public.push_subscriptions
-where disabled_at is null;
-```
-
-3. Press `Send test notification`; confirm it appears while the app is open and in the bell.
-4. Send another test with the app in the background.
-5. Send another test after completely closing the installed PWA.
-6. For a two-minute scheduled test, set the Settings reminder time to two minutes from now, create a once-off payment due today with `Remind days before = 0`, then completely close the PWA.
-7. Tap the delivered notification. Confirm it opens/focuses Mushavo Budget on Payments and highlights the matching payment.
-8. Confirm the bell contains one matching reminder record.
-9. Wait through at least two more cron minutes and confirm the same occurrence did not send again:
-
-```sql
-select deduplication_key, count(*)
-from public.notification_outbox
-group by deduplication_key
-having count(*) > 1;
-```
-
-The query must return no rows.
-
-10. Enable notifications on a second device for the same user. Send a test and confirm both devices receive it.
-11. Sign in as another user and verify the API/Settings view cannot list, update, or delete the first user's subscription. RLS policies bind all four operations to `auth.uid()`.
-12. Set timezone to `Africa/Harare`, schedule a test occurrence, and confirm the stored UTC time converts back correctly:
-
-```sql
-select scheduled_for,
-       scheduled_for at time zone timezone as selected_local_time,
-       timezone
-from public.notification_outbox
-order by created_at desc
-limit 10;
-```
-
-13. Block notifications in browser settings and confirm Settings shows recovery instructions rather than failing silently.
-14. Repeat install, enable, background, closed-app, and tap-through tests on Android Chrome as an installed PWA.
-15. On iOS/iPadOS 16.4 or later, confirm a normal Safari tab explains that Home Screen installation is required, then repeat the tests from the installed Home Screen PWA.
-16. Disable notifications on the current device and confirm its row receives `disabled_at` and that other subscribed devices continue to receive tests.
-
-### Diagnostic codes
-
-Frontend console messages are prefixed with `[Mushavo Push]`. Edge Function logs use JSON with `scope: "mushavo-push"`. They distinguish unsupported APIs, service-worker failures, permission state, missing/saved subscriptions, database save failures, authentication failures, no due reminders, provider rejection, successful acceptance, expired subscriptions, and duplicate skips. Logs never contain endpoints, Push authentication keys, VAPID private keys, access tokens, cron secrets, or payment amounts.
+The current schema already stores reminder timing on payment items so the app is ready for that next step.
 
 ## Admin Workflow
 
@@ -291,11 +162,6 @@ Upload all visible files and folders, including:
 - `README.md`
 - `RECURRING_PAYMENTS_PLAN.md`
 - `supabase/schema.sql`
-- `supabase/migrations/20260828090000_web_push_notifications.sql`
-- `supabase/functions/send-reminders/index.ts`
-- `supabase/functions/.env.example`
-- `supabase/config.toml`
-- `supabase/cron.sql`
 - `assets/ledger-mark.svg`
 - `assets/pwa-icon.svg`
 

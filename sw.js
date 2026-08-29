@@ -1,12 +1,11 @@
-const CACHE_NAME = "mushavo-budget-v15";
+const CACHE_NAME = "mushavo-budget-v17-no-web-push";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./signup.html",
   "./offline.html",
-  "./styles.css?v=22",
-  "./app.js?v=26",
-  "./config.js?v=20",
+  "./styles.css?v=21",
+  "./app.js?v=25",
   "./manifest.webmanifest",
   "./assets/ledger-mark.svg",
   "./assets/pwa-icon.svg",
@@ -16,84 +15,41 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
-  );
-  self.clients.claim();
-});
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") self.skipWaiting();
-});
-
-self.addEventListener("push", (event) => {
   event.waitUntil((async () => {
-    let payload = {};
-    try {
-      payload = event.data ? event.data.json() : {};
-    } catch (_error) {
-      payload = { body: "You have a new Mushavo Budget reminder." };
-    }
+    const cache = await caches.open(CACHE_NAME);
 
-    const appName = "Mushavo Budget";
-    const title = typeof payload.title === "string" && payload.title.trim()
-      ? payload.title.trim().slice(0, 120)
-      : appName;
-    const body = typeof payload.body === "string" && payload.body.trim()
-      ? payload.body.trim().slice(0, 240)
-      : "You have a new reminder in Mushavo Budget.";
-    const tag = typeof payload.tag === "string" && payload.tag.trim()
-      ? payload.tag.trim().slice(0, 160)
-      : `mushavo-${Date.now()}`;
-    const requestedUrl = typeof payload.url === "string" ? payload.url : "./index.html#family/dashboard";
-    const targetUrl = new URL(requestedUrl, self.registration.scope);
-    if (targetUrl.origin !== self.location.origin) targetUrl.href = new URL("./index.html#family/dashboard", self.registration.scope).href;
-
-    await self.registration.showNotification(title, {
-      body,
-      icon: "./assets/pwa-icon-192.png",
-      badge: "./assets/pwa-icon-192.png",
-      tag,
-      renotify: false,
-      data: {
-        appName,
-        url: targetUrl.href,
-        notificationId: typeof payload.notificationId === "string" ? payload.notificationId : null,
-        itemType: typeof payload.itemType === "string" ? payload.itemType : "dashboard",
-        itemId: typeof payload.itemId === "string" ? payload.itemId : null
+    // Cache each file independently so a missing optional asset cannot block
+    // this rollback worker from replacing the previous Web Push worker.
+    await Promise.all(APP_SHELL.map(async (assetUrl) => {
+      try {
+        const request = new Request(assetUrl, { cache: "reload" });
+        const response = await fetch(request);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        await cache.put(request, response);
+      } catch (error) {
+        console.warn("[Mushavo SW] Precache skipped", assetUrl, error?.message || "request failed");
       }
-    });
+    }));
+
+    await self.skipWaiting();
   })());
 });
 
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
+self.addEventListener("activate", (event) => {
   event.waitUntil((async () => {
-    const fallback = new URL("./index.html#family/dashboard", self.registration.scope).href;
-    let targetUrl = fallback;
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)));
+
+    // This rollback keeps the PWA but permanently removes its Web Push device
+    // subscription. In-app reminders continue to work through app.js.
     try {
-      const candidate = new URL(event.notification.data?.url || fallback, self.registration.scope);
-      if (candidate.origin === self.location.origin) targetUrl = candidate.href;
-    } catch (_error) {
-      targetUrl = fallback;
+      const subscription = await self.registration.pushManager?.getSubscription();
+      if (subscription) await subscription.unsubscribe();
+    } catch (error) {
+      console.warn("[Mushavo SW] Existing Web Push subscription could not be removed", error?.name || "unsubscribe failed");
     }
 
-    const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const client of windows) {
-      if (new URL(client.url).origin !== self.location.origin) continue;
-      if ("navigate" in client) await client.navigate(targetUrl);
-      return client.focus();
-    }
-    return self.clients.openWindow(targetUrl);
+    await self.clients.claim();
   })());
 });
 
@@ -103,9 +59,28 @@ self.addEventListener("fetch", (event) => {
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) return;
 
+  // Never cache runtime configuration or the service worker. This prevents an
+  // old Supabase key or an old worker from surviving in newly opened tabs.
+  if (requestUrl.pathname.endsWith("/config.js") || requestUrl.pathname.endsWith("/sw.js")) {
+    event.respondWith(fetch(new Request(event.request, { cache: "no-store" })));
+    return;
+  }
+
   if (event.request.mode === "navigate") {
     event.respondWith(
-      fetch(event.request).catch(() => caches.match("./offline.html"))
+      fetch(event.request)
+        .then(async (response) => {
+          if (response.ok) {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(event.request, response.clone());
+          }
+          return response;
+        })
+        .catch(async () =>
+          (await caches.match(event.request)) ||
+          (await caches.match("./index.html")) ||
+          caches.match("./offline.html")
+        )
     );
     return;
   }
@@ -114,8 +89,10 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
       return fetch(event.request).then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        if (response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       });
     })

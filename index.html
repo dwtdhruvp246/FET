@@ -13,9 +13,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=22" />
-    <script src="config.js?v=20"></script>
-    <script type="module" src="app.js?v=26"></script>
+    <link rel="stylesheet" href="styles.css?v=21" />
+    <script src="config.js?v=22"></script>
+    <script type="module" src="app.js?v=25"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -439,26 +439,11 @@
             <section class="content-grid">
               <section class="tool-panel">
                 <div class="panel-heading"><p class="eyebrow">Reminders</p><h3>Notification delivery</h3></div>
-                <p class="muted-copy">Mushavo Budget uses secure Web Push, so scheduled reminders can arrive even when the installed app is closed. Permission is requested only when you press Enable notifications.</p>
-                <div id="notificationSupportNotice" class="notification-status-card" role="status" aria-live="polite">
-                  <div><span>Permission</span><strong id="notificationPermissionStatus">Not requested</strong></div>
-                  <div><span>This device</span><strong id="notificationDeviceStatus">Checking...</strong></div>
-                  <p id="notificationRecoveryText" class="muted-copy">Enable notifications to register this device.</p>
-                  <small id="notificationDiagnosticCode">PERMISSION_NOT_REQUESTED</small>
-                </div>
-                <div class="form-grid notification-preferences">
-                  <label class="checkbox-label full"><input id="reminderNotificationsEnabled" type="checkbox" /> Send scheduled reminder notifications</label>
-                  <label class="checkbox-label full"><input id="detailedNotificationPreviews" type="checkbox" /> Show payment names in notification previews</label>
-                  <label for="notificationTimezone">Timezone<select id="notificationTimezone"></select></label>
-                  <label for="notificationReminderTime">Default reminder time<input id="notificationReminderTime" type="time" value="09:00" /></label>
-                </div>
-                <div class="button-row notification-actions">
+                <p class="muted-copy">Mushavo Budget shows in-app notifications for invites and reminders. Browser reminders work while the app is installed or open. Email or WhatsApp reminders can be added later with Supabase Edge Functions and Resend.</p>
+                <div class="button-row">
                   <button id="settingsInstallButton" class="primary" type="button" data-install-app>Install app</button>
-                  <button id="settingsEnableNotificationsButton" type="button" data-enable-notifications>Enable notifications</button>
-                  <button id="sendTestNotificationButton" type="button" data-send-test-notification>Send test notification</button>
-                  <button id="disableDeviceNotificationsButton" class="danger" type="button" data-disable-device-notifications>Disable on this device</button>
+                  <button id="settingsEnableNotificationsButton" type="button" data-enable-notifications>Enable browser reminders</button>
                 </div>
-                <p class="muted-copy notification-privacy-note">Detailed previews are off by default. Privacy-safe notifications do not reveal payment names or amounts on a locked screen.</p>
               </section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
             </section>

@@ -13,13 +13,6 @@ const supabase = isConfigured
   ? createClient(config.supabaseUrl, config.supabasePublishableKey)
   : null;
 
-const vapidPublicKey = `${config.vapidPublicKey || ""}`.trim();
-const hasVapidPublicKey = Boolean(
-  vapidPublicKey &&
-  !vapidPublicKey.includes("REPLACE_WITH") &&
-  !vapidPublicKey.includes("YOUR_VAPID")
-);
-
 const state = {
   session: null,
   profile: null,
@@ -32,8 +25,6 @@ const state = {
   paymentRecords: [],
   familyInvitations: [],
   notifications: [],
-  pushSubscription: null,
-  notificationDiagnosticCode: "PERMISSION_NOT_REQUESTED",
   heads: [],
   adminFamilies: [],
   adminMembers: [],
@@ -56,7 +47,6 @@ const realtime = {
 
 let deferredInstallPrompt = null;
 let dashboardFitFrame = null;
-let serviceWorkerRegistrationPromise = null;
 
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
 const PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
@@ -94,38 +84,12 @@ $("#recordPaymentDate").value = toDateValue(today);
 registerServiceWorker();
 
 function registerServiceWorker() {
-  if (!("serviceWorker" in navigator)) {
-    logNotificationDiagnostic("SERVICE_WORKER_UNAVAILABLE");
-    return null;
-  }
-  if (serviceWorkerRegistrationPromise) return serviceWorkerRegistrationPromise;
-  serviceWorkerRegistrationPromise = new Promise((resolve, reject) => {
-    const startRegistration = () => {
-      navigator.serviceWorker
-        .register("./sw.js", { scope: "./", updateViaCache: "none" })
-        .then(async (registration) => {
-          await registration.update().catch(() => {});
-          resolve(registration);
-        })
-        .catch((error) => {
-          logNotificationDiagnostic("SERVICE_WORKER_REGISTRATION_FAILURE", { name: error?.name });
-          reject(error);
-        });
-    };
-    if (document.readyState === "complete") startRegistration();
-    else window.addEventListener("load", startRegistration, { once: true });
+  if (!("serviceWorker" in navigator)) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch((error) => {
+      console.warn("Service worker registration failed", error);
+    });
   });
-  return serviceWorkerRegistrationPromise;
-}
-
-function logNotificationDiagnostic(code, details = {}) {
-  const safeDetails = Object.fromEntries(
-    Object.entries(details).filter(([key]) => !["endpoint", "auth", "p256dh", "token", "secret"].includes(key))
-  );
-  state.notificationDiagnosticCode = code;
-  console.info(`[Mushavo Push] ${code}`, safeDetails);
-  const diagnostic = $("#notificationDiagnosticCode");
-  if (diagnostic) diagnostic.textContent = code;
 }
 
 function isStandaloneApp() {
@@ -246,9 +210,6 @@ function friendlyMessage(message = "") {
   }
   if (text.includes("CANNOT_INVITE_YOURSELF")) {
     return "You cannot invite your own email address.";
-  }
-  if (text.includes("PUSH_SUBSCRIPTION_ENDPOINT_CONFLICT")) {
-    return "This browser subscription belongs to another signed-in account. Disable notifications for that account or reset this site's notification permission, then try again.";
   }
   if (text.includes("ALREADY_FAMILY_MEMBER")) {
     return "That user is already part of this family.";
@@ -514,8 +475,6 @@ function resetState() {
   state.paymentRecords = [];
   state.familyInvitations = [];
   state.notifications = [];
-  state.pushSubscription = null;
-  state.notificationDiagnosticCode = "PERMISSION_NOT_REQUESTED";
   state.heads = [];
   state.adminFamilies = [];
   state.adminMembers = [];
@@ -559,7 +518,6 @@ async function loadApp() {
   syncRouteForWorkspace("family");
   setView("app");
   renderFamilyApp();
-  handleNotificationDeepLink();
   startRealtime();
 }
 
@@ -1185,7 +1143,6 @@ function renderObligationCard(item) {
   const member = memberById(item.responsible_member_id);
   const article = document.createElement("article");
   article.className = "record-card";
-  article.dataset.paymentItemId = item.id;
   article.innerHTML = `
     <div class="record-main">
       <strong>${escapeHtml(item.name)}</strong>
@@ -1209,19 +1166,6 @@ function renderObligationCard(item) {
     </div>
   `;
   return article;
-}
-
-function handleNotificationDeepLink() {
-  const url = new URL(window.location.href);
-  const paymentItemId = url.searchParams.get("payment_item");
-  if (!paymentItemId) return;
-  const target = document.querySelector(`[data-payment-item-id="${CSS.escape(paymentItemId)}"]`);
-  if (!target) return;
-  requestAnimationFrame(() => {
-    target.classList.add("notification-deep-link-target");
-    target.scrollIntoView({ behavior: "smooth", block: "center" });
-    window.setTimeout(() => target.classList.remove("notification-deep-link-target"), 6000);
-  });
 }
 
 function renderSchedule() {
@@ -1347,157 +1291,6 @@ function renderSettings() {
   $("#settingsMemberAccess").textContent = canManageAnyFamily ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
   renderNotifications();
-  renderNotificationSettings().catch((error) => {
-    logNotificationDiagnostic("PUSH_SUBSCRIPTION_STATUS_FAILURE", { name: error?.name });
-  });
-}
-
-function isIosDevice() {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
-function populateTimezoneOptions(selectedTimezone) {
-  const select = $("#notificationTimezone");
-  if (!select) return;
-  const fallback = ["Africa/Harare", "Africa/Johannesburg", "Africa/Maputo", "UTC", "Europe/London", "America/New_York"];
-  let zones = fallback;
-  try {
-    zones = Intl.supportedValuesOf("timeZone");
-  } catch (_error) {
-    // Older browsers use the short, safe fallback above.
-  }
-  if (!zones.includes("Africa/Harare")) zones = ["Africa/Harare", ...zones];
-  if (selectedTimezone && !zones.includes(selectedTimezone)) zones = [selectedTimezone, ...zones];
-  const previous = select.value;
-  select.innerHTML = "";
-  zones.forEach((zone) => select.append(new Option(zone.replaceAll("_", " "), zone)));
-  select.value = selectedTimezone || previous || "Africa/Harare";
-}
-
-async function renderNotificationSettings() {
-  const permissionStatus = $("#notificationPermissionStatus");
-  if (!permissionStatus || !state.session) return;
-
-  const timezone = state.profile?.timezone || "Africa/Harare";
-  populateTimezoneOptions(timezone);
-  $("#notificationTimezone").value = timezone;
-  $("#notificationReminderTime").value = `${state.profile?.reminder_time_local || "09:00"}`.slice(0, 5);
-  $("#reminderNotificationsEnabled").checked = state.profile?.reminder_notifications_enabled !== false;
-  $("#detailedNotificationPreviews").checked = state.profile?.detailed_notification_previews === true;
-
-  const enableButton = $("#settingsEnableNotificationsButton");
-  const testButton = $("#sendTestNotificationButton");
-  const disableButton = $("#disableDeviceNotificationsButton");
-  const deviceStatus = $("#notificationDeviceStatus");
-  const recoveryText = $("#notificationRecoveryText");
-
-  if (!("Notification" in window)) {
-    permissionStatus.textContent = "Unsupported";
-    deviceStatus.textContent = "Not available";
-    recoveryText.textContent = "This browser does not provide the Notification API.";
-    enableButton.disabled = true;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    logNotificationDiagnostic("NOTIFICATION_API_UNSUPPORTED");
-    return;
-  }
-
-  permissionStatus.textContent = Notification.permission === "default"
-    ? "Not requested"
-    : Notification.permission === "granted" ? "Allowed" : "Blocked";
-
-  if (!("serviceWorker" in navigator)) {
-    deviceStatus.textContent = "Not available";
-    recoveryText.textContent = "This browser cannot register the service worker required for Web Push.";
-    enableButton.disabled = true;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    logNotificationDiagnostic("SERVICE_WORKER_UNAVAILABLE");
-    return;
-  }
-
-  if (!("PushManager" in window)) {
-    deviceStatus.textContent = "Not supported";
-    recoveryText.textContent = isIosDevice() && !isStandaloneApp()
-      ? "On iPhone or iPad, add Mushavo Budget to the Home Screen, open the installed app, then enable notifications."
-      : "This browser does not support Web Push notifications.";
-    enableButton.disabled = true;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    logNotificationDiagnostic("PUSH_API_UNSUPPORTED");
-    return;
-  }
-
-  if (isIosDevice() && !isStandaloneApp()) {
-    deviceStatus.textContent = "Home Screen required";
-    recoveryText.textContent = "On iPhone or iPad, first use Share → Add to Home Screen. Open the installed Mushavo Budget app, then press Enable notifications.";
-    enableButton.disabled = true;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    logNotificationDiagnostic("IOS_HOME_SCREEN_REQUIRED");
-    return;
-  }
-
-  if (!hasVapidPublicKey) {
-    deviceStatus.textContent = "Setup incomplete";
-    recoveryText.textContent = "The site administrator must add the VAPID public key to config.js before this device can subscribe.";
-    enableButton.disabled = true;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    logNotificationDiagnostic("VAPID_PUBLIC_KEY_MISSING");
-    return;
-  }
-
-  if (Notification.permission === "denied") {
-    deviceStatus.textContent = "Blocked by browser";
-    recoveryText.textContent = "Open this site's browser settings, change Notifications to Allow, then return and press Enable notifications.";
-    enableButton.disabled = true;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    logNotificationDiagnostic("PERMISSION_DENIED");
-    return;
-  }
-
-  let registration;
-  try {
-    registration = await registerServiceWorker();
-  } catch (_error) {
-    deviceStatus.textContent = "Service worker failed";
-    recoveryText.textContent = "Reload the app. If this continues, remove the installed app, clear its site data, and install it again.";
-    enableButton.disabled = false;
-    testButton.disabled = true;
-    disableButton.disabled = true;
-    return;
-  }
-
-  state.pushSubscription = await registration.pushManager.getSubscription();
-  if (state.pushSubscription) {
-    const endpoint = state.pushSubscription.endpoint;
-    const rows = await query(
-      "push subscription status",
-      supabase.from("push_subscriptions").select("id, disabled_at").eq("endpoint", endpoint).limit(1)
-    );
-    const activeInDatabase = rows.some((row) => !row.disabled_at);
-    deviceStatus.textContent = activeInDatabase ? "Subscribed" : "Needs registration";
-    recoveryText.textContent = activeInDatabase
-      ? "This device is registered for secure background reminders."
-      : "Press Enable notifications to securely associate this device with your account.";
-    enableButton.disabled = false;
-    testButton.disabled = !activeInDatabase;
-    disableButton.disabled = false;
-    logNotificationDiagnostic(activeInDatabase ? "PUSH_SUBSCRIPTION_ACTIVE" : "PUSH_SUBSCRIPTION_MISSING");
-    return;
-  }
-
-  deviceStatus.textContent = "Not subscribed";
-  recoveryText.textContent = Notification.permission === "granted"
-    ? "Permission is allowed, but this device is not subscribed. Press Enable notifications to finish setup."
-    : "Press Enable notifications to request permission and subscribe this device.";
-  enableButton.disabled = false;
-  testButton.disabled = true;
-  disableButton.disabled = true;
-  logNotificationDiagnostic(Notification.permission === "granted" ? "PUSH_SUBSCRIPTION_MISSING" : "PERMISSION_NOT_REQUESTED");
 }
 
 function renderNotifications() {
@@ -1556,7 +1349,6 @@ function renderNotificationList(list, compact = false) {
       </div>
       <div class="record-side">
         ${isPendingInvite ? `<div class="row-actions"><button class="primary" type="button" data-accept-invite="${invitation.id}">Accept</button><button type="button" data-reject-invite="${invitation.id}">Reject</button></div>` : ""}
-        ${notification.url ? `<button type="button" data-open-notification="${notification.id}">Open</button>` : ""}
         ${notification.read_at ? "" : `<button type="button" data-read-notification="${notification.id}">Mark read</button>`}
       </div>
     `;
@@ -2555,174 +2347,30 @@ function exportCsv() {
 
 async function enableNotifications() {
   if (!("Notification" in window)) {
-    logNotificationDiagnostic("NOTIFICATION_API_UNSUPPORTED");
-    showToast("This browser does not support notifications.");
-    await renderNotificationSettings();
+    showToast("Browser notifications are not supported on this device.");
     return;
   }
-  if (!("serviceWorker" in navigator)) {
-    logNotificationDiagnostic("SERVICE_WORKER_UNAVAILABLE");
-    showToast("This browser cannot register the service worker required for notifications.");
-    await renderNotificationSettings();
-    return;
-  }
-  if (!("PushManager" in window)) {
-    logNotificationDiagnostic("PUSH_API_UNSUPPORTED");
-    showToast("Web Push is not supported in this browser.");
-    await renderNotificationSettings();
-    return;
-  }
-  if (isIosDevice() && !isStandaloneApp()) {
-    logNotificationDiagnostic("IOS_HOME_SCREEN_REQUIRED");
-    showToast("On iPhone or iPad, add Mushavo Budget to the Home Screen, then enable notifications from the installed app.");
-    await renderNotificationSettings();
-    return;
-  }
-  if (!hasVapidPublicKey) {
-    logNotificationDiagnostic("VAPID_PUBLIC_KEY_MISSING");
-    showToast("Notification setup is incomplete. The site administrator must add the VAPID public key.");
-    return;
-  }
-
-  try {
-    const permission = Notification.permission === "granted"
-      ? "granted"
-      : await Notification.requestPermission();
-    if (permission !== "granted") {
-      logNotificationDiagnostic(permission === "denied" ? "PERMISSION_DENIED" : "PERMISSION_NOT_REQUESTED");
-      showToast(permission === "denied"
-        ? "Notifications are blocked. Allow them in this site's browser settings, then try again."
-        : "Notification permission was not granted.");
-      await renderNotificationSettings();
-      return;
-    }
-
-    logNotificationDiagnostic("PERMISSION_GRANTED");
-    const registration = await registerServiceWorker();
-    let subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-      });
-    }
-    const keys = subscription.toJSON().keys || {};
-    if (!keys.p256dh || !keys.auth) throw new Error("PUSH_SUBSCRIPTION_KEYS_MISSING");
-
-    try {
-      await query(
-        "push subscription save",
-        supabase.rpc("save_push_subscription", {
-          p_endpoint: subscription.endpoint,
-          p_p256dh: keys.p256dh,
-          p_auth: keys.auth,
-          p_device_info: {
-            language: navigator.language || null,
-            standalone: isStandaloneApp(),
-            user_agent: navigator.userAgent.slice(0, 320)
-          },
-          p_platform: navigator.userAgentData?.platform || navigator.platform || "Unknown"
-        })
-      );
-    } catch (error) {
-      logNotificationDiagnostic("SUBSCRIPTION_DATABASE_SAVE_FAILURE", { name: error?.name });
-      throw error;
-    }
-    state.pushSubscription = subscription;
-    logNotificationDiagnostic("PUSH_SUBSCRIPTION_SAVED");
-    showToast("Notifications are enabled on this device.");
-    await renderNotificationSettings();
-  } catch (error) {
-    logNotificationDiagnostic(
-      `${error?.message}`.includes("PUSH_SUBSCRIPTION_ENDPOINT_CONFLICT") || `${error?.message}`.includes("row-level security")
-        ? "SUBSCRIPTION_DATABASE_SAVE_FAILURE"
-        : "PUSH_SUBSCRIPTION_FAILURE",
-      { name: error?.name }
-    );
-    console.error("Push subscription setup failed", { name: error?.name, message: friendlyMessage(error?.message) });
-    showToast(`Notifications could not be enabled: ${friendlyMessage(error?.message)}`);
-    await renderNotificationSettings().catch(() => {});
+  const result = await Notification.requestPermission();
+  if (result === "granted") {
+    showToast("Reminder notifications enabled for this browser.");
+    showDueBrowserNotifications();
+  } else {
+    showToast("Notifications were not enabled. In-app reminders still work.");
   }
 }
 
-function urlBase64ToUint8Array(base64String) {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replaceAll("-", "+").replaceAll("_", "/");
-  const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
-}
-
-async function disableNotificationsOnCurrentDevice() {
-  if (!("serviceWorker" in navigator)) return;
-  try {
-    const registration = await registerServiceWorker();
-    const subscription = await registration.pushManager.getSubscription();
-    if (!subscription) {
-      logNotificationDiagnostic("PUSH_SUBSCRIPTION_MISSING");
-      showToast("This device is not subscribed.");
-      await renderNotificationSettings();
-      return;
-    }
-    await query(
-      "push subscription disable",
-      supabase.from("push_subscriptions")
-        .update({ disabled_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-        .eq("endpoint", subscription.endpoint)
-    );
-    await subscription.unsubscribe();
-    state.pushSubscription = null;
-    logNotificationDiagnostic("PUSH_SUBSCRIPTION_DISABLED");
-    showToast("Notifications are disabled on this device.");
-    await renderNotificationSettings();
-  } catch (error) {
-    logNotificationDiagnostic("PUSH_SUBSCRIPTION_DISABLE_FAILURE", { name: error?.name });
-    showToast(`This device could not be disabled: ${friendlyMessage(error?.message)}`);
-  }
-}
-
-async function sendTestNotification() {
-  if (Notification.permission !== "granted" || !state.pushSubscription) {
-    logNotificationDiagnostic("PUSH_SUBSCRIPTION_MISSING");
-    showToast("Enable notifications on this device before sending a test.");
-    return;
-  }
-  try {
-    const { data, error } = await supabase.functions.invoke("send-reminders", {
-      body: { action: "test" }
+function showDueBrowserNotifications() {
+  if (Notification.permission !== "granted") return;
+  const dueItems = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth)
+    .filter((occurrence) => ["overdue", "due-soon", "partial"].includes(occurrence.status))
+    .slice(0, 5);
+  dueItems.forEach((occurrence) => {
+    const title = occurrence.status === "overdue" ? "Payment overdue" : "Payment reminder";
+    new Notification(title, {
+      body: `${occurrence.item.name}: ${money(occurrence.outstanding, occurrence.item.currency)} outstanding`,
+      tag: `mushavo-${occurrence.key}`
     });
-    if (error) throw error;
-    if (!data?.ok) throw new Error(data?.error || "TEST_NOTIFICATION_REJECTED");
-    logNotificationDiagnostic("NOTIFICATION_ACCEPTED_FOR_DELIVERY", { accepted: data.accepted || 0 });
-    showToast(data.accepted
-      ? "Test notification accepted for delivery."
-      : "The test ran, but no active device subscription was available.");
-    await loadNotifications();
-    renderNotifications();
-  } catch (error) {
-    logNotificationDiagnostic("PUSH_PROVIDER_REJECTION", { name: error?.name });
-    showToast(`Test notification failed: ${friendlyMessage(error?.message)}`);
-  }
-}
-
-async function saveNotificationPreferences() {
-  const payload = {
-    reminder_notifications_enabled: $("#reminderNotificationsEnabled").checked,
-    detailed_notification_previews: $("#detailedNotificationPreviews").checked,
-    timezone: $("#notificationTimezone").value || "Africa/Harare",
-    reminder_time_local: $("#notificationReminderTime").value || "09:00",
-    notification_preferences_updated_at: new Date().toISOString()
-  };
-  try {
-    const rows = await query(
-      "notification preferences save",
-      supabase.from("profiles").update(payload).eq("id", state.session.user.id).select("*")
-    );
-    state.profile = rows[0] || { ...state.profile, ...payload };
-    showToast("Notification preferences saved.");
-    await renderNotificationSettings();
-  } catch (error) {
-    showToast(`Preferences could not be saved: ${friendlyMessage(error?.message)}`);
-  }
+  });
 }
 
 function memberById(id) {
@@ -2796,8 +2444,6 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
   if (event.target.closest("[data-open-notifications]")) openNotificationDialog();
   if (event.target.closest("[data-enable-notifications]")) await enableNotifications();
-  if (event.target.closest("[data-send-test-notification]")) await sendTestNotification();
-  if (event.target.closest("[data-disable-device-notifications]")) await disableNotificationsOnCurrentDevice();
   if (event.target.closest("[data-install-app]")) await installApp();
   if (event.target.dataset.retryLoad !== undefined) {
     setView("loading");
@@ -2953,15 +2599,6 @@ document.addEventListener("click", async (event) => {
     await loadNotifications();
     renderSettings();
   }
-
-  const openNotificationId = event.target.dataset.openNotification;
-  if (openNotificationId) {
-    const notification = state.notifications.find((item) => item.id === openNotificationId);
-    if (notification?.url) {
-      const target = new URL(notification.url, window.location.href);
-      if (target.origin === window.location.origin) window.location.assign(target.href);
-    }
-  }
 });
 
 $("#authForm").addEventListener("submit", signIn);
@@ -2987,10 +2624,6 @@ $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.sig
 $("#suspendedSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#exportCsvButton").addEventListener("click", exportCsv);
 $("#enableNotificationsButton").addEventListener("click", enableNotifications);
-$("#reminderNotificationsEnabled").addEventListener("change", saveNotificationPreferences);
-$("#detailedNotificationPreviews").addEventListener("change", saveNotificationPreferences);
-$("#notificationTimezone").addEventListener("change", saveNotificationPreferences);
-$("#notificationReminderTime").addEventListener("change", saveNotificationPreferences);
 $("#paymentHead").addEventListener("change", (event) => {
   const option = event.target.selectedOptions[0];
   const amount = Number(option?.dataset.amount || 0);
