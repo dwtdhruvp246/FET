@@ -46,6 +46,8 @@ const realtime = {
 };
 
 let dashboardFitFrame = null;
+let appLoadPromise = null;
+let appLoadUserId = null;
 
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
 const PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
@@ -146,6 +148,12 @@ function money(amount, currency = "USD") {
 function setView(viewName) {
   Object.values(views).forEach((view) => view.classList.add("hidden"));
   if (viewName) views[viewName].classList.remove("hidden");
+}
+
+function showLoading(title = "Opening your workspace", message = "Loading your latest budget...") {
+  $("#loadingTitle").textContent = title;
+  $("#loadingMessage").textContent = message;
+  setView("loading");
 }
 
 function showSignupSuccessMessage() {
@@ -420,7 +428,7 @@ async function query(label, promise) {
 }
 
 async function init() {
-  setView("loading");
+  showLoading("Opening your workspace", "Checking your secure session...");
   if (!isConfigured) {
     setView("configWarning");
     return;
@@ -430,7 +438,7 @@ async function init() {
   const { data } = await supabase.auth.getSession();
   state.session = data.session;
 
-  supabase.auth.onAuthStateChange(async (event, session) => {
+  supabase.auth.onAuthStateChange((event, session) => {
     if (event === "INITIAL_SESSION") return;
     const previousSession = state.session;
     state.session = session;
@@ -441,23 +449,51 @@ async function init() {
     }
 
     if (session) {
-      setView("loading");
-      resetState();
-      state.session = session;
-      await loadApp();
+      window.setTimeout(() => {
+        openAuthenticatedSession(session).catch(handleLoadFailure);
+      }, 0);
       return;
     }
-    resetState();
-    window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    setView("auth");
+    window.setTimeout(handleSignedOut, 0);
   });
 
   if (state.session) {
-    await loadApp();
+    await openAuthenticatedSession(state.session);
   } else {
     setView("auth");
     showSignupSuccessMessage();
   }
+}
+
+function handleSignedOut() {
+  resetState();
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+  setView("auth");
+}
+
+function handleLoadFailure(error) {
+  console.error(error);
+  showToast(error.message);
+  if (state.session) showAppError(error);
+  else setView("auth");
+}
+
+function openAuthenticatedSession(session) {
+  const userId = session?.user?.id;
+  if (!userId) return Promise.reject(new Error("Your secure session could not be opened. Please sign in again."));
+  if (appLoadPromise && appLoadUserId === userId) return appLoadPromise;
+
+  resetState();
+  state.session = session;
+  appLoadUserId = userId;
+  showLoading("Opening your workspace", "Loading your latest budget...");
+  appLoadPromise = loadApp().finally(() => {
+    if (appLoadUserId === userId) {
+      appLoadPromise = null;
+      appLoadUserId = null;
+    }
+  });
+  return appLoadPromise;
 }
 
 function resetState() {
@@ -488,7 +524,17 @@ function resetState() {
 async function loadApp() {
   assertSupabase();
   const startedAt = performance.now();
-  await Promise.all([ensureProfile(), loadAccess()]);
+  const loadingUserId = state.session.user.id;
+  const settled = (promise) => promise.then(
+    () => ({ ok: true }),
+    (error) => ({ ok: false, error })
+  );
+  const profileResult = settled(ensureProfile());
+  const familyResult = settled(loadFamily());
+  const invitationResult = settled(loadInvitations());
+  const notificationResult = settled(loadNotifications());
+
+  await loadAccess();
 
   if (state.isAdmin) {
     await loadAdminData();
@@ -496,13 +542,19 @@ async function loadApp() {
     setView("admin");
     renderAdmin();
     startRealtime();
+    profileResult.then((result) => {
+      if (!result.ok) console.warn("Profile load was deferred", result.error);
+    });
     console.info(`[Mushavo] Admin workspace ready in ${Math.round(performance.now() - startedAt)}ms`);
     return;
   }
 
-  await Promise.all([loadFamily(), loadInvitations(), loadNotifications()]);
+  const loadedFamily = await familyResult;
+  if (!loadedFamily.ok) throw loadedFamily.error;
 
   if (state.headApproval?.status === "suspended") {
+    const loadedInvitations = await invitationResult;
+    if (!loadedInvitations.ok) throw loadedInvitations.error;
     if (hasJoinableFamilyInvitation()) {
       showToast("You can join an invited family without an active subscription.");
     } else {
@@ -518,6 +570,15 @@ async function loadApp() {
   renderFamilyApp();
   handleNotificationDeepLink();
   startRealtime();
+  Promise.all([profileResult, invitationResult, notificationResult]).then((results) => {
+    const labels = ["Profile", "Invitations", "Notifications"];
+    results.forEach((result, index) => {
+      if (!result.ok) console.warn(`${labels[index]} background load failed`, result.error);
+    });
+    if (!state.session || state.session.user.id !== loadingUserId) return;
+    renderNotifications();
+    if (state.familyTab === "members") renderInvitations();
+  });
   console.info(`[Mushavo] Workspace ready in ${Math.round(performance.now() - startedAt)}ms`);
 }
 
@@ -1817,13 +1878,25 @@ async function signIn(event) {
     showToast("Enter an email and password.");
     return;
   }
+  const submitButton = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
   try {
-    setView("loading");
-    await query("sign in", supabase.auth.signInWithPassword({ email, password }));
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.textContent = "Signing in...";
+    }
+    showLoading("Signing you in", "Verifying your account...");
+    const authData = await query("sign in", supabase.auth.signInWithPassword({ email, password }));
+    if (!authData.session) throw new Error("Sign-in completed without a session. Please try again.");
+    await openAuthenticatedSession(authData.session);
     showToast("Signed in.");
   } catch (error) {
     setView("auth");
     showToast(error.message);
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = "Sign in";
+    }
   }
 }
 
@@ -2687,12 +2760,4 @@ window.addEventListener("hashchange", () => {
 window.addEventListener("beforeunload", stopRealtime);
 window.addEventListener("resize", scheduleDashboardTextFit);
 
-init().catch((error) => {
-  console.error(error);
-  showToast(error.message);
-  if (state.session) {
-    showAppError(error);
-  } else {
-    setView("auth");
-  }
-});
+init().catch(handleLoadFailure);
