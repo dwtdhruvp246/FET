@@ -50,6 +50,7 @@ let dashboardFitFrame = null;
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
 const PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
 const PAYMENT_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
+const QUERY_TIMEOUT_MS = 15000;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -387,8 +388,7 @@ async function refreshVisibleData() {
       renderAdmin();
       return;
     }
-    await loadAccess();
-    await loadFamily();
+    await Promise.all([loadAccess(), loadFamily()]);
     await loadFamilyData();
     if (state.session?.user?.id !== sessionId) return;
     renderFamilyApp();
@@ -398,12 +398,25 @@ async function refreshVisibleData() {
 }
 
 async function query(label, promise) {
-  const { data, error } = await promise;
-  if (error) {
-    console.error(label, error);
-    throw new Error(error.message);
+  let timeoutId;
+  try {
+    const { data, error } = await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = window.setTimeout(
+          () => reject(new Error("The request took too long. Check your connection and try again.")),
+          QUERY_TIMEOUT_MS
+        );
+      })
+    ]);
+    if (error) {
+      console.error(label, error);
+      throw new Error(error.message);
+    }
+    return data;
+  } finally {
+    window.clearTimeout(timeoutId);
   }
-  return data;
 }
 
 async function init() {
@@ -474,8 +487,8 @@ function resetState() {
 
 async function loadApp() {
   assertSupabase();
-  await ensureProfile();
-  await loadAccess();
+  const startedAt = performance.now();
+  await Promise.all([ensureProfile(), loadAccess()]);
 
   if (state.isAdmin) {
     await loadAdminData();
@@ -483,10 +496,11 @@ async function loadApp() {
     setView("admin");
     renderAdmin();
     startRealtime();
+    console.info(`[Mushavo] Admin workspace ready in ${Math.round(performance.now() - startedAt)}ms`);
     return;
   }
 
-  await Promise.all([loadInvitations(), loadNotifications()]);
+  await Promise.all([loadFamily(), loadInvitations(), loadNotifications()]);
 
   if (state.headApproval?.status === "suspended") {
     if (hasJoinableFamilyInvitation()) {
@@ -498,13 +512,13 @@ async function loadApp() {
     }
   }
 
-  await loadFamily();
-  await loadFamilyData();
+  await loadFamilyFinancialData();
   syncRouteForWorkspace("family");
   setView("app");
   renderFamilyApp();
   handleNotificationDeepLink();
   startRealtime();
+  console.info(`[Mushavo] Workspace ready in ${Math.round(performance.now() - startedAt)}ms`);
 }
 
 async function ensureProfile() {
@@ -513,30 +527,44 @@ async function ensureProfile() {
     user.user_metadata?.full_name ||
     user.email?.split("@")[0] ||
     "Household owner";
+  const email = user.email?.toLowerCase() || null;
 
-  await query(
-    "profile upsert",
-    supabase.from("profiles").upsert({ id: user.id, full_name: fullName, email: user.email?.toLowerCase() }, { onConflict: "id" })
+  const existingProfile = await query(
+    "profile load",
+    supabase.from("profiles").select("*").eq("id", user.id).maybeSingle()
   );
+  if (existingProfile) {
+    state.profile = existingProfile;
+    if (existingProfile.full_name !== fullName || existingProfile.email !== email) {
+      query(
+        "profile sync",
+        supabase.from("profiles").update({ full_name: fullName, email }).eq("id", user.id).select("*").single()
+      ).then((profile) => {
+        state.profile = profile;
+      }).catch((error) => console.warn("Profile sync was deferred", error));
+    }
+    return;
+  }
 
   state.profile = await query(
-    "profile load",
-    supabase.from("profiles").select("*").eq("id", user.id).single()
+    "profile create",
+    supabase.from("profiles").insert({ id: user.id, full_name: fullName, email }).select("*").single()
   );
 }
 
 async function loadAccess() {
   const userEmail = state.session.user.email?.toLowerCase();
-  const adminRows = await query(
-    "admin access load",
-    supabase.from("app_admins").select("*").eq("user_id", state.session.user.id).limit(1)
-  );
+  const [adminRows, headRows] = await Promise.all([
+    query(
+      "admin access load",
+      supabase.from("app_admins").select("*").eq("user_id", state.session.user.id).limit(1)
+    ),
+    query(
+      "head access load",
+      supabase.from("family_heads").select("*").ilike("email", userEmail).limit(1)
+    )
+  ]);
   state.isAdmin = adminRows.length > 0;
-
-  const headRows = await query(
-    "head access load",
-    supabase.from("family_heads").select("*").ilike("email", userEmail).limit(1)
-  );
   state.headApproval = headRows[0] || null;
 }
 
@@ -587,12 +615,16 @@ async function selectFamily(familyId) {
   state.family = family;
   state.editingObligationId = null;
   persistSelectedFamily();
-  await loadFamilyData();
+  await loadFamilyFinancialData();
   renderFamilyApp();
 }
 
 async function loadFamilyData() {
-  await Promise.all([loadMembers(), loadPaymentItems(), loadPaymentRecords(), loadInvitations(), loadNotifications()]);
+  await Promise.all([loadFamilyFinancialData(), loadInvitations(), loadNotifications()]);
+}
+
+async function loadFamilyFinancialData() {
+  await Promise.all([loadMembers(), loadPaymentItems(), loadPaymentRecords()]);
 }
 
 async function loadMembers() {
@@ -650,53 +682,65 @@ async function loadNotifications() {
   );
 }
 
-async function loadAdminData() {
-  state.heads = await query(
-    "heads load",
-    supabase.from("family_heads").select("*").order("created_at", { ascending: false })
-  );
-  state.adminFamilies = await query(
-    "admin families load",
-    supabase.from("families").select("*").order("created_at", { ascending: false })
-  );
-  state.adminMembers = await query(
-    "admin members load",
-    supabase.from("family_members").select("*").order("created_at", { ascending: true })
-  );
-  state.adminPaymentItems = await query(
-    "admin payment items load",
-    supabase.from("payment_items").select("*").order("created_at", { ascending: false })
-  );
-  state.adminPaymentRecords = await query(
-    "admin payment records load",
-    supabase.from("payment_records").select("*").order("payment_date", { ascending: false })
-  );
-  state.payments = await query(
-    "payments load",
-    supabase
-      .from("payments")
-      .select("*, family_heads(full_name, email, billing_status, status)")
-      .order("payment_date", { ascending: false })
-      .order("created_at", { ascending: false })
-  );
-  state.adminNotes = await query(
-    "admin notes load",
-    supabase.from("admin_support_notes").select("*").order("created_at", { ascending: false })
-  );
+async function loadAdminData(tab = state.adminTab) {
+  const tasks = [];
+  const assign = [];
+
+  const add = (target, label, request) => {
+    tasks.push(query(label, request));
+    assign.push(target);
+  };
+
+  if (["dashboard", "households", "users", "support"].includes(tab)) {
+    add("adminFamilies", "admin families load", supabase.from("families").select("*").order("created_at", { ascending: false }));
+  }
+  if (["households", "users", "finance"].includes(tab)) {
+    add("heads", "heads load", supabase.from("family_heads").select("*").order("created_at", { ascending: false }));
+  }
+  if (tab === "households") {
+    add("adminMembers", "admin members load", supabase.from("family_members").select("*").order("created_at", { ascending: true }));
+  }
+  if (["dashboard", "households"].includes(tab)) {
+    add("adminPaymentItems", "admin payment items load", supabase.from("payment_items").select("*").order("created_at", { ascending: false }));
+    add("adminPaymentRecords", "admin payment records load", supabase.from("payment_records").select("*").order("payment_date", { ascending: false }));
+  }
+  if (["dashboard", "finance"].includes(tab)) {
+    add(
+      "payments",
+      "payments load",
+      supabase
+        .from("payments")
+        .select("*, family_heads(full_name, email, billing_status, status)")
+        .order("payment_date", { ascending: false })
+        .order("created_at", { ascending: false })
+    );
+  }
+  if (tab === "support") {
+    add("adminNotes", "admin notes load", supabase.from("admin_support_notes").select("*").order("created_at", { ascending: false }));
+  }
+
+  const results = await Promise.all(tasks);
+  assign.forEach((target, index) => {
+    state[target] = results[index];
+  });
 }
 
 function renderFamilyApp() {
   renderFamilyTabs();
   renderFamilyHeader();
-  renderMemberAccess();
   renderMemberOptions();
   renderPaymentScope();
-  renderDashboard();
-  renderObligations();
-  renderMembers();
-  renderInvitations();
-  renderSettings();
-  renderReports();
+  renderNotifications();
+
+  if (state.familyTab === "dashboard") renderDashboard();
+  if (state.familyTab === "payments") renderObligations();
+  if (state.familyTab === "members") {
+    renderMemberAccess();
+    renderMembers();
+    renderInvitations();
+  }
+  if (state.familyTab === "settings") renderSettings();
+  if (state.familyTab === "reports") renderReports();
 }
 
 function renderFamilyTabs() {
@@ -1290,7 +1334,6 @@ function renderSettings() {
   $("#settingsPaymentLimit").textContent = hasPaidPlan() ? "Unlimited payments unlocked" : `${paymentCount}/5 free payments used`;
   $("#settingsMemberAccess").textContent = canManageAnyFamily ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
-  renderNotifications();
 }
 
 function renderNotifications() {
@@ -1543,13 +1586,17 @@ function renderFamilyPaymentRecord(record) {
 
 function renderAdmin() {
   renderAdminTabs();
-  renderAdminSummary();
-  renderHeads();
-  renderPaymentHeadOptions();
-  renderPlatformPayments();
-  renderAdminFamilies();
-  renderAdminNoteOptions();
-  renderAdminNotes();
+  if (state.adminTab === "dashboard") renderAdminSummary();
+  if (state.adminTab === "households") renderAdminFamilies();
+  if (state.adminTab === "users") renderHeads();
+  if (state.adminTab === "finance") {
+    renderPaymentHeadOptions();
+    renderPlatformPayments();
+  }
+  if (state.adminTab === "support") {
+    renderAdminNoteOptions();
+    renderAdminNotes();
+  }
 }
 
 function renderAdminTabs() {
@@ -2432,7 +2479,12 @@ document.addEventListener("click", async (event) => {
   if (adminTab) {
     state.adminTab = adminTab;
     setRoute("admin", adminTab);
-    renderAdminTabs();
+    try {
+      await loadAdminData(adminTab);
+      renderAdmin();
+    } catch (error) {
+      showToast(`This page could not load: ${friendlyMessage(error?.message)}`);
+    }
     closeDrawer();
   }
 
@@ -2440,7 +2492,7 @@ document.addEventListener("click", async (event) => {
   if (familyTab) {
     state.familyTab = familyTab;
     setRoute("family", familyTab);
-    renderFamilyTabs();
+    renderFamilyApp();
     scheduleDashboardTextFit();
     closeDrawer();
   }
@@ -2568,7 +2620,7 @@ document.addEventListener("click", async (event) => {
   if (readNotificationId) {
     await query("notification read", supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", readNotificationId));
     await loadNotifications();
-    renderSettings();
+    renderFamilyApp();
   }
 
   const openNotificationId = event.target.dataset.openNotification;
@@ -2626,8 +2678,10 @@ document.querySelectorAll("[data-family-selector]").forEach((select) => {
 
 window.addEventListener("hashchange", () => {
   applyRouteFromHash();
-  if (state.isAdmin) renderAdminTabs();
-  if (state.session && !state.isAdmin) renderFamilyTabs();
+  if (state.isAdmin) {
+    loadAdminData().then(renderAdmin).catch((error) => showToast(friendlyMessage(error?.message)));
+  }
+  if (state.session && !state.isAdmin) renderFamilyApp();
 });
 
 window.addEventListener("beforeunload", stopRealtime);

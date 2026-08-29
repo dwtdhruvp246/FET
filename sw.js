@@ -1,12 +1,12 @@
-const CACHE_NAME = "mushavo-budget-v18";
+const CACHE_NAME = "mushavo-budget-v19";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./signup.html",
   "./offline.html",
   "./styles.css?v=25",
-  "./app.js?v=29",
-  "./config.js?v=23",
+  "./app.js?v=30",
+  "./config.js?v=24",
   "./manifest.webmanifest",
   "./assets/ledger-mark.svg",
   "./assets/pwa-icon.svg",
@@ -33,9 +33,9 @@ async function cacheFreshResponse(request, cacheMode = "no-cache") {
   return response;
 }
 
-async function networkFirst(request, fallback) {
+async function networkFirst(request, fallback, cacheMode = "no-cache") {
   try {
-    return await cacheFreshResponse(request, "no-store");
+    return await cacheFreshResponse(request, cacheMode);
   } catch (_error) {
     return (await caches.match(request)) ||
       (fallback ? await caches.match(fallback) : null) ||
@@ -86,7 +86,7 @@ self.addEventListener("fetch", (event) => {
 
   const fileName = requestUrl.pathname.split("/").pop();
   if (NETWORK_FIRST_FILES.has(fileName)) {
-    event.respondWith(networkFirst(event.request));
+    event.respondWith(networkFirst(event.request, null, fileName === "config.js" ? "no-store" : "no-cache"));
     return;
   }
 
