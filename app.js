@@ -78,12 +78,27 @@ const currencyNames = {
   AUD: "en-AU"
 };
 
+const PAYMENT_CURRENCIES = [
+  ["AED", "United Arab Emirates Dirham"], ["AUD", "Australian Dollar"], ["BDT", "Bangladeshi Taka"],
+  ["BWP", "Botswana Pula"], ["BRL", "Brazilian Real"], ["CAD", "Canadian Dollar"], ["CHF", "Swiss Franc"],
+  ["CNY", "Chinese Yuan"], ["DKK", "Danish Krone"], ["EGP", "Egyptian Pound"], ["EUR", "Euro"],
+  ["GBP", "British Pound"], ["GHS", "Ghanaian Cedi"], ["HKD", "Hong Kong Dollar"], ["INR", "Indian Rupee"],
+  ["JPY", "Japanese Yen"], ["KES", "Kenyan Shilling"], ["KWD", "Kuwaiti Dinar"], ["MUR", "Mauritian Rupee"],
+  ["MZN", "Mozambican Metical"], ["NAD", "Namibian Dollar"], ["NGN", "Nigerian Naira"], ["NOK", "Norwegian Krone"],
+  ["NZD", "New Zealand Dollar"], ["OMR", "Omani Rial"], ["PKR", "Pakistani Rupee"], ["PLN", "Polish Zloty"],
+  ["QAR", "Qatari Riyal"], ["SAR", "Saudi Riyal"], ["SEK", "Swedish Krona"], ["SGD", "Singapore Dollar"],
+  ["SZL", "Swazi Lilangeni"], ["THB", "Thai Baht"], ["TRY", "Turkish Lira"], ["TZS", "Tanzanian Shilling"],
+  ["UGX", "Ugandan Shilling"], ["USD", "US Dollar"], ["ZAR", "South African Rand"], ["ZMW", "Zambian Kwacha"],
+  ["ZWG", "Zimbabwe Gold"]
+];
+
 const today = new Date();
 $("#paymentDate").value = toDateValue(today);
 $("#monthFilter").value = state.filterMonth;
 $("#reportMonthFilter").value = state.filterMonth;
 $("#startDate").value = toDateValue(today);
 $("#recordPaymentDate").value = toDateValue(today);
+renderPaymentCurrencyOptions("", "USD");
 registerServiceWorker();
 
 function registerServiceWorker() {
@@ -139,11 +154,41 @@ function lastDayOfMonth(year, monthIndex) {
 }
 
 function money(amount, currency = "USD") {
-  return new Intl.NumberFormat(currencyNames[currency] || "en-US", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 2
-  }).format(Number(amount || 0));
+  try {
+    return new Intl.NumberFormat(currencyNames[currency] || "en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2
+    }).format(Number(amount || 0));
+  } catch (_error) {
+    return `${currency} ${Number(amount || 0).toFixed(2)}`;
+  }
+}
+
+function renderPaymentCurrencyOptions(searchTerm = "", selectedCurrency = "") {
+  const select = $("#obligationCurrency");
+  if (!select) return;
+  const queryText = searchTerm.trim().toLowerCase();
+  const currentValue = selectedCurrency || select.value || "USD";
+  const matches = PAYMENT_CURRENCIES.filter(([code, name]) =>
+    !queryText || code.toLowerCase().includes(queryText) || name.toLowerCase().includes(queryText)
+  );
+  if (!queryText && currentValue && !matches.some(([code]) => code === currentValue)) {
+    const currentCurrency = PAYMENT_CURRENCIES.find(([code]) => code === currentValue);
+    if (currentCurrency) matches.unshift(currentCurrency);
+  }
+  select.innerHTML = "";
+  if (matches.length) {
+    matches.forEach(([code, name]) => select.append(new Option(`${code} — ${name}`, code)));
+    if (matches.some(([code]) => code === currentValue)) select.value = currentValue;
+  } else {
+    const emptyOption = new Option("No matching currencies", "");
+    emptyOption.disabled = true;
+    emptyOption.selected = true;
+    select.append(emptyOption);
+  }
+  const result = $("#currencySearchResult");
+  if (result) result.textContent = `${matches.length} currenc${matches.length === 1 ? "y" : "ies"} available`;
 }
 
 function setView(viewName) {
@@ -896,7 +941,7 @@ function renderMemberAccess() {
     field.disabled = !allowedToCreate;
   });
   $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", !allowedToCreate);
-  $("#familyManagementGrid").classList.toggle("single-action", !allowedToCreate);
+  $("#familyManagementGrid").classList.toggle("hidden", !allowedToCreate);
 
   const inviteFamily = $("#inviteFamily");
   const previousInviteFamily = inviteFamily.value;
@@ -906,6 +951,7 @@ function renderMemberAccess() {
     ? previousInviteFamily
     : manageableFamilies.find((family) => family.id === state.family?.id)?.id || manageableFamilies[0]?.id || "";
   const allowedToInvite = manageableFamilies.length > 0;
+  $("#inviteMemberButton").disabled = !allowedToInvite;
   $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowedToInvite;
   });
@@ -1016,12 +1062,12 @@ function occurrenceStatus(item, dueDate, paid, amount) {
   const due = parseDate(dueDate);
   const days = Math.ceil((due - todayDate) / 86400000);
   if (days < 0) return "overdue";
-  if (days <= Number(item.reminder_days_before || 3)) return "due-soon";
+  if (days <= Number(item.reminder_days_before ?? 3)) return "due-soon";
   return "upcoming";
 }
 
 function renderDashboard() {
-  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
+  const occurrences = selectedOccurrences();
   const due = occurrences.reduce((sum, item) => sum + item.amount, 0);
   const paid = occurrences.reduce((sum, item) => sum + item.paid, 0);
   const outstanding = occurrences.reduce((sum, item) => sum + item.outstanding, 0);
@@ -1067,27 +1113,22 @@ function renderPriorityDueList(occurrences) {
   const statusPriority = { overdue: 0, partial: 1, "due-soon": 2, upcoming: 3, paid: 4 };
   const monthGroups = [];
 
-  for (let monthOffset = 0; monthOffset <= 6 && monthGroups.length < 4; monthOffset += 1) {
+  for (let monthOffset = 0; monthOffset <= 6; monthOffset += 1) {
     const monthValue = offsetMonthValue(state.filterMonth, monthOffset);
     const monthOccurrences = (monthOffset === 0
       ? occurrences
       : generateOccurrences(state.paymentItems, state.paymentRecords, monthValue))
-      .filter((item) => item.status !== "paid")
-      .sort((a, b) => statusPriority[a.status] - statusPriority[b.status] || a.dueDate.localeCompare(b.dueDate))
-      .slice(0, monthOffset === 0 ? 6 : 4);
+      .filter((item) => state.filterStatus === "all" || item.status === state.filterStatus)
+      .sort((a, b) => statusPriority[a.status] - statusPriority[b.status] || a.dueDate.localeCompare(b.dueDate));
 
-    if (monthOccurrences.length) monthGroups.push({ monthOffset, monthValue, occurrences: monthOccurrences });
-  }
-
-  if (!monthGroups.length) {
-    list.innerHTML = emptyState("Nothing due", "Upcoming recurring payments will appear here grouped by month.");
-    return;
+    monthGroups.push({ monthOffset, monthValue, occurrences: monthOccurrences });
   }
 
   list.innerHTML = "";
   monthGroups.forEach((group, groupIndex) => {
     const section = document.createElement("section");
-    section.className = `due-month-group month-accent-${groupIndex % 4}`;
+    const isCurrentMonth = group.monthOffset === 0;
+    section.className = `due-month-group month-accent-${groupIndex % 4}${isCurrentMonth ? " expanded" : " collapsed"}`;
     section.dataset.month = group.monthValue;
     const monthTitle = parseDate(monthStart(group.monthValue)).toLocaleString("en", {
       month: "long",
@@ -1097,18 +1138,25 @@ function renderPriorityDueList(occurrences) {
       currency: occurrence.item.currency,
       amount: occurrence.outstanding
     })));
+    const summary = group.occurrences.length
+      ? `${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} · ${totalOutstanding} outstanding`
+      : "No payments scheduled";
     section.innerHTML = `
-      <header class="due-month-header">
+      <button class="due-month-header" type="button" ${isCurrentMonth ? "disabled" : "data-toggle-due-month"} aria-expanded="${isCurrentMonth ? "true" : "false"}" aria-controls="due-month-${group.monthValue}">
         <div>
           <span>${group.monthOffset === 0 ? "Selected month" : "Upcoming month"}</span>
           <h4>${escapeHtml(monthTitle)}</h4>
         </div>
-        <small title="${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} · ${escapeHtml(totalOutstanding)} outstanding">${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} &middot; ${escapeHtml(totalOutstanding)} outstanding</small>
-      </header>
-      <div class="due-month-items"></div>
+        <span class="due-month-summary"><small title="${escapeHtml(summary)}">${escapeHtml(summary)}</small>${isCurrentMonth ? "" : '<span class="accordion-chevron" aria-hidden="true">⌄</span>'}</span>
+      </button>
+      <div id="due-month-${group.monthValue}" class="due-month-items" ${isCurrentMonth ? "" : "hidden"}></div>
     `;
     const items = section.querySelector(".due-month-items");
-    group.occurrences.forEach((occurrence) => items.append(renderOccurrenceCard(occurrence, true)));
+    if (group.occurrences.length) {
+      group.occurrences.forEach((occurrence) => items.append(renderOccurrenceCard(occurrence, true, true)));
+    } else {
+      items.innerHTML = emptyState("No payments this month", "There are no scheduled payments for this month and filter.");
+    }
     list.append(section);
   });
 }
@@ -1251,7 +1299,7 @@ function renderObligationCard(item) {
         ${statusBadge(item.status || "active")}
         <span class="mini-badge">${escapeHtml(item.visibility === "family" ? "Family" : "Personal")}</span>
         <span class="mini-badge">${escapeHtml(member?.name || "No assigned member")}</span>
-        <span class="mini-badge">Remind ${item.reminder_days_before || 0} days before</span>
+        <span class="mini-badge">Daily reminders from ${item.reminder_days_before ?? 0} day${Number(item.reminder_days_before ?? 0) === 1 ? "" : "s"} before until due</span>
       </div>
     </div>
     <div class="record-side">
@@ -1312,9 +1360,40 @@ function myOccurrences(occurrences) {
   );
 }
 
-function renderOccurrenceCard(occurrence, withAction = false) {
+function renderOccurrenceCard(occurrence, withAction = false, collapsible = false) {
   const member = memberById(occurrence.item.responsible_member_id);
   const article = document.createElement("article");
+  if (collapsible) {
+    const detailsId = `occurrence-details-${occurrence.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+    article.className = "record-card occurrence-card";
+    article.innerHTML = `
+      <button class="occurrence-summary-button" type="button" data-toggle-occurrence-details aria-expanded="false" aria-controls="${detailsId}">
+        <span class="date-chip">
+          <strong>${parseDate(occurrence.dueDate).getDate()}</strong>
+          <span>${parseDate(occurrence.dueDate).toLocaleString("en", { month: "short" })}</span>
+        </span>
+        <span class="occurrence-summary-copy">
+          <strong class="occurrence-name" title="${escapeHtml(occurrence.item.name)}">${escapeHtml(occurrence.item.name)}</strong>
+          <span class="occurrence-summary-meta">Due ${escapeHtml(occurrence.dueDate)} · ${escapeHtml(occurrence.status)}</span>
+        </span>
+        <strong class="occurrence-amount" data-fit-text data-fit-min="10">${money(occurrence.amount, occurrence.item.currency)}</strong>
+        <span class="accordion-chevron" aria-hidden="true">⌄</span>
+      </button>
+      <div id="${detailsId}" class="occurrence-card-details" hidden>
+        <dl class="occurrence-facts">
+          <div><dt>Responsible</dt><dd>${escapeHtml(member?.name || "Household account")}</dd></div>
+          <div><dt>Category</dt><dd>${escapeHtml(occurrence.item.category)}</dd></div>
+          <div><dt>Paid</dt><dd>${money(occurrence.paid, occurrence.item.currency)}</dd></div>
+          <div><dt>Outstanding</dt><dd>${money(occurrence.outstanding, occurrence.item.currency)}</dd></div>
+        </dl>
+        <div class="occurrence-detail-footer">
+          <div class="badge-row">${statusBadge(occurrence.status)}<span class="mini-badge">Daily reminder from ${occurrence.item.reminder_days_before ?? 3} day${Number(occurrence.item.reminder_days_before ?? 3) === 1 ? "" : "s"} before</span></div>
+          ${withAction ? `<div class="row-actions"><button type="button" data-edit-obligation="${occurrence.item.id}">Edit</button>${occurrence.status !== "paid" ? `<button class="primary" type="button" data-record-payment="${occurrence.key}">Record payment</button>` : '<span class="paid-label">Paid in full</span>'}</div>` : ""}
+        </div>
+      </div>
+    `;
+    return article;
+  }
   article.className = "record-card";
   article.innerHTML = `
     <div class="date-chip">
@@ -1473,13 +1552,30 @@ function renderNotificationList(list, compact = false) {
 
 function notificationDueOccurrences() {
   const currentMonth = toMonthValue(new Date());
+  const todayValue = toDateValue(new Date());
+  const todayDate = parseDate(todayValue);
   return [
     ...generateOccurrences(state.paymentItems, state.paymentRecords, currentMonth),
     ...generateOccurrences(state.paymentItems, state.paymentRecords, offsetMonthValue(currentMonth, 1))
   ]
-    .filter((occurrence) => ["overdue", "due-soon", "partial"].includes(occurrence.status))
+    .filter((occurrence) => {
+      if (occurrence.outstanding <= 0) return false;
+      const daysUntilDue = Math.ceil((parseDate(occurrence.dueDate) - todayDate) / 86400000);
+      return daysUntilDue >= 0 && daysUntilDue <= Number(occurrence.item.reminder_days_before ?? 3);
+    })
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
     .slice(0, 8);
+}
+
+function openInviteMemberDialog() {
+  const button = $("#inviteMemberButton");
+  if (button.disabled) {
+    showToast("Only an active family owner with member access can send invitations.");
+    return;
+  }
+  const dialog = $("#inviteMemberDialog");
+  if (!dialog.open) dialog.showModal();
+  window.setTimeout(() => $("#inviteEmail").focus(), 0);
 }
 
 function openNotificationDialog() {
@@ -1515,6 +1611,7 @@ async function inviteMember(event) {
       })
     );
     $("#inviteForm").reset();
+    $("#inviteMemberDialog").close();
     await loadFamilyData();
     renderFamilyApp();
     showToast("Invitation sent.");
@@ -2076,7 +2173,8 @@ function startEditObligation(itemId) {
   $("#obligationSubmitButton").textContent = "Save changes";
   $("#obligationName").value = item.name;
   $("#obligationAmount").value = item.amount;
-  $("#obligationCurrency").value = item.currency;
+  $("#obligationCurrencySearch").value = "";
+  renderPaymentCurrencyOptions("", item.currency);
   $("#paymentScope").value = item.visibility || (item.family_id ? "family" : "personal");
   $("#obligationCategory").value = item.category;
   $("#obligationMember").value = item.responsible_member_id || "";
@@ -2097,7 +2195,8 @@ function resetObligationForm() {
   $("#recurrenceInterval").value = 1;
   $("#dueDay").value = 1;
   $("#reminderDays").value = 3;
-  $("#obligationCurrency").value = state.family?.currency || "USD";
+  $("#obligationCurrencySearch").value = "";
+  renderPaymentCurrencyOptions("", state.family?.currency || "USD");
   $("#paymentScope").value = state.family ? "family" : "personal";
   $("#obligationTitle").textContent = "Add payment";
   $("#obligationSubmitButton").textContent = "Add payment";
@@ -2513,34 +2612,6 @@ async function deleteRow(table, id, reload, message) {
   }
 }
 
-function exportCsv() {
-  const occurrences = selectedOccurrences();
-  if (!occurrences.length) {
-    showToast("Nothing to export for this filter.");
-    return;
-  }
-  const rows = [
-    ["Due date", "Payment", "Responsible", "Status", "Amount due", "Paid", "Outstanding"],
-    ...occurrences.map((occurrence) => [
-      occurrence.dueDate,
-      occurrence.item.name,
-      memberById(occurrence.item.responsible_member_id)?.name || "Household account",
-      occurrence.status,
-      occurrence.amount,
-      occurrence.paid,
-      occurrence.outstanding
-    ])
-  ];
-  const csv = rows.map((row) => row.map((value) => `"${`${value}`.replaceAll('"', '""')}"`).join(",")).join("\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `mushavo-budget-${state.filterMonth}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 function memberById(id) {
   return state.members.find((member) => member.id === id);
 }
@@ -2608,11 +2679,39 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.closePaymentDialog !== undefined) $("#recordPaymentDialog").close();
   if (event.target.closest("[data-open-payment-item-dialog]")) openPaymentItemDialog();
   if (event.target.closest("[data-close-payment-item-dialog]")) $("#paymentItemDialog").close();
+  if (event.target.closest("[data-open-invite-dialog]")) openInviteMemberDialog();
+  if (event.target.closest("[data-close-invite-dialog]")) $("#inviteMemberDialog").close();
   if (event.target.dataset.closeConfirmDialog !== undefined) $("#confirmDialog").close();
   if (event.target.closest("[data-close-notifications]")) $("#notificationDialog").close();
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
   if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
   if (event.target.closest("[data-open-notifications]")) openNotificationDialog();
+
+  const dueMonthToggle = event.target.closest("[data-toggle-due-month]");
+  if (dueMonthToggle) {
+    const section = dueMonthToggle.closest(".due-month-group");
+    const items = section?.querySelector(".due-month-items");
+    if (section && items) {
+      const expanded = dueMonthToggle.getAttribute("aria-expanded") === "true";
+      dueMonthToggle.setAttribute("aria-expanded", `${!expanded}`);
+      items.hidden = expanded;
+      section.classList.toggle("expanded", !expanded);
+      section.classList.toggle("collapsed", expanded);
+      scheduleDashboardTextFit();
+    }
+  }
+
+  const occurrenceToggle = event.target.closest("[data-toggle-occurrence-details]");
+  if (occurrenceToggle) {
+    const details = document.getElementById(occurrenceToggle.getAttribute("aria-controls"));
+    if (details) {
+      const expanded = occurrenceToggle.getAttribute("aria-expanded") === "true";
+      occurrenceToggle.setAttribute("aria-expanded", `${!expanded}`);
+      details.hidden = expanded;
+      occurrenceToggle.closest(".occurrence-card")?.classList.toggle("expanded", !expanded);
+      scheduleDashboardTextFit();
+    }
+  }
   if (event.target.dataset.retryLoad !== undefined) {
     setView("loading");
     await loadApp().catch((error) => {
@@ -2802,10 +2901,16 @@ $("#paymentForm").addEventListener("submit", addPlatformPayment);
 $("#adminNoteForm").addEventListener("submit", saveAdminNote);
 $("#cancelEditObligationButton").addEventListener("click", () => $("#paymentItemDialog").close());
 $("#paymentItemDialog").addEventListener("close", resetObligationForm);
+$("#inviteMemberDialog").addEventListener("close", () => {
+  $("#inviteEmail").value = "";
+  $("#inviteRole").value = "Adult";
+});
 $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#suspendedSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
-$("#exportCsvButton").addEventListener("click", exportCsv);
+$("#obligationCurrencySearch").addEventListener("input", (event) => {
+  renderPaymentCurrencyOptions(event.target.value, $("#obligationCurrency").value);
+});
 $("#paymentHead").addEventListener("change", (event) => {
   const option = event.target.selectedOptions[0];
   const amount = Number(option?.dataset.amount || 0);

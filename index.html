@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=27" />
+    <link rel="stylesheet" href="styles.css?v=28" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=33"></script>
+    <script type="module" src="app.js?v=34"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -129,7 +129,6 @@
           <header class="app-nav">
             <div class="sidebar-brand">
               <img src="assets/ledger-mark.svg" alt="" width="52" height="52" />
-              <button class="icon-button drawer-close" type="button" aria-label="Close menu" data-close-drawer>Close</button>
             </div>
             <div class="sidebar-account">
               <p class="eyebrow">Admin console</p>
@@ -276,7 +275,6 @@
           <header class="app-nav">
             <div class="sidebar-brand">
               <img src="assets/ledger-mark.svg" alt="" width="52" height="52" />
-              <button class="icon-button drawer-close" type="button" aria-label="Close menu" data-close-drawer>Close</button>
             </div>
             <div class="sidebar-account">
               <p class="eyebrow">Family workspace</p>
@@ -300,7 +298,6 @@
                 <span>Notifications</span>
                 <span class="notification-count hidden" data-notification-count aria-hidden="true">0</span>
               </button>
-              <button id="exportCsvButton" type="button">Export CSV</button>
               <button id="signOutButton" type="button">Sign out</button>
             </div>
             <div class="sidebar-footer">
@@ -356,7 +353,7 @@
           </section>
 
           <section class="screen-panel hidden" data-family-panel="members">
-            <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2><p class="muted-copy">Manage the selected family, its people, and invitations.</p></div></header>
+            <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2><p class="muted-copy">Manage the selected family, its people, and invitations.</p></div><button id="inviteMemberButton" class="primary" type="button" data-open-invite-dialog>Invite member</button></header>
             <section id="selectedFamilyPanel" class="family-overview hidden" aria-labelledby="selectedFamilyTitle">
               <div class="family-overview-copy"><p class="eyebrow">Selected family</p><h3 id="selectedFamilyTitle">Family details</h3><p id="selectedFamilyMeta" class="muted-copy"></p></div>
               <div class="family-overview-stats" aria-label="Selected family summary">
@@ -379,19 +376,8 @@
                   </form>
                 </section>
               </div>
-              <div class="family-action-column">
-                <section id="memberAccessNotice" class="notice hidden"><strong>Family-member access is locked.</strong> Only an active family owner can send invitations. Invited users do not need an active membership, but they must already have a Mushavo Budget account.</section>
-                <section class="tool-panel" aria-labelledby="inviteTitle">
-                  <div class="panel-heading"><p class="eyebrow">Invite member</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">The user receives an in-app invitation to accept or reject.</p></div>
-                  <form id="inviteForm" class="form-grid compact-form-grid">
-                    <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
-                    <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
-                    <label class="full" for="inviteEmail">Registered email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
-                    <button class="primary full" type="submit">Send invitation</button>
-                  </form>
-                </section>
-              </div>
             </section>
+            <section id="memberAccessNotice" class="notice hidden"><strong>Family-member access is locked.</strong> Only an active family owner can send invitations. Invited users do not need an active membership, but they must already have a Mushavo Budget account.</section>
             <section class="family-roster-grid">
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3><p class="muted-copy">Active people in the selected family.</p></div><div id="membersList" class="record-list"></div></section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Invitations</p><h3>Join requests and invites</h3><p class="muted-copy">Track invitations sent and received.</p></div><div id="invitationsList" class="record-list"></div></section>
@@ -441,20 +427,30 @@
       </section>
     </main>
 
+    <dialog id="inviteMemberDialog" class="payment-dialog invite-member-dialog" aria-labelledby="inviteTitle">
+      <form id="inviteForm" class="form-grid compact-form-grid">
+        <div class="panel-heading inline full"><div><p class="eyebrow">Invite member</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">They will receive an in-app invitation to accept or reject. They must already have a Mushavo Budget account.</p></div><button class="icon-button" type="button" data-close-invite-dialog aria-label="Close invitation form">Close</button></div>
+        <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
+        <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
+        <label class="full" for="inviteEmail">Registered email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
+        <div class="button-row full"><button class="primary" type="submit">Send invitation</button><button type="button" data-close-invite-dialog>Cancel</button></div>
+      </form>
+    </dialog>
+
     <dialog id="paymentItemDialog" class="payment-dialog payment-item-dialog" aria-labelledby="obligationTitle">
       <form id="obligationForm" class="form-grid">
         <div class="panel-heading inline full"><div><p class="eyebrow">Payment details</p><h3 id="obligationTitle">Add payment</h3></div><button class="icon-button" type="button" data-close-payment-item-dialog aria-label="Close payment form">Close</button></div>
         <label class="full" for="obligationName">Payment name<input id="obligationName" required placeholder="Rent, electricity, school fees..." /></label>
         <label for="paymentScope">Show this payment in<select id="paymentScope"><option value="personal">Personal budget</option><option value="family">Family budget</option></select></label>
         <label for="obligationAmount">Amount due<input id="obligationAmount" type="number" min="0.01" step="0.01" required placeholder="1000" /></label>
-        <label for="obligationCurrency">Currency<select id="obligationCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+        <fieldset class="currency-picker full"><legend>Currency</legend><label for="obligationCurrencySearch">Search currencies<input id="obligationCurrencySearch" type="search" autocomplete="off" placeholder="Search USD, dollar, rand..." /></label><label for="obligationCurrency">Select currency<select id="obligationCurrency" required></select></label><small id="currencySearchResult" aria-live="polite"></small></fieldset>
         <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
         <label for="obligationMember">Responsible member<select id="obligationMember"></select></label>
         <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option></select></label>
         <label for="recurrenceInterval">Every N months<input id="recurrenceInterval" type="number" min="1" max="24" value="1" /></label>
-        <label for="dueDay">Due day<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
+        <label for="dueDay">Due day (calendar day payment must be paid)<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
         <label for="startDate">Start date<input id="startDate" type="date" required /></label>
-        <label for="reminderDays">Remind days before<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
+        <label for="reminderDays">Remind days before (daily until due date)<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
         <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
         <div class="button-row full"><button id="obligationSubmitButton" class="primary" type="submit">Add payment</button><button id="cancelEditObligationButton" type="button">Cancel</button></div>
       </form>

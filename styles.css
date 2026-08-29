@@ -698,8 +698,26 @@ code {
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
   min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 16px;
   padding: 2px 4px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.due-month-header:hover {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.42);
+  box-shadow: none;
+}
+
+.due-month-header:disabled {
+  cursor: default;
+  opacity: 1;
 }
 
 .due-month-header > div {
@@ -731,14 +749,149 @@ code {
   text-align: right;
 }
 
+.due-month-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+  max-width: 58%;
+}
+
+.due-month-summary small {
+  max-width: 100%;
+}
+
+.accordion-chevron {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  color: var(--muted-strong);
+  font-size: 1.15rem;
+  line-height: 1;
+  transition: transform 180ms ease;
+}
+
+[aria-expanded="true"] > .accordion-chevron,
+[aria-expanded="true"] .accordion-chevron {
+  transform: rotate(180deg);
+}
+
 .due-month-items {
   display: grid;
   gap: 10px;
 }
 
+.due-month-items[hidden],
+.occurrence-card-details[hidden] {
+  display: none;
+}
+
 .due-month-items .record-card {
   border-color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.78);
+}
+
+.occurrence-card {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+}
+
+.occurrence-summary-button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  padding: 13px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.occurrence-summary-button:hover {
+  border-color: transparent;
+  background: rgba(240, 253, 250, 0.52);
+  box-shadow: none;
+}
+
+.occurrence-summary-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.occurrence-summary-copy .occurrence-name,
+.occurrence-summary-meta,
+.occurrence-summary-button .occurrence-amount {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.occurrence-summary-meta {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.occurrence-summary-button .occurrence-amount {
+  max-width: 150px;
+  font-variant-numeric: tabular-nums;
+}
+
+.occurrence-card-details {
+  display: grid;
+  gap: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 13px;
+  background: rgba(248, 250, 252, 0.66);
+}
+
+.occurrence-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.occurrence-facts > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border-radius: 12px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.occurrence-facts dt {
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 800;
+}
+
+.occurrence-facts dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.occurrence-detail-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
 }
 
 .record-card,
@@ -1101,6 +1254,34 @@ code {
   width: min(760px, calc(100vw - 32px));
 }
 
+.invite-member-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.currency-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  padding: 14px;
+}
+
+.currency-picker legend {
+  padding: 0 6px;
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.currency-picker > small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
 .family-overview {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) auto minmax(180px, 0.55fr);
@@ -1172,9 +1353,16 @@ code {
 .family-management-grid,
 .family-roster-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 22px;
   align-items: start;
+}
+
+.family-management-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.family-roster-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .family-creation-notice {
@@ -1794,6 +1982,12 @@ input[type="file"] {
     text-align: left;
   }
 
+  .due-month-summary {
+    width: 100%;
+    max-width: 100%;
+    justify-content: space-between;
+  }
+
   .due-month-header span,
   .due-month-header h4,
   .due-month-header small {
@@ -1808,6 +2002,57 @@ input[type="file"] {
     gap: 9px;
     border-radius: 17px;
     padding: 10px;
+  }
+
+  .due-month-items .occurrence-card {
+    display: block;
+    padding: 0;
+  }
+
+  .occurrence-summary-button {
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .occurrence-summary-button > .accordion-chevron {
+    grid-column: 3;
+    grid-row: 2;
+    width: 20px;
+    height: 20px;
+  }
+
+  .occurrence-summary-button .occurrence-amount {
+    grid-column: 3;
+    grid-row: 1;
+    max-width: 105px;
+    font-size: clamp(0.72rem, 3.3vw, 0.88rem);
+    text-align: right;
+  }
+
+  .occurrence-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .occurrence-detail-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .occurrence-detail-footer .row-actions {
+    width: 100%;
+  }
+
+  .occurrence-detail-footer .row-actions button {
+    flex: 1 1 120px;
+  }
+
+  .currency-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .currency-picker > small {
+    grid-column: auto;
   }
 
   .due-month-items .date-chip {
@@ -1886,6 +2131,20 @@ input[type="file"] {
 
   .due-month-items .row-actions button[data-edit-obligation] {
     display: none;
+  }
+
+  .due-month-header .accordion-chevron {
+    width: 26px;
+  }
+
+  .due-month-items .occurrence-detail-footer .row-actions {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .due-month-items .occurrence-detail-footer .row-actions button {
+    display: inline-flex;
+    flex: 1 1 120px;
   }
 
   .workload-card {
