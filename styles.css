@@ -1177,6 +1177,18 @@ code {
   align-items: start;
 }
 
+.family-creation-notice {
+  margin-bottom: 12px;
+}
+
+.family-management-grid.single-action {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.family-management-grid.single-action .family-create-column {
+  display: none;
+}
+
 .family-action-column {
   display: grid;
   gap: 12px;

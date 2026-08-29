@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=26" />
+    <link rel="stylesheet" href="styles.css?v=27" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=32"></script>
+    <script type="module" src="app.js?v=33"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -366,9 +366,9 @@
               </div>
               <div class="family-overview-actions"><button class="danger" type="button" data-delete-family>Delete family</button><small>Permanently removes this family and all of its related data.</small></div>
             </section>
-            <section class="family-management-grid">
-              <div class="family-action-column">
-                <section id="familyCreationNotice" class="notice hidden"><strong id="familyCreationNoticeTitle">Active membership required.</strong><span id="familyCreationNoticeText">The Mushavo Budget admin must activate family access before you can create a family.</span></section>
+            <section id="familyCreationNotice" class="notice family-creation-notice hidden"><strong id="familyCreationNoticeTitle">Active membership required.</strong><span id="familyCreationNoticeText">The Mushavo Budget admin must activate family access before you can create a family.</span></section>
+            <section id="familyManagementGrid" class="family-management-grid">
+              <div class="family-action-column family-create-column">
                 <section class="tool-panel" aria-labelledby="createFamilyTitle">
                   <div class="panel-heading"><p class="eyebrow">New family</p><h3 id="createFamilyTitle">Create another family</h3><p class="muted-copy">Your admin controls how many families your account may own.</p></div>
                   <form id="memberFamilyForm" class="form-grid compact-form-grid">

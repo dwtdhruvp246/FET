@@ -185,6 +185,9 @@ function friendlyMessage(message = "") {
   if (text.includes("FAMILY_LIMIT_REACHED")) {
     return "You have reached your family limit. Ask the Mushavo Budget admin to increase it.";
   }
+  if (text.includes("PERSONAL_PAYMENT_LIMIT_REACHED")) {
+    return "Free accounts can keep up to 5 active personal payments. Family payments remain unlimited.";
+  }
   if (text.includes("MEMBER_MANAGEMENT_ACCESS_REQUIRED")) {
     return "Your active membership does not currently include permission to manage family members.";
   }
@@ -893,6 +896,7 @@ function renderMemberAccess() {
     field.disabled = !allowedToCreate;
   });
   $("#memberFamilyForm").closest(".tool-panel").classList.toggle("hidden", !allowedToCreate);
+  $("#familyManagementGrid").classList.toggle("single-action", !allowedToCreate);
 
   const inviteFamily = $("#inviteFamily");
   const previousInviteFamily = inviteFamily.value;
@@ -1392,11 +1396,13 @@ function renderInvitations() {
 
 function renderSettings() {
   const plan = hasPaidPlan() ? "Starter - Active" : hasJoinableFamilyInvitation() ? "Family member - Free" : "Active - Free";
-  const paymentCount = userCreatedPaymentCount();
+  const paymentCount = userCreatedPersonalPaymentCount();
   const canManageAnyFamily = ownedFamilies().some((family) => canManageMembersForFamily(family.id));
   $("#settingsPlanBadge").textContent = plan;
   $("#settingsPlanBadge").className = `mini-badge ${badgeClass(plan)}`;
-  $("#settingsPaymentLimit").textContent = hasPaidPlan() ? "Unlimited payments unlocked" : `${paymentCount}/5 free payments used`;
+  $("#settingsPaymentLimit").textContent = hasPaidPlan()
+    ? "Unlimited personal and family payments"
+    : `${paymentCount}/5 personal payments used · family payments unlimited`;
   $("#settingsMemberAccess").textContent = canManageAnyFamily ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
 }
@@ -2005,8 +2011,12 @@ async function saveObligation(event) {
     showToast("Create or join a family before saving a family payment.");
     return;
   }
-  if (!state.editingObligationId && !hasPaidPlan() && userCreatedPaymentCount() >= 5) {
-    showToast("Free accounts can add up to 5 payments. Ask the admin to unlock your plan for more.");
+  const editingItem = state.paymentItems.find((item) => item.id === state.editingObligationId);
+  const usesNewPersonalSlot = scope === "personal" && (
+    !editingItem || editingItem.visibility !== "personal" || editingItem.status === "inactive"
+  );
+  if (!hasPaidPlan() && usesNewPersonalSlot && userCreatedPersonalPaymentCount() >= 5) {
+    showToast("Free accounts can keep up to 5 active personal payments. Family payments remain unlimited.");
     return;
   }
   const payload = {
@@ -2098,9 +2108,13 @@ function hasPaidPlan() {
   return hasActiveMembership();
 }
 
-function userCreatedPaymentCount() {
+function userCreatedPersonalPaymentCount() {
   const userId = state.session?.user?.id;
-  return state.paymentItems.filter((item) => item.created_by === userId && item.status !== "inactive").length;
+  return state.paymentItems.filter((item) =>
+    item.created_by === userId &&
+    item.visibility === "personal" &&
+    item.status !== "inactive"
+  ).length;
 }
 
 function openRecordPayment(key) {
