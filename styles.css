@@ -1093,6 +1093,347 @@ code {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.payments-list-panel {
+  margin-top: 22px;
+}
+
+.payment-item-dialog {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.family-overview {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto minmax(180px, 0.55fr);
+  align-items: center;
+  gap: 24px;
+  margin: 22px 0;
+  border: 1px solid rgba(15, 118, 110, 0.18);
+  border-radius: 24px;
+  padding: 22px;
+  background: linear-gradient(135deg, rgba(209, 250, 229, 0.68), rgba(255, 255, 255, 0.68));
+  box-shadow: var(--shadow-tight);
+}
+
+.family-overview-copy,
+.family-overview-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.family-overview-copy h3 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.family-overview-copy p,
+.family-overview-actions small {
+  margin: 0;
+}
+
+.family-overview-actions {
+  justify-items: end;
+  text-align: right;
+}
+
+.family-overview-actions small {
+  max-width: 240px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.family-overview-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.family-overview-stats > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border-left: 1px solid rgba(15, 118, 110, 0.18);
+  padding: 5px 14px;
+}
+
+.family-overview-stats strong {
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.family-overview-stats span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.family-management-grid,
+.family-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+  align-items: start;
+}
+
+.family-action-column {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.family-roster-grid {
+  margin-top: 22px;
+}
+
+.compact-form-grid {
+  align-items: end;
+}
+
+.report-topbar {
+  align-items: flex-end;
+  margin-bottom: 22px;
+}
+
+.report-month-control {
+  width: min(220px, 100%);
+}
+
+.report-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.report-kpi {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 20px;
+  padding: 17px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 9px 22px rgba(15, 23, 42, 0.055);
+}
+
+.report-kpi::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  background: linear-gradient(180deg, var(--primary), #22d3ee);
+  content: "";
+}
+
+.report-kpi span,
+.report-kpi small {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-kpi strong {
+  display: block;
+  margin: 9px 0 7px;
+  overflow: hidden;
+  font-size: clamp(1.05rem, 2vw, 1.6rem);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.report-history-panel {
+  grid-column: 1 / -1;
+}
+
+.collection-progress {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.collection-progress-ring {
+  --progress: 0deg;
+  position: relative;
+  display: grid;
+  place-content: center;
+  width: 118px;
+  height: 118px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: conic-gradient(var(--primary) var(--progress), rgba(148, 163, 184, 0.17) 0);
+  text-align: center;
+}
+
+.collection-progress-ring::after {
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: #f8fffd;
+  content: "";
+}
+
+.collection-progress-ring strong,
+.collection-progress-ring span {
+  position: relative;
+  z-index: 1;
+}
+
+.collection-progress-ring strong {
+  font-size: 1.45rem;
+}
+
+.collection-progress-ring span {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.collection-progress-copy {
+  min-width: 0;
+}
+
+.collection-progress-copy > strong {
+  font-size: 1.05rem;
+}
+
+.collection-progress-copy p {
+  margin: 6px 0 0;
+}
+
+.status-analysis-list,
+.trend-list {
+  display: grid;
+  gap: 11px;
+}
+
+.status-analysis-row {
+  display: grid;
+  grid-template-columns: 94px minmax(0, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-analysis-row > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.status-analysis-row small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.status-analysis-row.partial .meter span { background: #f59e0b; }
+.status-analysis-row.overdue .meter span { background: #ef4444; }
+.status-analysis-row.upcoming .meter span { background: #0ea5e9; }
+
+.trend-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 42px 34px;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.76rem;
+}
+
+.trend-row > span,
+.trend-row > strong {
+  font-weight: 800;
+}
+
+.trend-row > small {
+  color: var(--muted);
+  text-align: right;
+}
+
+.report-context-list,
+.account-details-list {
+  margin: 0;
+}
+
+.report-context-list > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 15px 0;
+}
+
+.report-context-list > div:last-child {
+  border-bottom: 0;
+}
+
+.report-context-list dt {
+  color: var(--muted-strong);
+  font-weight: 700;
+}
+
+.report-context-list dd {
+  margin: 0;
+  font-weight: 900;
+  text-align: right;
+}
+
+.account-details-panel {
+  margin: 20px 0 24px;
+  padding: 4px 2px 0;
+}
+
+.account-detail-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.38fr) minmax(0, 1fr);
+  gap: 24px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 17px 2px;
+}
+
+.account-detail-row:first-child {
+  border-top: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+.account-detail-row dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.account-detail-row dd {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+
+.account-detail-row dd strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.account-detail-row dd small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .notification-deep-link-target {
   border-color: rgba(13, 148, 136, 0.72);
   box-shadow: 0 0 0 4px rgba(45, 212, 191, 0.18), var(--shadow);
@@ -1241,6 +1582,22 @@ input[type="file"] {
   .content-grid {
     grid-template-columns: 1fr;
   }
+
+  .family-overview {
+    grid-template-columns: minmax(220px, 1fr) auto;
+  }
+
+  .family-overview-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 680px) {
@@ -1266,6 +1623,78 @@ input[type="file"] {
   .stats-grid,
   .form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .family-management-grid,
+  .family-roster-grid,
+  .report-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .family-overview {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 17px;
+  }
+
+  .family-overview-stats {
+    width: 100%;
+  }
+
+  .family-overview-stats > div:first-child {
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .family-overview-actions {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .family-overview-actions button {
+    width: 100%;
+  }
+
+  .report-history-panel {
+    grid-column: auto;
+  }
+
+  .report-topbar {
+    align-items: stretch;
+  }
+
+  .report-month-control {
+    width: 100%;
+  }
+
+  .report-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .report-kpi {
+    padding: 13px;
+  }
+
+  .report-kpi strong {
+    font-size: clamp(0.92rem, 4.2vw, 1.18rem);
+  }
+
+  .report-kpi span,
+  .report-kpi small {
+    font-size: 0.66rem;
+  }
+
+  .collection-progress {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .account-detail-row {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 14px 2px;
   }
 
   .record-card,

@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/ledger-mark.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=25" />
+    <link rel="stylesheet" href="styles.css?v=26" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=31"></script>
+    <script type="module" src="app.js?v=32"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -338,28 +338,11 @@
           </section>
 
           <section class="screen-panel hidden" data-family-panel="payments">
-            <header class="topbar"><div><p class="eyebrow">Payment items</p><h2>Payments</h2></div></header>
-            <section class="content-grid">
-              <section class="tool-panel" aria-labelledby="obligationTitle">
-                <div class="panel-heading inline"><div><p class="eyebrow">Create</p><h3 id="obligationTitle">Add payment</h3></div><button id="cancelEditObligationButton" class="hidden" type="button">Cancel edit</button></div>
-                <form id="obligationForm" class="form-grid">
-                  <label class="full" for="obligationName">Payment name<input id="obligationName" required placeholder="Rent, electricity, school fees..." /></label>
-                  <label for="paymentScope">Show this payment in<select id="paymentScope"><option value="personal">Personal budget</option><option value="family">Family budget</option></select></label>
-                  <label for="obligationAmount">Amount due<input id="obligationAmount" type="number" min="0.01" step="0.01" required placeholder="1000" /></label>
-                  <label for="obligationCurrency">Currency<select id="obligationCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
-                  <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
-                  <label for="obligationMember">Responsible member<select id="obligationMember"></select></label>
-                  <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option></select></label>
-                  <label for="recurrenceInterval">Every N months<input id="recurrenceInterval" type="number" min="1" max="24" value="1" /></label>
-                  <label for="dueDay">Due day<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
-                  <label for="startDate">Start date<input id="startDate" type="date" required /></label>
-                  <label for="reminderDays">Remind days before<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
-                  <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
-                  <button id="obligationSubmitButton" class="primary full" type="submit">Save payment</button>
-                </form>
-              </section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Active list</p><h3>Payments to track</h3></div><div id="obligationsList" class="record-list"></div></section>
-            </section>
+            <header class="topbar">
+              <div><p class="eyebrow">Payment items</p><h2>Payments</h2><p class="muted-copy">Manage recurring and once-off payments from one place.</p></div>
+              <button class="primary" type="button" data-open-payment-item-dialog>Add payment</button>
+            </header>
+            <section class="ledger-panel payments-list-panel"><div class="panel-heading"><p class="eyebrow">Active list</p><h3>Payments to track</h3></div><div id="obligationsList" class="record-list"></div></section>
           </section>
 
           <section class="screen-panel hidden" data-family-panel="schedule">
@@ -373,65 +356,82 @@
           </section>
 
           <section class="screen-panel hidden" data-family-panel="members">
-            <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2></div></header>
-            <section class="content-grid">
-              <section id="familyCreationNotice" class="notice hidden">
-                <strong id="familyCreationNoticeTitle">Active membership required.</strong>
-                <span id="familyCreationNoticeText">The Mushavo Budget admin must activate family access before you can create a family.</span>
-              </section>
-              <section class="tool-panel" aria-labelledby="createFamilyTitle">
-                <div class="panel-heading"><p class="eyebrow">Family details</p><h3 id="createFamilyTitle">Create another family</h3><p class="muted-copy">Add the family name, expected monthly payments, and preferred currency. Your admin controls how many families you can own.</p></div>
-                <form id="memberFamilyForm" class="form-grid">
-                  <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
-                  <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
-                  <label for="memberFamilyCurrency">Currency<select id="memberFamilyCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
-                  <button class="primary full" type="submit">Create family</button>
-                </form>
-              </section>
-              <section id="selectedFamilyPanel" class="tool-panel hidden" aria-labelledby="selectedFamilyTitle">
-                <div class="panel-heading"><p class="eyebrow">Selected family</p><h3 id="selectedFamilyTitle">Family details</h3><p id="selectedFamilyMeta" class="muted-copy"></p></div>
-                <button class="danger" type="button" data-delete-family>Delete this family</button>
-                <p class="muted-copy">Deleting a family permanently removes its members, invitations, payment items, payment records, notifications, budgets, and expenses from the database.</p>
-              </section>
-              <section id="memberAccessNotice" class="notice hidden">
-                <strong>Family-member access is locked.</strong>
-                Only an active family owner can send invitations. Invited users do not need an active membership, but they must already have a Mushavo Budget account.
-              </section>
-              <section class="tool-panel" aria-labelledby="inviteTitle">
-                <div class="panel-heading"><p class="eyebrow">Invite</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">We will check the email, then send an in-app invitation that the user can accept or reject.</p></div>
-                <form id="inviteForm" class="form-grid">
-                  <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
-                  <label for="inviteEmail">Email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
-                  <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
-                  <button class="primary full" type="submit">Send invite</button>
-                </form>
-              </section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3></div><div id="membersList" class="record-list"></div></section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Invitations</p><h3>Join requests and invites</h3></div><div id="invitationsList" class="record-list"></div></section>
+            <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2><p class="muted-copy">Manage the selected family, its people, and invitations.</p></div></header>
+            <section id="selectedFamilyPanel" class="family-overview hidden" aria-labelledby="selectedFamilyTitle">
+              <div class="family-overview-copy"><p class="eyebrow">Selected family</p><h3 id="selectedFamilyTitle">Family details</h3><p id="selectedFamilyMeta" class="muted-copy"></p></div>
+              <div class="family-overview-stats" aria-label="Selected family summary">
+                <div><strong id="selectedFamilyMemberCount">0</strong><span>Members</span></div>
+                <div><strong id="selectedFamilyPaymentCount">0</strong><span>Payments</span></div>
+                <div><strong id="selectedFamilyInviteCount">0</strong><span>Pending invites</span></div>
+              </div>
+              <div class="family-overview-actions"><button class="danger" type="button" data-delete-family>Delete family</button><small>Permanently removes this family and all of its related data.</small></div>
+            </section>
+            <section class="family-management-grid">
+              <div class="family-action-column">
+                <section id="familyCreationNotice" class="notice hidden"><strong id="familyCreationNoticeTitle">Active membership required.</strong><span id="familyCreationNoticeText">The Mushavo Budget admin must activate family access before you can create a family.</span></section>
+                <section class="tool-panel" aria-labelledby="createFamilyTitle">
+                  <div class="panel-heading"><p class="eyebrow">New family</p><h3 id="createFamilyTitle">Create another family</h3><p class="muted-copy">Your admin controls how many families your account may own.</p></div>
+                  <form id="memberFamilyForm" class="form-grid compact-form-grid">
+                    <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
+                    <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
+                    <label for="memberFamilyCurrency">Currency<select id="memberFamilyCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+                    <button class="primary full" type="submit">Create family</button>
+                  </form>
+                </section>
+              </div>
+              <div class="family-action-column">
+                <section id="memberAccessNotice" class="notice hidden"><strong>Family-member access is locked.</strong> Only an active family owner can send invitations. Invited users do not need an active membership, but they must already have a Mushavo Budget account.</section>
+                <section class="tool-panel" aria-labelledby="inviteTitle">
+                  <div class="panel-heading"><p class="eyebrow">Invite member</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">The user receives an in-app invitation to accept or reject.</p></div>
+                  <form id="inviteForm" class="form-grid compact-form-grid">
+                    <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
+                    <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
+                    <label class="full" for="inviteEmail">Registered email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
+                    <button class="primary full" type="submit">Send invitation</button>
+                  </form>
+                </section>
+              </div>
+            </section>
+            <section class="family-roster-grid">
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3><p class="muted-copy">Active people in the selected family.</p></div><div id="membersList" class="record-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Invitations</p><h3>Join requests and invites</h3><p class="muted-copy">Track invitations sent and received.</p></div><div id="invitationsList" class="record-list"></div></section>
             </section>
           </section>
 
           <section class="screen-panel hidden" data-family-panel="reports">
-            <header class="topbar"><div><p class="eyebrow">Reports</p><h2>Payment reliability</h2></div></header>
-            <section class="stats-grid" aria-label="Reports summary">
-              <article class="stat-card"><span class="stat-label">Paid rate</span><strong id="paidRate">0%</strong><small>Selected month</small></article>
-              <article class="stat-card"><span class="stat-label">Partial payments</span><strong id="partialCount">0</strong><small>Need completion</small></article>
-              <article class="stat-card"><span class="stat-label">Active obligations</span><strong id="activeObligationCount">0</strong><small>Recurring items</small></article>
-              <article class="stat-card"><span class="stat-label">Year expected</span><strong id="yearExpected">$0.00</strong><small>Based on active items</small></article>
+            <header class="topbar report-topbar">
+              <div><p class="eyebrow">Reports</p><h2>Payment analytics</h2><p id="reportPeriodLabel" class="muted-copy">Performance for the selected month.</p></div>
+              <label class="report-month-control" for="reportMonthFilter">Report month<input id="reportMonthFilter" type="month" /></label>
+            </header>
+            <section class="report-summary-grid" aria-label="Monthly payment summary">
+              <article class="report-kpi"><span>Payment completion</span><strong id="paidRate">0%</strong><small id="reportCompletionCaption">0 of 0 payments completed</small></article>
+              <article class="report-kpi"><span>Total due</span><strong id="reportDueTotal">$0.00</strong><small>For the selected month</small></article>
+              <article class="report-kpi"><span>Total paid</span><strong id="reportPaidTotal">$0.00</strong><small>Recorded payments</small></article>
+              <article class="report-kpi"><span>Outstanding</span><strong id="reportOutstandingTotal">$0.00</strong><small id="reportOverdueCaption">0 overdue payments</small></article>
             </section>
-            <section class="content-grid">
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due by category</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
+            <section class="report-analysis-grid">
+              <section class="ledger-panel report-collection-panel">
+                <div class="panel-heading"><p class="eyebrow">Collection</p><h3>Monthly progress</h3></div>
+                <div class="collection-progress"><div class="collection-progress-ring" id="collectionProgressRing"><strong id="collectionProgressValue">0%</strong><span>complete</span></div><div class="collection-progress-copy"><strong id="collectionProgressTitle">No payments due</strong><p id="collectionProgressText" class="muted-copy">Add a payment to begin tracking monthly reliability.</p></div></div>
+                <div id="reportStatusList" class="status-analysis-list"></div>
+              </section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Six-month view</p><h3>Reliability trend</h3><p class="muted-copy">The percentage of payment occurrences completed each month.</p></div><div id="reportTrendList" class="trend-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due and outstanding</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
+              <section class="ledger-panel report-context-panel"><div class="panel-heading"><p class="eyebrow">Portfolio context</p><h3>Payment commitments</h3></div><dl class="report-context-list"><div><dt>Partial payments</dt><dd id="partialCount">0</dd></div><div><dt>Active payment items</dt><dd id="activeObligationCount">0</dd></div><div><dt>Estimated annual total</dt><dd id="yearExpected">$0.00</dd></div></dl></section>
+              <section class="ledger-panel report-history-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Recent payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
             </section>
           </section>
 
           <section class="screen-panel hidden" data-family-panel="settings">
             <header class="topbar"><div><p class="eyebrow">Settings</p><h2>Account and notifications</h2></div></header>
-            <section class="stats-grid" aria-label="Account status">
-              <article class="stat-card"><span class="stat-label">Plan</span><strong id="settingsPlanBadge" class="mini-badge">Active - Free</strong><small id="settingsPaymentLimit">0/5 free payments used</small></article>
-              <article class="stat-card"><span class="stat-label">Member access</span><strong id="settingsMemberAccess">Locked</strong><small>Admin unlock controls this feature</small></article>
-              <article class="stat-card"><span class="stat-label">Signed in as</span><strong id="settingsEmail">-</strong><small>Your login email</small></article>
-              <article class="stat-card"><span class="stat-label">Alerts</span><strong id="notificationCount">0</strong><small>Unread messages and due reminders</small></article>
+            <section class="account-details-panel" aria-labelledby="accountDetailsTitle">
+              <div class="panel-heading"><p class="eyebrow">Account details</p><h3 id="accountDetailsTitle">Your account</h3></div>
+              <dl class="account-details-list">
+                <div class="account-detail-row"><dt>Plan</dt><dd><span id="settingsPlanBadge" class="mini-badge">Active - Free</span><small id="settingsPaymentLimit">0/5 free payments used</small></dd></div>
+                <div class="account-detail-row"><dt>Family access</dt><dd><strong id="settingsMemberAccess">Locked</strong><small>Admin-managed access</small></dd></div>
+                <div class="account-detail-row"><dt>Signed in as</dt><dd><strong id="settingsEmail">-</strong><small>Your login email</small></dd></div>
+                <div class="account-detail-row"><dt>Alerts</dt><dd><strong id="notificationCount">0</strong><small>Unread messages and due reminders</small></dd></div>
+              </dl>
             </section>
             <section class="content-grid settings-content-grid">
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
@@ -440,6 +440,25 @@
         </div>
       </section>
     </main>
+
+    <dialog id="paymentItemDialog" class="payment-dialog payment-item-dialog" aria-labelledby="obligationTitle">
+      <form id="obligationForm" class="form-grid">
+        <div class="panel-heading inline full"><div><p class="eyebrow">Payment details</p><h3 id="obligationTitle">Add payment</h3></div><button class="icon-button" type="button" data-close-payment-item-dialog aria-label="Close payment form">Close</button></div>
+        <label class="full" for="obligationName">Payment name<input id="obligationName" required placeholder="Rent, electricity, school fees..." /></label>
+        <label for="paymentScope">Show this payment in<select id="paymentScope"><option value="personal">Personal budget</option><option value="family">Family budget</option></select></label>
+        <label for="obligationAmount">Amount due<input id="obligationAmount" type="number" min="0.01" step="0.01" required placeholder="1000" /></label>
+        <label for="obligationCurrency">Currency<select id="obligationCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
+        <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
+        <label for="obligationMember">Responsible member<select id="obligationMember"></select></label>
+        <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option></select></label>
+        <label for="recurrenceInterval">Every N months<input id="recurrenceInterval" type="number" min="1" max="24" value="1" /></label>
+        <label for="dueDay">Due day<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
+        <label for="startDate">Start date<input id="startDate" type="date" required /></label>
+        <label for="reminderDays">Remind days before<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
+        <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
+        <div class="button-row full"><button id="obligationSubmitButton" class="primary" type="submit">Add payment</button><button id="cancelEditObligationButton" type="button">Cancel</button></div>
+      </form>
+    </dialog>
 
     <dialog id="recordPaymentDialog" class="payment-dialog">
       <form id="recordPaymentForm" method="dialog" class="form-grid">

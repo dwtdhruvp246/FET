@@ -81,6 +81,7 @@ const currencyNames = {
 const today = new Date();
 $("#paymentDate").value = toDateValue(today);
 $("#monthFilter").value = state.filterMonth;
+$("#reportMonthFilter").value = state.filterMonth;
 $("#startDate").value = toDateValue(today);
 $("#recordPaymentDate").value = toDateValue(today);
 registerServiceWorker();
@@ -918,6 +919,9 @@ function renderMemberAccess() {
   if (ownsSelectedFamily) {
     $("#selectedFamilyTitle").textContent = state.family.name;
     $("#selectedFamilyMeta").textContent = `${money(state.family.monthly_budget, state.family.currency)} expected each month · ${familyCount} of ${limit} family slots used`;
+    $("#selectedFamilyMemberCount").textContent = state.members.filter((member) => member.status === "active").length;
+    $("#selectedFamilyPaymentCount").textContent = state.paymentItems.filter((item) => item.family_id === state.family.id && item.status !== "inactive").length;
+    $("#selectedFamilyInviteCount").textContent = state.familyInvitations.filter((invite) => invite.family_id === state.family.id && invite.status === "pending").length;
   }
 }
 
@@ -1560,13 +1564,62 @@ function renderReports() {
   const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
   const paid = occurrences.filter((item) => item.status === "paid").length;
   const partial = occurrences.filter((item) => item.status === "partial").length;
+  const overdue = occurrences.filter((item) => item.status === "overdue").length;
   const paidRate = occurrences.length ? Math.round((paid / occurrences.length) * 100) : 0;
+  const periodLabel = parseDate(monthStart(state.filterMonth)).toLocaleString("en", { month: "long", year: "numeric" });
+  $("#reportMonthFilter").value = state.filterMonth;
+  $("#reportPeriodLabel").textContent = `Payment performance for ${periodLabel}.`;
   $("#paidRate").textContent = `${paidRate}%`;
+  $("#reportCompletionCaption").textContent = `${paid} of ${occurrences.length} payments completed`;
+  $("#reportDueTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.amount })));
+  $("#reportPaidTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.paid })));
+  $("#reportOutstandingTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.outstanding })));
+  $("#reportOverdueCaption").textContent = `${overdue} overdue payment${overdue === 1 ? "" : "s"}`;
   $("#partialCount").textContent = partial;
   $("#activeObligationCount").textContent = state.paymentItems.filter((item) => item.status !== "inactive").length;
   $("#yearExpected").textContent = formatCurrencyTotals(estimateYearTotals(state.paymentItems));
+  $("#collectionProgressRing").style.setProperty("--progress", `${paidRate * 3.6}deg`);
+  $("#collectionProgressValue").textContent = `${paidRate}%`;
+  $("#collectionProgressTitle").textContent = !occurrences.length
+    ? "No payments due"
+    : paidRate === 100
+      ? "Everything is paid"
+      : paidRate >= 70
+        ? "Good progress this month"
+        : "Payments need attention";
+  $("#collectionProgressText").textContent = !occurrences.length
+    ? "Add a payment to begin tracking monthly reliability."
+    : `${occurrences.length - paid} payment${occurrences.length - paid === 1 ? " remains" : "s remain"}; ${partial} partial and ${overdue} overdue.`;
+  renderStatusAnalysis(occurrences);
+  renderReportTrend();
   renderCategoryReport(occurrences);
   renderPaymentRecordList();
+}
+
+function renderStatusAnalysis(occurrences) {
+  const list = $("#reportStatusList");
+  const rows = [
+    { label: "Paid", className: "paid", count: occurrences.filter((item) => item.status === "paid").length },
+    { label: "Partial", className: "partial", count: occurrences.filter((item) => item.status === "partial").length },
+    { label: "Overdue", className: "overdue", count: occurrences.filter((item) => item.status === "overdue").length },
+    { label: "Upcoming", className: "upcoming", count: occurrences.filter((item) => ["due-soon", "upcoming"].includes(item.status)).length }
+  ];
+  list.innerHTML = rows.map((row) => {
+    const percentage = occurrences.length ? Math.round((row.count / occurrences.length) * 100) : 0;
+    return `<div class="status-analysis-row ${row.className}"><div><span>${row.label}</span><strong>${row.count}</strong></div><div class="meter"><span style="width:${percentage}%"></span></div><small>${percentage}%</small></div>`;
+  }).join("");
+}
+
+function renderReportTrend() {
+  const list = $("#reportTrendList");
+  const months = Array.from({ length: 6 }, (_, index) => offsetMonthValue(state.filterMonth, index - 5));
+  list.innerHTML = months.map((monthValue) => {
+    const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, monthValue);
+    const completed = occurrences.filter((item) => item.status === "paid").length;
+    const percentage = occurrences.length ? Math.round((completed / occurrences.length) * 100) : 0;
+    const label = parseDate(monthStart(monthValue)).toLocaleString("en", { month: "short", year: "2-digit" });
+    return `<div class="trend-row"><span>${label}</span><div class="meter"><span style="width:${percentage}%"></span></div><strong>${percentage}%</strong><small>${completed}/${occurrences.length}</small></div>`;
+  }).join("");
 }
 
 function estimateYearTotals(items) {
@@ -1584,8 +1637,8 @@ function estimateYearTotals(items) {
 function renderCategoryReport(occurrences) {
   const list = $("#categoryReportList");
   const rows = Object.values(occurrences.reduce((acc, occurrence) => {
-    const key = occurrence.item.category;
-    acc[key] ||= { name: key, amount: 0, outstanding: 0, currency: occurrence.item.currency };
+    const key = `${occurrence.item.category}:${occurrence.item.currency}`;
+    acc[key] ||= { name: occurrence.item.category, amount: 0, outstanding: 0, currency: occurrence.item.currency };
     acc[key].amount += occurrence.amount;
     acc[key].outstanding += occurrence.outstanding;
     return acc;
@@ -1986,6 +2039,7 @@ async function saveObligation(event) {
       await query("payment item create", supabase.from("payment_items").insert(payload));
       showToast("Payment saved.");
     }
+    $("#paymentItemDialog").close();
     resetObligationForm();
     await loadFamilyData();
     renderFamilyApp();
@@ -1994,16 +2048,22 @@ async function saveObligation(event) {
   }
 }
 
+function openPaymentItemDialog() {
+  resetObligationForm();
+  const dialog = $("#paymentItemDialog");
+  if (!dialog.open) dialog.showModal();
+  window.setTimeout(() => $("#obligationName").focus(), 0);
+}
+
 function startEditObligation(itemId) {
   const item = state.paymentItems.find((paymentItem) => paymentItem.id === itemId);
   if (!item) return;
   state.editingObligationId = item.id;
   state.familyTab = "payments";
   setRoute("family", "payments");
-  renderFamilyTabs();
+  renderFamilyApp();
   $("#obligationTitle").textContent = "Edit payment";
   $("#obligationSubmitButton").textContent = "Save changes";
-  $("#cancelEditObligationButton").classList.remove("hidden");
   $("#obligationName").value = item.name;
   $("#obligationAmount").value = item.amount;
   $("#obligationCurrency").value = item.currency;
@@ -2016,6 +2076,8 @@ function startEditObligation(itemId) {
   $("#startDate").value = item.start_date;
   $("#reminderDays").value = item.reminder_days_before || 0;
   $("#obligationNotes").value = item.notes || "";
+  const dialog = $("#paymentItemDialog");
+  if (!dialog.open) dialog.showModal();
 }
 
 function resetObligationForm() {
@@ -2028,8 +2090,7 @@ function resetObligationForm() {
   $("#obligationCurrency").value = state.family?.currency || "USD";
   $("#paymentScope").value = state.family ? "family" : "personal";
   $("#obligationTitle").textContent = "Add payment";
-  $("#obligationSubmitButton").textContent = "Save payment";
-  $("#cancelEditObligationButton").classList.add("hidden");
+  $("#obligationSubmitButton").textContent = "Add payment";
   renderPaymentScope();
 }
 
@@ -2531,6 +2592,8 @@ function escapeHtml(value) {
 
 document.addEventListener("click", async (event) => {
   if (event.target.dataset.closePaymentDialog !== undefined) $("#recordPaymentDialog").close();
+  if (event.target.closest("[data-open-payment-item-dialog]")) openPaymentItemDialog();
+  if (event.target.closest("[data-close-payment-item-dialog]")) $("#paymentItemDialog").close();
   if (event.target.dataset.closeConfirmDialog !== undefined) $("#confirmDialog").close();
   if (event.target.closest("[data-close-notifications]")) $("#notificationDialog").close();
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
@@ -2723,7 +2786,8 @@ $("#recordPaymentType").addEventListener("change", (event) => {
 $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPlatformPayment);
 $("#adminNoteForm").addEventListener("submit", saveAdminNote);
-$("#cancelEditObligationButton").addEventListener("click", resetObligationForm);
+$("#cancelEditObligationButton").addEventListener("click", () => $("#paymentItemDialog").close());
+$("#paymentItemDialog").addEventListener("close", resetObligationForm);
 $("#signOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#adminSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
 $("#suspendedSignOutButton").addEventListener("click", async () => supabase.auth.signOut());
@@ -2737,6 +2801,11 @@ $("#paymentHead").addEventListener("change", (event) => {
 $("#monthFilter").addEventListener("change", (event) => {
   state.filterMonth = event.target.value;
   renderFamilyApp();
+});
+$("#reportMonthFilter").addEventListener("change", (event) => {
+  state.filterMonth = event.target.value;
+  $("#monthFilter").value = state.filterMonth;
+  renderReports();
 });
 $("#statusFilter").addEventListener("change", (event) => {
   state.filterStatus = event.target.value;
