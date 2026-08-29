@@ -1,6 +1,6 @@
 {
   "name": "Mushavo Budget",
-  "short_name": "Mushavo",
+  "short_name": "Mushavo Budget",
   "description": "Track personal and family recurring payments, budgets, reminders, and members.",
   "start_url": "./index.html",
   "scope": "./",
@@ -26,12 +26,6 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
-    },
-    {
-      "src": "assets/pwa-icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
     }
   ],
   "categories": ["finance", "productivity", "utilities"]

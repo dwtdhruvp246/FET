@@ -179,8 +179,9 @@ code {
 }
 
 .brand-mark {
-  width: 64px;
-  height: 64px;
+  width: min(190px, 100%);
+  height: auto;
+  object-fit: contain;
 }
 
 .eyebrow {
@@ -367,7 +368,20 @@ code {
 }
 
 .sidebar-brand {
-  justify-content: space-between;
+  justify-content: center;
+}
+
+.sidebar-logo {
+  width: min(178px, 100%);
+  height: auto;
+  object-fit: contain;
+}
+
+.mobile-logo {
+  flex: 0 0 auto;
+  width: clamp(72px, 18vw, 100px);
+  height: auto;
+  object-fit: contain;
 }
 
 .sidebar-account {
