@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=30" />
+    <link rel="stylesheet" href="styles.css?v=31" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=35"></script>
+    <script type="module" src="app.js?v=36"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -137,8 +137,9 @@
             </div>
             <nav class="tabs" aria-label="Admin sections">
               <button class="tab-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
-              <button class="tab-button" type="button" data-admin-tab="households">Households</button>
+              <button class="tab-button" type="button" data-admin-tab="households">Workspaces</button>
               <button class="tab-button" type="button" data-admin-tab="users">Users</button>
+              <button class="tab-button" type="button" data-admin-tab="plans">Plans</button>
               <button class="tab-button" type="button" data-admin-tab="finance">Finance</button>
               <button class="tab-button" type="button" data-admin-tab="support">Support</button>
             </nav>
@@ -154,12 +155,12 @@
             <header class="topbar">
               <div>
                 <p class="eyebrow">Overview</p>
-                <h2>Household health</h2>
+                <h2>Workspace health</h2>
               </div>
               <span id="adminEmail" class="admin-account">-</span>
             </header>
             <section class="stats-grid" aria-label="Admin summary">
-              <article class="stat-card"><span class="stat-label">Households</span><strong id="adminFamilyCount">0</strong><small>Workspaces created</small></article>
+              <article class="stat-card"><span class="stat-label">Workspaces</span><strong id="adminFamilyCount">0</strong><small>Personal, Household, and Business</small></article>
               <article class="stat-card"><span class="stat-label">Overdue dues</span><strong id="adminOverdueCount">0</strong><small>Across all households</small></article>
               <article class="stat-card"><span class="stat-label">Due this month</span><strong id="adminDueTotal">$0.00</strong><small>Expected obligations</small></article>
               <article class="stat-card"><span class="stat-label">Platform revenue</span><strong id="adminRevenueTotal">$0.00</strong><small id="adminPaymentCount">0 payments</small></article>
@@ -176,10 +177,33 @@
             </section>
           </section>
 
+          <section class="screen-panel hidden" data-admin-panel="plans">
+            <header class="topbar">
+              <div><p class="eyebrow">Plan catalogue</p><h2>Subscription plans and prices</h2><p class="muted-copy">Configure real monthly and annual prices. Saving a new price preserves earlier invoice snapshots.</p></div>
+            </header>
+            <section class="content-grid subscription-admin-grid">
+              <section class="tool-panel" aria-labelledby="planPriceTitle">
+                <div class="panel-heading"><p class="eyebrow">Price editor</p><h3 id="planPriceTitle">Publish a plan price</h3></div>
+                <form id="planPriceForm" class="form-grid">
+                  <label for="planPricePlan">Plan<select id="planPricePlan" required><option value="personal">Personal</option><option value="household">Household</option><option value="business">Business</option></select></label>
+                  <label for="planPricePeriod">Billing period<select id="planPricePeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
+                  <label for="planPriceCurrency">Currency<input id="planPriceCurrency" maxlength="3" value="USD" required /></label>
+                  <label for="planPriceAmount">Base price<input id="planPriceAmount" type="number" min="0.01" step="0.01" required /></label>
+                  <label class="full" for="planPriceExtra">Additional member price<input id="planPriceExtra" type="number" min="0" step="0.01" value="0" required /><small>Household charges from the 5th total person; Business charges after the owner plus five team members.</small></label>
+                  <button class="primary full" type="submit">Save active price</button>
+                </form>
+              </section>
+              <section class="ledger-panel">
+                <div class="panel-heading"><p class="eyebrow">Current catalogue</p><h3>Available plans</h3><p class="muted-copy">Paid plans stay unavailable to users until an active price exists.</p></div>
+                <div id="adminPlanList" class="plan-card-grid"></div>
+              </section>
+            </section>
+          </section>
+
           <section class="screen-panel hidden" data-admin-panel="households">
             <header class="topbar">
-              <div><p class="eyebrow">Households</p><h2>Family workspaces</h2></div>
-              <input id="adminHouseholdSearch" class="compact-input" placeholder="Search households" />
+              <div><p class="eyebrow">Workspaces</p><h2>Personal, Household, and Business</h2></div>
+              <input id="adminHouseholdSearch" class="compact-input" placeholder="Search workspaces" />
             </header>
             <div id="adminFamiliesList" class="record-list"></div>
           </section>
@@ -192,9 +216,6 @@
                 <form id="headForm" class="form-grid">
                   <label for="headName">Full name<input id="headName" required placeholder="Jordan Lee" /></label>
                   <label for="headEmail">Email<input id="headEmail" type="email" required placeholder="head@example.com" /></label>
-                  <label for="headMonthlyFee">Monthly platform fee<input id="headMonthlyFee" type="number" min="0" step="0.01" placeholder="0" /></label>
-                  <label for="headFeeCurrency">Fee currency<select id="headFeeCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
-                  <label for="headBillingStatus">Billing status<select id="headBillingStatus"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="overdue">Overdue</option></select></label>
                   <label for="headFamilyLimit">Maximum families<input id="headFamilyLimit" type="number" min="0" max="100" step="1" value="1" required /></label>
                   <label class="checkbox-label full"><input id="headCanAddMembers" type="checkbox" /> Allow this user to add family members</label>
                   <button class="primary full" type="submit">Save user access</button>
@@ -209,23 +230,26 @@
 
           <section class="screen-panel hidden" data-admin-panel="finance">
             <header class="topbar"><div><p class="eyebrow">Finance</p><h2>Platform subscription payments</h2></div></header>
+            <section class="ledger-panel subscription-review-panel">
+              <div class="panel-heading"><p class="eyebrow">Payment review</p><h3>Pending proof submissions</h3><p class="muted-copy">Approvals are applied once and create an entitlement history record and receipt.</p></div>
+              <div id="subscriptionReviewList" class="record-list"></div>
+            </section>
             <section class="content-grid">
               <section class="tool-panel" aria-labelledby="paymentTitle">
-                <div class="panel-heading"><p class="eyebrow">Record payment</p><h3 id="paymentTitle">Add household subscription payment</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Legacy records</p><h3 id="paymentTitle">Add a historical payment note</h3><p class="muted-copy">This log is retained for older records and never activates or extends a subscription.</p></div>
                 <form id="paymentForm" class="form-grid">
                   <label class="full" for="paymentHead">User<select id="paymentHead" required></select></label>
                   <label for="paymentAmount">Amount<input id="paymentAmount" type="number" min="0.01" step="0.01" required placeholder="49.00" /></label>
                   <label for="paymentCurrency">Currency<select id="paymentCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
                   <label for="paymentMethod">Method<select id="paymentMethod"><option value="Cash">Cash</option><option value="EFT">EFT</option><option value="Card">Card</option><option value="Bank deposit">Bank deposit</option><option value="Other">Other</option></select></label>
                   <label for="paymentDate">Payment date<input id="paymentDate" type="date" required /></label>
-                  <label for="paidUntil">Paid until<input id="paidUntil" type="date" /></label>
                   <label class="full" for="paymentReference">Reference<input id="paymentReference" placeholder="Receipt or EFT ref" /></label>
                   <label class="full" for="paymentNotes">Notes<input id="paymentNotes" placeholder="Cash received, bank confirmation, discount..." /></label>
-                  <button class="primary full" type="submit">Record platform payment</button>
+                  <button class="primary full" type="submit">Save legacy payment note</button>
                 </form>
               </section>
               <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">History</p><h3>Subscription payments</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Legacy history</p><h3>Historical payment notes</h3></div>
                 <div id="paymentsList" class="record-list"></div>
               </section>
             </section>
@@ -277,9 +301,9 @@
               <img class="sidebar-logo" src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" />
             </div>
             <div class="sidebar-account">
-              <p class="eyebrow">Family workspace</p>
+              <p class="eyebrow">Budget workspace</p>
               <h1 id="householdTitle">Household</h1>
-              <label class="workspace-picker">Switch family<select data-family-selector aria-label="Switch family"></select></label>
+              <label class="workspace-picker">Switch workspace<select data-family-selector aria-label="Switch workspace"></select></label>
               <span id="headBillingBadge" class="mini-badge">free</span>
             </div>
             <nav class="tabs" aria-label="Family sections">
@@ -287,6 +311,7 @@
               <button class="tab-button" type="button" data-family-tab="payments">Payments</button>
               <button class="tab-button" type="button" data-family-tab="members">Family &amp; Members</button>
               <button class="tab-button" type="button" data-family-tab="reports">Reports</button>
+              <button class="tab-button" type="button" data-family-tab="subscription">Subscription</button>
               <button class="tab-button" type="button" data-family-tab="settings">Settings</button>
             </nav>
             <div class="topbar-actions">
@@ -389,6 +414,12 @@
               <div><p class="eyebrow">Reports</p><h2>Payment analytics</h2><p id="reportPeriodLabel" class="muted-copy">Performance for the selected month.</p></div>
               <label class="report-month-control" for="reportMonthFilter">Report month<input id="reportMonthFilter" type="month" /></label>
             </header>
+            <section id="reportsLockNotice" class="locked-feature-panel hidden">
+              <p class="eyebrow">Personal feature</p>
+              <h3>Finance analytics are locked on Free</h3>
+              <p>Upgrade to Personal, Household, or Business to view spending insights, trends, advanced reports, and financial summaries.</p>
+              <button class="primary" type="button" data-family-tab="subscription">View plans</button>
+            </section>
             <section class="report-summary-grid" aria-label="Monthly payment summary">
               <article class="report-kpi"><span>Payment completion</span><strong id="paidRate">0%</strong><small id="reportCompletionCaption">0 of 0 payments completed</small></article>
               <article class="report-kpi"><span>Total due</span><strong id="reportDueTotal">$0.00</strong><small>For the selected month</small></article>
@@ -405,6 +436,36 @@
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due and outstanding</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
               <section class="ledger-panel report-context-panel"><div class="panel-heading"><p class="eyebrow">Portfolio context</p><h3>Payment commitments</h3></div><dl class="report-context-list"><div><dt>Partial payments</dt><dd id="partialCount">0</dd></div><div><dt>Active payment items</dt><dd id="activeObligationCount">0</dd></div><div><dt>Estimated annual total</dt><dd id="yearExpected">$0.00</dd></div></dl></section>
               <section class="ledger-panel report-history-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Recent payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
+            </section>
+          </section>
+
+          <section class="screen-panel hidden" data-family-panel="subscription">
+            <header class="topbar subscription-topbar">
+              <div><p class="eyebrow">Subscription</p><h2>Plan and billing</h2><p class="muted-copy">The plan belongs to this workspace. Invited members inherit its access and never need a separate subscription.</p></div>
+              <button id="openRenewalButton" class="primary" type="button" data-open-renewal-dialog>Submit payment</button>
+            </header>
+            <section class="subscription-summary-grid" aria-label="Current subscription">
+              <article class="subscription-current-card">
+                <span>Current plan</span><strong id="subscriptionPlanName">Free</strong><small id="subscriptionStatusText">Active</small>
+              </article>
+              <article class="subscription-current-card">
+                <span>Workspace</span><strong id="subscriptionWorkspaceName">Personal budget</strong><small id="subscriptionWorkspaceType">Personal</small>
+              </article>
+              <article class="subscription-current-card">
+                <span>Paid through</span><strong id="subscriptionPaidThrough">No expiry</strong><small>Stored and calculated in UTC</small>
+              </article>
+              <article class="subscription-current-card">
+                <span>Usage</span><strong id="subscriptionUsage">0 / 5</strong><small id="subscriptionUsageCaption">Active payment items</small>
+              </article>
+            </section>
+            <section id="subscriptionAccessNotice" class="notice hidden"></section>
+            <section class="ledger-panel">
+              <div class="panel-heading"><p class="eyebrow">Compare plans</p><h3>Plans for this workspace</h3><p class="muted-copy">Prices are published by Mushavo Budget administrators and are never calculated in the browser.</p></div>
+              <div id="workspacePlanList" class="plan-card-grid"></div>
+            </section>
+            <section class="content-grid subscription-history-grid">
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Requests</p><h3>Payment review history</h3></div><div id="renewalHistoryList" class="record-list"></div></section>
+              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Entitlements</p><h3>Plan history</h3></div><div id="entitlementHistoryList" class="record-list"></div></section>
             </section>
           </section>
 
@@ -453,6 +514,23 @@
         <label for="reminderDays">Remind days before (daily until due date)<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
         <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
         <div class="button-row full"><button id="obligationSubmitButton" class="primary" type="submit">Add payment</button><button id="cancelEditObligationButton" type="button">Cancel</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="renewalDialog" class="payment-dialog renewal-dialog" aria-labelledby="renewalDialogTitle">
+      <form id="renewalForm" class="form-grid">
+        <div class="panel-heading inline full"><div><p class="eyebrow">Subscription payment</p><h3 id="renewalDialogTitle">Submit payment for review</h3><p class="muted-copy">Submitting payment does not activate access automatically. Authorized finance staff will review it.</p></div><button class="icon-button" type="button" data-close-renewal-dialog aria-label="Close subscription payment form">Close</button></div>
+        <label for="renewalPlan">Plan<select id="renewalPlan" required></select></label>
+        <label for="renewalPeriod">Billing period<select id="renewalPeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
+        <label for="renewalCurrency">Currency<select id="renewalCurrency" required></select></label>
+        <label for="renewalAmount">Amount due<input id="renewalAmount" type="number" readonly required /></label>
+        <label for="renewalMethod">Payment method<select id="renewalMethod" required><option value="EFT">EFT</option><option value="Bank deposit">Bank deposit</option><option value="Cash">Cash</option><option value="Card">Card</option><option value="Other">Other</option></select></label>
+        <label for="renewalPaymentDate">Payment date<input id="renewalPaymentDate" type="date" required /></label>
+        <label class="full" for="renewalReference">Payment reference<input id="renewalReference" required placeholder="Bank or receipt reference" /></label>
+        <label class="full" for="renewalProof">Proof of payment (optional)<input id="renewalProof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
+        <label class="full" for="renewalNotes">Notes<textarea id="renewalNotes" placeholder="Information that will help the finance reviewer"></textarea></label>
+        <div id="renewalInvoiceSummary" class="invoice-summary full"></div>
+        <div class="button-row full"><button id="renewalSubmitButton" class="primary" type="submit">Submit for review</button><button type="button" data-close-renewal-dialog>Cancel</button></div>
       </form>
     </dialog>
 

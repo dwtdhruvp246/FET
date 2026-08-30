@@ -113,9 +113,39 @@ The notification bell and Settings inbox show invitations and payment reminders 
 
 1. Open Admin `Dashboard` to see household health.
 2. Open `Households` to unlock member access, suspend/reactivate households, and see overdue/partial dues.
-3. Open `Users` to manually configure a household owner.
-4. Open `Finance` to record platform subscription payments.
-5. Open `Support` to add household support notes.
+3. Open `Users` to see every Supabase Auth user and their workspace/access state.
+4. Open `Plans` to publish the real monthly and annual prices for Personal, Household, and Business. Prices are intentionally not invented or hard-coded.
+5. Open `Finance` to review user-submitted payment details and proof. Approval extends the entitlement once, creates a receipt, and records history; rejection requires a reason.
+6. Open `Support` to add household support notes.
+
+## Workspace subscriptions
+
+The complete schema now adds a compatibility workspace layer around the existing family and payment tables:
+
+- Every registered user receives one Personal workspace with an active Free entitlement.
+- Existing families are backfilled as Household workspaces without deleting or renaming family data.
+- Existing family members and invitations are linked to workspace membership and seat usage.
+- Free is limited to five active Personal payment items. Completed or inactive items remain in history and do not consume a slot.
+- Household and Business plans use workspace-level subscriptions. Invited members inherit access and do not buy separate subscriptions.
+- Household includes four people total. Business includes the owner plus five team members. Active pending invitations count toward billing.
+- Personal expiry falls back to Free without changing or deleting payment records.
+- Expired or suspended Household and Business workspaces remain stored and become read-only.
+- Reports stay visible on Free but open a locked upgrade state; plan limits are also checked by database functions.
+- Subscription invoices snapshot plan name, billing period, currency, base price, extra-seat price, member count, and total.
+- User payment proof is stored in the private `subscription-proofs` bucket. The browser never receives a service-role key.
+
+## Required deployment order for this subscription release
+
+1. Open the Supabase project used by `config.js`.
+2. Open **SQL Editor**, create a new query, paste the entire current `supabase/schema.sql`, and run it once. Do not run only the new section.
+3. Confirm the query completes without an error. It backfills profiles, Personal workspaces, Household workspaces, owner/member rows, Free/Household subscriptions, workspace links on payment records, and Row Level Security policies.
+4. In the app, sign in with a Super Admin account and open **Plans**.
+5. Publish a monthly and annual price for each paid plan and currency you want to offer. The additional-member amount entered for annual billing is the annual extra-seat price.
+6. Upload the changed website files while preserving the `assets/` and `supabase/` folders.
+7. Reload the website once so service worker cache `mushavo-budget-v26` takes control.
+8. Test with one ordinary user: open **Subscription**, submit payment details and optional proof, then approve it in Admin **Finance**.
+
+Paid plans remain safely unavailable when their price is not configured. Monthly and annual prices are separate effective-dated rows, and old invoices retain their original snapshots after a later price change.
 
 ## Run Locally
 

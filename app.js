@@ -17,6 +17,7 @@ const state = {
   session: null,
   profile: null,
   isAdmin: false,
+  adminRole: null,
   headApproval: null,
   families: [],
   family: null,
@@ -25,6 +26,17 @@ const state = {
   paymentRecords: [],
   familyInvitations: [],
   notifications: [],
+  workspaces: [],
+  workspaceMembers: [],
+  workspaceSubscription: null,
+  workspaceEntitlement: null,
+  billableMemberCount: 1,
+  plans: [],
+  planPrices: [],
+  renewalRequests: [],
+  subscriptionInvoices: [],
+  subscriptionPayments: [],
+  entitlementHistory: [],
   heads: [],
   adminProfiles: [],
   adminFamilies: [],
@@ -33,6 +45,15 @@ const state = {
   adminPaymentRecords: [],
   payments: [],
   adminNotes: [],
+  adminWorkspaces: [],
+  adminWorkspaceMembers: [],
+  adminSubscriptions: [],
+  adminPlans: [],
+  adminPlanPrices: [],
+  adminRenewalRequests: [],
+  adminSubscriptionInvoices: [],
+  adminSubscriptionPayments: [],
+  adminSubscriptionProofs: [],
   adminTab: "dashboard",
   familyTab: "dashboard",
   editingObligationId: null,
@@ -51,6 +72,7 @@ let appLoadPromise = null;
 let appLoadUserId = null;
 
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
+const SUBSCRIPTION_PROOF_BUCKET = "subscription-proofs";
 const PAYMENT_PROOF_MAX_BYTES = 10 * 1024 * 1024;
 const PAYMENT_PROOF_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "application/pdf"]);
 const QUERY_TIMEOUT_MS = 15000;
@@ -68,8 +90,8 @@ const views = {
   app: $("#appView")
 };
 
-const adminTabs = new Set(["dashboard", "households", "users", "finance", "support"]);
-const familyTabs = new Set(["dashboard", "payments", "reports", "members", "settings"]);
+const adminTabs = new Set(["dashboard", "households", "users", "plans", "finance", "support"]);
+const familyTabs = new Set(["dashboard", "payments", "reports", "members", "subscription", "settings"]);
 const currencyNames = {
   USD: "en-US",
   ZAR: "en-ZA",
@@ -99,6 +121,7 @@ $("#monthFilter").value = state.filterMonth;
 $("#reportMonthFilter").value = state.filterMonth;
 $("#startDate").value = toDateValue(today);
 $("#recordPaymentDate").value = toDateValue(today);
+$("#renewalPaymentDate").value = toDateValue(today);
 renderPaymentCurrencyOptions("", "USD");
 registerServiceWorker();
 
@@ -203,6 +226,12 @@ function showLoading(title = "Opening your workspace", message = "Loading your l
   setView("loading");
 }
 
+function setSubmitting(button, isSubmitting, label) {
+  if (!button) return;
+  button.disabled = isSubmitting;
+  button.textContent = label;
+}
+
 function showSignupSuccessMessage() {
   const url = new URL(window.location.href);
   if (url.searchParams.get("signup") !== "success") return;
@@ -233,6 +262,30 @@ function friendlyMessage(message = "") {
   }
   if (text.includes("PERSONAL_PAYMENT_LIMIT_REACHED")) {
     return "Free accounts can keep up to 5 active personal payments. Family payments remain unlimited.";
+  }
+  if (text.includes("WORKSPACE_READ_ONLY")) {
+    return "This shared workspace is read-only because its subscription is expired or suspended. The owner can renew it from Subscription.";
+  }
+  if (text.includes("PLAN_PRICE_NOT_CONFIGURED")) {
+    return "This plan does not have an active price for the selected billing period and currency yet.";
+  }
+  if (text.includes("PAYMENT_AMOUNT_DOES_NOT_MATCH_INVOICE")) {
+    return "The plan price or member count changed. Reopen the payment form to load the latest invoice total.";
+  }
+  if (text.includes("SUBSCRIPTION_REVIEW_ALREADY_PENDING")) {
+    return "A payment for this plan and billing period is already waiting for review.";
+  }
+  if (text.includes("ADDITIONAL_SEAT_PAYMENT_REQUIRED")) {
+    return "This member would use an additional paid seat. The Family Head must submit and receive approval for a Household payment covering the new seat first.";
+  }
+  if (text.includes("WORKSPACE_OWNER_REQUIRED")) {
+    return "Only the workspace owner can complete this subscription action.";
+  }
+  if (text.includes("FINANCE_REVIEW_ACCESS_REQUIRED")) {
+    return "Your admin role does not include subscription payment review access.";
+  }
+  if (text.includes("REJECTION_REASON_REQUIRED")) {
+    return "Enter a reason so the workspace owner knows what must be corrected.";
   }
   if (text.includes("MEMBER_MANAGEMENT_ACCESS_REQUIRED")) {
     return "Your active membership does not currently include permission to manage family members.";
@@ -386,9 +439,14 @@ function isSameAuthUser(previousSession, nextSession) {
 }
 
 function realtimeTablesForCurrentView() {
-  const sharedTables = ["profiles", "family_heads", "families", "family_members", "payment_items", "payment_records", "family_invitations", "notifications"];
+  const sharedTables = [
+    "profiles", "family_heads", "families", "family_members", "payment_items", "payment_records",
+    "family_invitations", "notifications", "budget_workspaces", "workspace_members",
+    "workspace_invitations", "workspace_subscriptions", "subscription_renewal_requests",
+    "subscription_invoices", "subscription_payments", "subscription_entitlement_history"
+  ];
   if (!state.isAdmin) return sharedTables;
-  return [...sharedTables, "payments", "admin_support_notes"];
+  return [...sharedTables, "plans", "plan_prices", "payments", "admin_support_notes"];
 }
 
 function stopRealtime() {
@@ -448,6 +506,7 @@ async function refreshVisibleData() {
     }
     await Promise.all([loadAccess(), loadFamily()]);
     await loadFamilyData();
+    await loadWorkspaceSubscriptionData();
     if (state.session?.user?.id !== sessionId) return;
     renderFamilyApp();
   } finally {
@@ -551,6 +610,7 @@ function resetState() {
   state.session = null;
   state.profile = null;
   state.isAdmin = false;
+  state.adminRole = null;
   state.headApproval = null;
   state.families = [];
   state.family = null;
@@ -559,13 +619,34 @@ function resetState() {
   state.paymentRecords = [];
   state.familyInvitations = [];
   state.notifications = [];
+  state.workspaces = [];
+  state.workspaceMembers = [];
+  state.workspaceSubscription = null;
+  state.workspaceEntitlement = null;
+  state.billableMemberCount = 1;
+  state.plans = [];
+  state.planPrices = [];
+  state.renewalRequests = [];
+  state.subscriptionInvoices = [];
+  state.subscriptionPayments = [];
+  state.entitlementHistory = [];
   state.heads = [];
+  state.adminProfiles = [];
   state.adminFamilies = [];
   state.adminMembers = [];
   state.adminPaymentItems = [];
   state.adminPaymentRecords = [];
   state.payments = [];
   state.adminNotes = [];
+  state.adminWorkspaces = [];
+  state.adminWorkspaceMembers = [];
+  state.adminSubscriptions = [];
+  state.adminPlans = [];
+  state.adminPlanPrices = [];
+  state.adminRenewalRequests = [];
+  state.adminSubscriptionInvoices = [];
+  state.adminSubscriptionPayments = [];
+  state.adminSubscriptionProofs = [];
   state.adminTab = "dashboard";
   state.familyTab = "dashboard";
   state.editingObligationId = null;
@@ -602,16 +683,15 @@ async function loadApp() {
   const loadedFamily = await familyResult;
   if (!loadedFamily.ok) throw loadedFamily.error;
 
+  await loadWorkspaceSubscriptionData();
+
   if (state.headApproval?.status === "suspended") {
-    const loadedInvitations = await invitationResult;
-    if (!loadedInvitations.ok) throw loadedInvitations.error;
-    if (hasJoinableFamilyInvitation()) {
-      showToast("You can join an invited family without an active subscription.");
-    } else {
-      setView("suspended");
-      stopRealtime();
-      return;
+    if (state.family?.owner_id === state.session.user.id) {
+      state.family = null;
+      persistSelectedFamily();
+      await loadWorkspaceSubscriptionData();
     }
+    showToast("A shared workspace is suspended. Your Personal workspace remains available.");
   }
 
   await loadFamilyFinancialData();
@@ -676,6 +756,7 @@ async function loadAccess() {
     )
   ]);
   state.isAdmin = adminRows.length > 0;
+  state.adminRole = adminRows[0]?.role || (state.isAdmin ? "super_admin" : null);
   state.headApproval = headRows[0] || null;
 }
 
@@ -702,11 +783,12 @@ async function loadFamily() {
   );
   state.families = families.filter((family) => family.owner_id === userId || joinedFamilyIds.has(family.id));
   const storedFamilyId = window.localStorage.getItem(selectedFamilyStorageKey());
-  state.family =
-    state.families.find((family) => family.id === storedFamilyId) ||
-    state.families.find((family) => family.id === state.family?.id) ||
-    state.families[0] ||
-    null;
+  state.family = storedFamilyId === "__personal__"
+    ? null
+    : state.families.find((family) => family.id === storedFamilyId) ||
+      state.families.find((family) => family.id === state.family?.id) ||
+      state.families[0] ||
+      null;
   persistSelectedFamily();
 }
 
@@ -717,16 +799,25 @@ function selectedFamilyStorageKey() {
 function persistSelectedFamily() {
   const key = selectedFamilyStorageKey();
   if (state.family?.id) window.localStorage.setItem(key, state.family.id);
-  else window.localStorage.removeItem(key);
+  else window.localStorage.setItem(key, "__personal__");
 }
 
 async function selectFamily(familyId) {
+  if (familyId === "__personal__") {
+    if (!state.family) return;
+    state.family = null;
+    state.editingObligationId = null;
+    persistSelectedFamily();
+    await Promise.all([loadFamilyFinancialData(), loadWorkspaceSubscriptionData()]);
+    renderFamilyApp();
+    return;
+  }
   const family = state.families.find((item) => item.id === familyId);
   if (!family || family.id === state.family?.id) return;
   state.family = family;
   state.editingObligationId = null;
   persistSelectedFamily();
-  await loadFamilyFinancialData();
+  await Promise.all([loadFamilyFinancialData(), loadWorkspaceSubscriptionData()]);
   renderFamilyApp();
 }
 
@@ -793,6 +884,51 @@ async function loadNotifications() {
   );
 }
 
+function currentBudgetWorkspace() {
+  if (state.family) {
+    return state.workspaces.find((workspace) => workspace.legacy_family_id === state.family.id) || null;
+  }
+  return state.workspaces.find((workspace) => workspace.workspace_type === "personal") || null;
+}
+
+function currentWorkspaceIsOwned() {
+  return currentBudgetWorkspace()?.owner_id === state.session?.user?.id;
+}
+
+async function loadWorkspaceSubscriptionData() {
+  await query("personal workspace provision", supabase.rpc("provision_my_budget_workspace"));
+  const [workspaces, members, plans, prices] = await Promise.all([
+    query("workspace load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: true })),
+    query("workspace membership load", supabase.from("workspace_members").select("*").order("created_at", { ascending: true })),
+    query("plan catalogue load", supabase.from("plans").select("*").eq("is_active", true).order("sort_order", { ascending: true })),
+    query("plan prices load", supabase.from("plan_prices").select("*").eq("is_active", true).order("effective_from", { ascending: false }))
+  ]);
+  state.workspaces = workspaces;
+  state.workspaceMembers = members;
+  state.plans = plans;
+  state.planPrices = prices;
+
+  const workspace = currentBudgetWorkspace();
+  if (!workspace) throw new Error("Your subscription workspace could not be reconciled. Run the complete Supabase schema again.");
+
+  const [subscriptions, entitlements, billableMemberCount, requests, invoices, payments, history] = await Promise.all([
+    query("workspace subscription load", supabase.from("workspace_subscriptions").select("*").eq("workspace_id", workspace.id).limit(1)),
+    query("workspace entitlement load", supabase.rpc("effective_workspace_entitlement", { p_workspace_id: workspace.id })),
+    query("workspace seat usage load", supabase.rpc("workspace_billable_member_count", { p_workspace_id: workspace.id })),
+    query("renewal requests load", supabase.from("subscription_renewal_requests").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
+    query("subscription invoices load", supabase.from("subscription_invoices").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
+    query("subscription payments load", supabase.from("subscription_payments").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
+    query("entitlement history load", supabase.from("subscription_entitlement_history").select("*, plans(display_name, code)").eq("workspace_id", workspace.id).order("created_at", { ascending: false }))
+  ]);
+  state.workspaceSubscription = subscriptions[0] || null;
+  state.workspaceEntitlement = entitlements[0] || null;
+  state.billableMemberCount = Number(billableMemberCount || 1);
+  state.renewalRequests = requests;
+  state.subscriptionInvoices = invoices;
+  state.subscriptionPayments = payments;
+  state.entitlementHistory = history;
+}
+
 async function loadAdminData(tab = state.adminTab) {
   const tasks = [];
   const assign = [];
@@ -805,14 +941,25 @@ async function loadAdminData(tab = state.adminTab) {
   if (["dashboard", "households", "users", "support"].includes(tab)) {
     add("adminFamilies", "admin families load", supabase.from("families").select("*").order("created_at", { ascending: false }));
   }
+  if (tab === "dashboard") {
+    add("adminWorkspaces", "admin workspace summary load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
+  }
   if (["households", "users", "finance"].includes(tab)) {
     add("heads", "heads load", supabase.from("family_heads").select("*").order("created_at", { ascending: false }));
   }
   if (tab === "users") {
     add("adminProfiles", "registered users load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
+    add("adminWorkspaces", "user workspaces load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
+    add("adminWorkspaceMembers", "user workspace membership load", supabase.from("workspace_members").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptions", "user subscriptions load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
+    add("adminPlans", "user plans load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
   }
   if (tab === "households") {
+    add("adminProfiles", "workspace owner profiles load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
     add("adminMembers", "admin members load", supabase.from("family_members").select("*").order("created_at", { ascending: true }));
+    add("adminWorkspaces", "workspace directory load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptions", "workspace subscription directory load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
+    add("adminPlans", "workspace plan directory load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
   }
   if (["dashboard", "households"].includes(tab)) {
     add("adminPaymentItems", "admin payment items load", supabase.from("payment_items").select("*").order("created_at", { ascending: false }));
@@ -832,6 +979,20 @@ async function loadAdminData(tab = state.adminTab) {
   if (tab === "support") {
     add("adminNotes", "admin notes load", supabase.from("admin_support_notes").select("*").order("created_at", { ascending: false }));
   }
+  if (["plans", "finance"].includes(tab)) {
+    add("adminPlans", "admin plans load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
+    add("adminPlanPrices", "admin plan prices load", supabase.from("plan_prices").select("*").order("effective_from", { ascending: false }));
+  }
+  if (["dashboard", "finance"].includes(tab)) {
+    add("adminSubscriptionPayments", "admin subscription payments load", supabase.from("subscription_payments").select("*").order("created_at", { ascending: false }));
+  }
+  if (tab === "finance") {
+    add("adminWorkspaces", "admin workspaces load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptions", "admin subscriptions load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
+    add("adminRenewalRequests", "admin renewal requests load", supabase.from("subscription_renewal_requests").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptionInvoices", "admin subscription invoices load", supabase.from("subscription_invoices").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptionProofs", "admin subscription proofs load", supabase.from("subscription_payment_proofs").select("*").order("created_at", { ascending: false }));
+  }
 
   const results = await Promise.all(tasks);
   assign.forEach((target, index) => {
@@ -845,6 +1006,11 @@ function renderFamilyApp() {
   renderMemberOptions();
   renderPaymentScope();
   renderNotifications();
+  const workspaceReadOnly = Boolean(state.workspaceEntitlement?.read_only || state.workspaceEntitlement?.effective_status === "suspended");
+  document.querySelectorAll("[data-open-payment-item-dialog]").forEach((button) => {
+    button.disabled = workspaceReadOnly;
+    button.title = workspaceReadOnly ? "Renew this workspace to change payments" : "";
+  });
 
   if (state.familyTab === "dashboard") renderDashboard();
   if (state.familyTab === "payments") renderObligations();
@@ -855,6 +1021,7 @@ function renderFamilyApp() {
   }
   if (state.familyTab === "settings") renderSettings();
   if (state.familyTab === "reports") renderReports();
+  if (state.familyTab === "subscription") renderSubscription();
 }
 
 function renderFamilyTabs() {
@@ -870,7 +1037,9 @@ function renderFamilyHeader() {
   const title = state.family?.name || "Personal budget";
   $("#householdTitle").textContent = title;
   $("#mobileHouseholdTitle").textContent = title;
-  const billing = hasActiveMembership() ? "Subscription - Active" : "Active - Free";
+  const billing = state.workspaceEntitlement
+    ? `${state.workspaceEntitlement.plan_name} - ${titleCase(state.workspaceEntitlement.effective_status)}`
+    : hasActiveMembership() ? "Household - Active" : "Free - Active";
   $("#headBillingBadge").textContent = billing;
   $("#headBillingBadge").className = `mini-badge ${badgeClass(billing)}`;
   renderFamilySelectors();
@@ -885,7 +1054,7 @@ function canAddMembers() {
 }
 
 function canCreateFamily() {
-  return hasActiveMembership() && ownedFamilies().length < familyLimit();
+  return ownedFamilies().length === 0;
 }
 
 function hasActiveMembership() {
@@ -902,25 +1071,24 @@ function ownedFamilies() {
 
 function canManageMembersForFamily(familyId) {
   const family = state.families.find((item) => item.id === familyId);
+  const activeHouseholdEntitlement = family?.id === state.family?.id
+    && state.workspaceEntitlement?.plan_code === "household"
+    && state.workspaceEntitlement?.effective_status === "active"
+    && !state.workspaceEntitlement?.read_only;
   return Boolean(
     family &&
     family.owner_id === state.session?.user?.id &&
-    hasActiveMembership() &&
-    state.headApproval?.can_add_members
+    activeHouseholdEntitlement
   );
 }
 
 function renderFamilySelectors() {
   document.querySelectorAll("[data-family-selector]").forEach((select) => {
     select.innerHTML = "";
-    if (!state.families.length) {
-      select.append(new Option("Personal budget", ""));
-      select.disabled = true;
-      return;
-    }
+    select.append(new Option("Personal budget", "__personal__"));
     state.families.forEach((family) => select.append(new Option(family.name, family.id)));
-    select.value = state.family?.id || state.families[0].id;
-    select.disabled = state.families.length < 2;
+    select.value = state.family?.id || "__personal__";
+    select.disabled = state.families.length === 0;
   });
 }
 
@@ -940,6 +1108,18 @@ function renderMemberAccess() {
       $("#familyCreationNoticeTitle").textContent = "Family limit reached.";
       $("#familyCreationNoticeText").textContent = `You currently own ${familyCount} of ${limit} allowed families. Ask the admin to increase your family limit.`;
     }
+  }
+  const createTitle = $("#createFamilyTitle");
+  const createPanelCopy = createTitle?.parentElement?.querySelector(".muted-copy");
+  const createButton = $("#memberFamilyForm").querySelector('button[type="submit"]');
+  if (!hasActiveMembership() && owned.length === 0) {
+    createTitle.textContent = "Create a Household workspace";
+    if (createPanelCopy) createPanelCopy.textContent = "The workspace starts read-only. Submit the Household plan payment from Subscription for admin review.";
+    createButton.textContent = "Create household to subscribe";
+  } else {
+    createTitle.textContent = "Create another family";
+    if (createPanelCopy) createPanelCopy.textContent = "Your admin controls how many families your account may own.";
+    createButton.textContent = "Create family";
   }
   $("#memberFamilyForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowedToCreate;
@@ -1478,16 +1658,128 @@ function renderInvitations() {
 }
 
 function renderSettings() {
-  const plan = hasPaidPlan() ? "Starter - Active" : hasJoinableFamilyInvitation() ? "Family member - Free" : "Active - Free";
+  const entitlement = state.workspaceEntitlement;
+  const plan = entitlement
+    ? `${entitlement.plan_name} - ${titleCase(entitlement.effective_status)}`
+    : hasJoinableFamilyInvitation() ? "Family member - Free" : "Active - Free";
   const paymentCount = userCreatedPersonalPaymentCount();
   const canManageAnyFamily = ownedFamilies().some((family) => canManageMembersForFamily(family.id));
   $("#settingsPlanBadge").textContent = plan;
   $("#settingsPlanBadge").className = `mini-badge ${badgeClass(plan)}`;
-  $("#settingsPaymentLimit").textContent = hasPaidPlan()
-    ? "Unlimited personal and family payments"
-    : `${paymentCount}/5 personal payments used · family payments unlimited`;
+  $("#settingsPaymentLimit").textContent = entitlement?.active_payment_limit == null
+    ? "Unlimited payments in this workspace"
+    : `${paymentCount}/${entitlement.active_payment_limit} active personal payments used`;
   $("#settingsMemberAccess").textContent = canManageAnyFamily ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
+}
+
+function titleCase(value) {
+  return `${value || ""}`.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function activePriceFor(planId, billingPeriod, currency = null) {
+  return state.planPrices.find((price) =>
+    price.plan_id === planId &&
+    price.billing_period === billingPeriod &&
+    price.is_active &&
+    (!currency || price.currency === currency)
+  ) || null;
+}
+
+function planInvoiceTotal(plan, price) {
+  if (!plan || !price) return 0;
+  const includedSeats = plan.code === "household" ? 4 : plan.code === "business" ? 6 : 1;
+  const extraSeats = Math.max(0, Number(state.billableMemberCount || 1) - includedSeats);
+  return Number(price.amount || 0) + extraSeats * Number(price.extra_member_amount || 0);
+}
+
+function renderSubscription() {
+  const workspace = currentBudgetWorkspace();
+  const entitlement = state.workspaceEntitlement;
+  if (!workspace || !entitlement) return;
+  const activeItems = state.paymentItems.filter((item) => item.workspace_id === workspace.id && item.status !== "inactive").length;
+  const limitText = entitlement.active_payment_limit == null
+    ? `${activeItems} active`
+    : `${activeItems} / ${entitlement.active_payment_limit}`;
+  $("#subscriptionPlanName").textContent = entitlement.plan_name;
+  $("#subscriptionStatusText").textContent = titleCase(entitlement.effective_status);
+  $("#subscriptionWorkspaceName").textContent = workspace.name;
+  $("#subscriptionWorkspaceType").textContent = titleCase(workspace.workspace_type);
+  $("#subscriptionPaidThrough").textContent = entitlement.paid_through_at
+    ? new Date(entitlement.paid_through_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+    : "No expiry";
+  $("#subscriptionUsage").textContent = limitText;
+  $("#subscriptionUsageCaption").textContent = workspace.workspace_type === "personal"
+    ? "Active payment items"
+    : `${state.billableMemberCount} billable member${state.billableMemberCount === 1 ? "" : "s"}`;
+  $("#openRenewalButton").disabled = !currentWorkspaceIsOwned();
+
+  const notice = $("#subscriptionAccessNotice");
+  notice.classList.toggle("hidden", entitlement.effective_status === "active" && !entitlement.read_only);
+  if (!notice.classList.contains("hidden")) {
+    notice.innerHTML = entitlement.effective_status === "suspended"
+      ? "<strong>Workspace suspended.</strong><span>Access can only be restored by an authorized Mushavo Budget administrator. A payment submission does not automatically remove a suspension.</span>"
+      : "<strong>Subscription expired.</strong><span>Your data remains stored. This shared workspace is read-only until its owner renews it.</span>";
+  }
+  renderWorkspacePlans();
+  renderRenewalHistory();
+  renderEntitlementHistory();
+}
+
+function renderWorkspacePlans() {
+  const list = $("#workspacePlanList");
+  const workspace = currentBudgetWorkspace();
+  const plans = state.plans.filter((plan) => plan.workspace_type === workspace?.workspace_type);
+  list.innerHTML = "";
+  plans.forEach((plan) => {
+    const monthly = activePriceFor(plan.id, "monthly");
+    const annual = activePriceFor(plan.id, "annual", monthly?.currency) || activePriceFor(plan.id, "annual");
+    const current = plan.code === state.workspaceEntitlement?.plan_code;
+    const card = document.createElement("article");
+    card.className = `plan-card${current ? " current" : ""}`;
+    card.innerHTML = `
+      <div class="plan-card-heading"><span class="mini-badge ${current ? "active" : ""}">${current ? "Current" : titleCase(plan.workspace_type)}</span><h4>${escapeHtml(plan.display_name)}</h4></div>
+      <p>${escapeHtml(plan.description)}</p>
+      <dl>
+        <div><dt>Monthly</dt><dd>${monthly ? money(planInvoiceTotal(plan, monthly), monthly.currency) : plan.code === "free" ? "Free" : "Not configured"}</dd></div>
+        <div><dt>Annual</dt><dd>${annual ? money(planInvoiceTotal(plan, annual), annual.currency) : plan.code === "free" ? "Free" : "Not configured"}</dd></div>
+      </dl>
+      ${plan.code === "free" || !currentWorkspaceIsOwned() ? "" : `<button type="button" data-select-renewal-plan="${plan.code}" ${monthly || annual ? "" : "disabled"}>${current ? "Renew plan" : "Choose plan"}</button>`}
+    `;
+    list.append(card);
+  });
+}
+
+function renderRenewalHistory() {
+  const list = $("#renewalHistoryList");
+  if (!state.renewalRequests.length) {
+    list.innerHTML = emptyState("No payment requests", "Submitted payments and review decisions will appear here.");
+    return;
+  }
+  list.innerHTML = "";
+  state.renewalRequests.forEach((request) => {
+    const invoice = state.subscriptionInvoices.find((item) => item.id === request.invoice_id);
+    const payment = state.subscriptionPayments.find((item) => item.renewal_request_id === request.id);
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `<div class="record-main"><strong>${escapeHtml(invoice?.plan_name || "Subscription")}</strong><span>${escapeHtml(invoice?.invoice_number || "Invoice pending")} &middot; ${titleCase(invoice?.billing_period)} &middot; ${new Date(request.created_at).toLocaleDateString()}</span>${request.rejection_reason ? `<small>${escapeHtml(request.rejection_reason)}</small>` : ""}<div class="badge-row">${statusBadge(request.status)}</div></div><div class="record-side"><strong>${invoice ? money(invoice.total_amount, invoice.currency) : ""}</strong>${payment?.receipt_number ? `<small>Receipt ${escapeHtml(payment.receipt_number)}</small>` : ""}</div>`;
+    list.append(article);
+  });
+}
+
+function renderEntitlementHistory() {
+  const list = $("#entitlementHistoryList");
+  if (!state.entitlementHistory.length) {
+    list.innerHTML = emptyState("No plan history", "The initial entitlement will appear after the complete schema is applied.");
+    return;
+  }
+  list.innerHTML = "";
+  state.entitlementHistory.forEach((entry) => {
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `<div class="record-main"><strong>${escapeHtml(entry.plans?.display_name || "Plan")}</strong><span>${escapeHtml(entry.reason)} &middot; ${new Date(entry.effective_from).toLocaleDateString()}</span><div class="badge-row">${statusBadge(entry.status)}</div></div><div class="record-side">${entry.effective_until ? `<small>Through ${new Date(entry.effective_until).toLocaleDateString()}</small>` : "<small>No expiry</small>"}</div>`;
+    list.append(article);
+  });
 }
 
 function renderNotifications() {
@@ -1588,6 +1880,112 @@ function openNotificationDialog() {
   if (dialog && !dialog.open) dialog.showModal();
 }
 
+function eligibleRenewalPlans() {
+  const workspace = currentBudgetWorkspace();
+  return state.plans.filter((plan) => plan.workspace_type === workspace?.workspace_type && plan.code !== "free");
+}
+
+function openRenewalDialog(planCode = null) {
+  if (!currentWorkspaceIsOwned()) {
+    showToast("Only the workspace owner can submit a subscription payment.");
+    return;
+  }
+  const plans = eligibleRenewalPlans();
+  if (!plans.length) {
+    showToast("No paid plan is available for this workspace yet.");
+    return;
+  }
+  const select = $("#renewalPlan");
+  select.innerHTML = "";
+  plans.forEach((plan) => select.append(new Option(plan.display_name, plan.code)));
+  select.value = plans.some((plan) => plan.code === planCode)
+    ? planCode
+    : plans.some((plan) => plan.code === state.workspaceEntitlement?.plan_code)
+      ? state.workspaceEntitlement.plan_code
+      : plans[0].code;
+  $("#renewalPaymentDate").value = toDateValue(new Date());
+  updateRenewalQuote();
+  const dialog = $("#renewalDialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+function updateRenewalQuote() {
+  const plan = state.plans.find((item) => item.code === $("#renewalPlan").value);
+  const period = $("#renewalPeriod").value;
+  const availablePrices = state.planPrices.filter((price) => price.plan_id === plan?.id && price.billing_period === period && price.is_active);
+  const currencySelect = $("#renewalCurrency");
+  const previousCurrency = currencySelect.value;
+  currencySelect.innerHTML = "";
+  availablePrices.forEach((price) => currencySelect.append(new Option(price.currency, price.currency)));
+  if (availablePrices.some((price) => price.currency === previousCurrency)) currencySelect.value = previousCurrency;
+  const price = availablePrices.find((item) => item.currency === currencySelect.value) || availablePrices[0] || null;
+  if (price) currencySelect.value = price.currency;
+  const total = planInvoiceTotal(plan, price);
+  $("#renewalAmount").value = price ? total.toFixed(2) : "";
+  $("#renewalSubmitButton").disabled = !price;
+  const includedSeats = plan?.code === "household" ? 4 : plan?.code === "business" ? 6 : 1;
+  const extraSeats = Math.max(0, Number(state.billableMemberCount || 1) - includedSeats);
+  $("#renewalInvoiceSummary").innerHTML = price
+    ? `<div><span>Base plan</span><strong>${money(price.amount, price.currency)}</strong></div><div><span>Additional members (${extraSeats})</span><strong>${money(extraSeats * Number(price.extra_member_amount || 0), price.currency)}</strong></div><div class="invoice-total"><span>Total submitted</span><strong>${money(total, price.currency)}</strong></div>`
+    : `<strong>Price not configured.</strong><span>An administrator must publish a ${period} price before this plan can be purchased.</span>`;
+}
+
+async function uploadSubscriptionProof(file, workspaceId) {
+  validateProofFile(file);
+  const extension = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `workspaces/${workspaceId}/${state.session.user.id}/${crypto.randomUUID()}.${extension || "bin"}`;
+  const { error } = await supabase.storage.from(SUBSCRIPTION_PROOF_BUCKET).upload(path, file, {
+    contentType: file.type,
+    upsert: false
+  });
+  if (error) throw new Error(error.message);
+  return path;
+}
+
+async function submitSubscriptionRenewal(event) {
+  event.preventDefault();
+  const workspace = currentBudgetWorkspace();
+  const plan = state.plans.find((item) => item.code === $("#renewalPlan").value);
+  const period = $("#renewalPeriod").value;
+  const currency = $("#renewalCurrency").value;
+  const price = activePriceFor(plan?.id, period, currency);
+  const amount = planInvoiceTotal(plan, price);
+  const proof = $("#renewalProof").files[0] || null;
+  const submitButton = $("#renewalSubmitButton");
+  let proofPath = null;
+  try {
+    if (!workspace || !plan || !price) throw new Error("Choose a plan with an active price.");
+    setSubmitting(submitButton, true, "Submitting...");
+    if (proof) proofPath = await uploadSubscriptionProof(proof, workspace.id);
+    await query("subscription payment submit", supabase.rpc("submit_subscription_renewal", {
+      p_workspace_id: workspace.id,
+      p_plan_code: plan.code,
+      p_billing_period: period,
+      p_currency: currency,
+      p_amount: amount,
+      p_payment_method: $("#renewalMethod").value,
+      p_payment_date: $("#renewalPaymentDate").value,
+      p_reference_number: $("#renewalReference").value.trim(),
+      p_notes: $("#renewalNotes").value.trim() || null,
+      p_proof_path: proofPath,
+      p_proof_name: proof?.name || null,
+      p_proof_mime_type: proof?.type || null,
+      p_proof_size_bytes: proof?.size || null
+    }));
+    $("#renewalForm").reset();
+    $("#renewalDialog").close();
+    await loadWorkspaceSubscriptionData();
+    renderSubscription();
+    showToast("Payment submitted for review. Access changes only after approval.");
+  } catch (error) {
+    if (proofPath) await supabase.storage.from(SUBSCRIPTION_PROOF_BUCKET).remove([proofPath]).catch(() => {});
+    showToast(error.message);
+  } finally {
+    setSubmitting(submitButton, false, "Submit for review");
+    updateRenewalQuote();
+  }
+}
+
 async function inviteMember(event) {
   event.preventDefault();
   assertSupabase();
@@ -1617,6 +2015,7 @@ async function inviteMember(event) {
     $("#inviteForm").reset();
     $("#inviteMemberDialog").close();
     await loadFamilyData();
+    await loadWorkspaceSubscriptionData();
     renderFamilyApp();
     showToast("Invitation sent.");
   } catch (error) {
@@ -1641,6 +2040,7 @@ async function respondToInvitation(invitationId, status) {
     await loadAccess();
     await loadFamily();
     await loadFamilyData();
+    await loadWorkspaceSubscriptionData();
     renderFamilyApp();
     showToast(status === "accepted" ? "Family invitation accepted." : "Family invitation rejected.");
   } catch (error) {
@@ -1655,9 +2055,10 @@ async function createFamilyWorkspace(name, monthlyBudget, currency) {
       : "An active subscription is required to create a family.");
     return null;
   }
+  const rpcName = hasActiveMembership() ? "create_family_workspace" : "create_household_subscription_workspace";
   const familyId = await query(
     "family create",
-    supabase.rpc("create_family_workspace", {
+    supabase.rpc(rpcName, {
       p_name: name,
       p_monthly_budget: Number(monthlyBudget || 0),
       p_currency: currency
@@ -1668,6 +2069,15 @@ async function createFamilyWorkspace(name, monthlyBudget, currency) {
 }
 
 function renderReports() {
+  const hasAnalytics = Boolean(
+    state.workspaceEntitlement?.finance_analytics &&
+    state.workspaceEntitlement?.effective_status === "active" &&
+    !state.workspaceEntitlement?.read_only
+  );
+  $("#reportsLockNotice").classList.toggle("hidden", hasAnalytics);
+  document.querySelector(".report-summary-grid").classList.toggle("hidden", !hasAnalytics);
+  document.querySelector(".report-analysis-grid").classList.toggle("hidden", !hasAnalytics);
+  if (!hasAnalytics) return;
   const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
   const paid = occurrences.filter((item) => item.status === "paid").length;
   const partial = occurrences.filter((item) => item.status === "partial").length;
@@ -1810,9 +2220,11 @@ function renderAdmin() {
   if (state.adminTab === "dashboard") renderAdminSummary();
   if (state.adminTab === "households") renderAdminFamilies();
   if (state.adminTab === "users") renderHeads();
+  if (state.adminTab === "plans") renderAdminPlans();
   if (state.adminTab === "finance") {
     renderPaymentHeadOptions();
     renderPlatformPayments();
+    renderSubscriptionReviews();
   }
   if (state.adminTab === "support") {
     renderAdminNoteOptions();
@@ -1820,8 +2232,114 @@ function renderAdmin() {
   }
 }
 
+function renderAdminPlans() {
+  const list = $("#adminPlanList");
+  list.innerHTML = "";
+  state.adminPlans.forEach((plan) => {
+    const activePrices = state.adminPlanPrices.filter((price) => price.plan_id === plan.id && price.is_active);
+    const card = document.createElement("article");
+    card.className = "plan-card";
+    card.innerHTML = `
+      <div class="plan-card-heading"><span class="mini-badge">${titleCase(plan.workspace_type)}</span><h4>${escapeHtml(plan.display_name)}</h4></div>
+      <p>${escapeHtml(plan.description)}</p>
+      <div class="plan-price-list">
+        ${activePrices.length ? activePrices.map((price) => `<div><strong>${titleCase(price.billing_period)}</strong><span>${money(price.amount, price.currency)} base${Number(price.extra_member_amount) ? ` &middot; ${money(price.extra_member_amount, price.currency)} per extra member` : ""}</span></div>`).join("") : "<span>No active prices configured.</span>"}
+      </div>
+    `;
+    list.append(card);
+  });
+}
+
+function renderSubscriptionReviews() {
+  const list = $("#subscriptionReviewList");
+  const pending = state.adminSubscriptionPayments.filter((payment) => payment.status === "pending_review");
+  if (!pending.length) {
+    list.innerHTML = emptyState("No payments waiting", "New user proof submissions will appear here for finance review.");
+    return;
+  }
+  list.innerHTML = "";
+  pending.forEach((payment) => {
+    const request = state.adminRenewalRequests.find((item) => item.id === payment.renewal_request_id);
+    const invoice = state.adminSubscriptionInvoices.find((item) => item.id === request?.invoice_id);
+    const workspace = state.adminWorkspaces.find((item) => item.id === payment.workspace_id);
+    const proof = state.adminSubscriptionProofs.find((item) => item.payment_id === payment.id);
+    const canReview = ["super_admin", "admin_staff", "finance_staff"].includes(state.adminRole);
+    const article = document.createElement("article");
+    article.className = "record-card subscription-review-card";
+    article.innerHTML = `
+      <div class="record-main"><strong>${escapeHtml(workspace?.name || "Workspace")}</strong><span>${escapeHtml(invoice?.plan_name || "Plan")} &middot; ${titleCase(invoice?.billing_period)} &middot; reference ${escapeHtml(payment.reference_number)}</span><small>Submitted ${new Date(payment.created_at).toLocaleString()} by an authenticated workspace owner.</small><div class="badge-row">${statusBadge(payment.status)}${proof ? '<span class="mini-badge">proof attached</span>' : ""}</div></div>
+      <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong><div class="row-actions">${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}${canReview ? `<button class="primary" type="button" data-review-subscription="${payment.id}" data-review-decision="approved">Approve</button><button type="button" data-review-subscription="${payment.id}" data-review-decision="rejected">Reject</button>` : '<span class="mini-badge">Read only</span>'}</div></div>
+    `;
+    list.append(article);
+  });
+}
+
+async function savePlanPrice(event) {
+  event.preventDefault();
+  const submitButton = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
+  const currency = $("#planPriceCurrency").value.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(currency)) {
+    showToast("Enter a three-letter ISO currency code, such as USD, ZAR, or ZWG.");
+    return;
+  }
+  try {
+    setSubmitting(submitButton, true, "Saving...");
+    await query("plan price save", supabase.rpc("save_plan_price", {
+      p_plan_code: $("#planPricePlan").value,
+      p_billing_period: $("#planPricePeriod").value,
+      p_currency: currency,
+      p_amount: Number($("#planPriceAmount").value),
+      p_extra_member_amount: Number($("#planPriceExtra").value || 0)
+    }));
+    $("#planPriceForm").reset();
+    $("#planPriceCurrency").value = currency;
+    $("#planPriceExtra").value = "0";
+    await loadAdminData("plans");
+    renderAdminPlans();
+    showToast("Plan price published. Earlier invoices keep their original price snapshots.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    setSubmitting(submitButton, false, "Save active price");
+  }
+}
+
+async function reviewSubscriptionPayment(paymentId, decision) {
+  let reason = null;
+  if (decision === "rejected") {
+    reason = window.prompt("Reason shown to the workspace owner:");
+    if (!reason?.trim()) return;
+  }
+  try {
+    await query("subscription payment review", supabase.rpc("review_subscription_payment", {
+      p_payment_id: paymentId,
+      p_decision: decision,
+      p_reason: reason
+    }));
+    await loadAdminData("finance");
+    renderAdmin();
+    showToast(decision === "approved" ? "Payment approved and entitlement updated." : "Payment rejected with the supplied reason.");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
+async function openSubscriptionProof(proofId) {
+  const proof = state.adminSubscriptionProofs.find((item) => item.id === proofId);
+  if (!proof) return;
+  try {
+    const signed = await query("subscription proof link", supabase.storage.from(SUBSCRIPTION_PROOF_BUCKET).createSignedUrl(proof.storage_path, 60));
+    window.open(signed.signedUrl, "_blank", "noopener,noreferrer");
+  } catch (error) {
+    showToast(error.message);
+  }
+}
+
 function renderAdminTabs() {
   document.querySelectorAll("[data-admin-tab]").forEach((button) => {
+    if (button.dataset.adminTab === "plans") {
+      button.classList.toggle("hidden", !["super_admin", "admin_staff"].includes(state.adminRole));
+    }
     button.classList.toggle("active", button.dataset.adminTab === state.adminTab);
   });
   document.querySelectorAll("[data-admin-panel]").forEach((panel) => {
@@ -1832,11 +2350,12 @@ function renderAdminTabs() {
 function renderAdminSummary() {
   const occurrences = generateOccurrences(state.adminPaymentItems, state.adminPaymentRecords, state.filterMonth);
   $("#adminEmail").textContent = state.session.user.email || "-";
-  $("#adminFamilyCount").textContent = state.adminFamilies.length;
+  $("#adminFamilyCount").textContent = state.adminWorkspaces.length;
   $("#adminOverdueCount").textContent = occurrences.filter((item) => item.status === "overdue").length;
   $("#adminDueTotal").textContent = formatOccurrenceCurrencyTotals(occurrences);
-  $("#adminRevenueTotal").textContent = formatCurrencyTotals(state.payments);
-  $("#adminPaymentCount").textContent = `${state.payments.length} payments`;
+  const approvedSubscriptionPayments = state.adminSubscriptionPayments.filter((payment) => payment.status === "approved");
+  $("#adminRevenueTotal").textContent = formatCurrencyTotals([...state.payments, ...approvedSubscriptionPayments]);
+  $("#adminPaymentCount").textContent = `${state.payments.length + approvedSubscriptionPayments.length} payments`;
   renderAdminAttention(occurrences);
   renderRecentPlatformPayments();
 }
@@ -1875,8 +2394,11 @@ function renderAdminFamilies() {
   const families = state.adminFamilies.filter((family) =>
     `${family.name} ${family.owner_email || ""}`.toLowerCase().includes(search)
   );
-  if (!families.length) {
-    list.innerHTML = emptyState("No households found", "New users appear here after creating a household.");
+  const generalizedWorkspaces = state.adminWorkspaces.filter((workspace) =>
+    !workspace.legacy_family_id && `${workspace.name} ${workspace.workspace_type}`.toLowerCase().includes(search)
+  );
+  if (!families.length && !generalizedWorkspaces.length) {
+    list.innerHTML = emptyState("No workspaces found", "Every registered user receives a Personal workspace automatically.");
     return;
   }
   list.innerHTML = "";
@@ -1919,6 +2441,18 @@ function renderAdminFamilies() {
     `;
     list.append(article);
   });
+  generalizedWorkspaces.forEach((workspace) => {
+    const subscription = state.adminSubscriptions.find((item) => item.workspace_id === workspace.id);
+    const plan = state.adminPlans.find((item) => item.id === subscription?.plan_id);
+    const owner = state.adminProfiles.find((profile) => profile.id === workspace.owner_id);
+    const article = document.createElement("article");
+    article.className = "record-card admin-household-card";
+    article.innerHTML = `
+      <div class="record-main"><strong>${escapeHtml(workspace.name)}</strong><span>${escapeHtml(owner?.email || workspace.owner_id)} &middot; ${titleCase(workspace.workspace_type)} workspace</span><div class="badge-row">${statusBadge(workspace.status)}${statusBadge(plan?.display_name || "Plan not set")}</div></div>
+      <div class="record-side"><small>Created ${new Date(workspace.created_at).toLocaleDateString()}</small></div>
+    `;
+    list.append(article);
+  });
 }
 
 function renderHeads() {
@@ -1934,19 +2468,26 @@ function renderHeads() {
     const ownedCount = state.adminFamilies.filter((family) =>
       (family.owner_email || "").toLowerCase() === email.toLowerCase()
     ).length;
+    const ownedWorkspaces = profile ? state.adminWorkspaces.filter((workspace) => workspace.owner_id === profile.id) : [];
+    const joinedWorkspaceIds = new Set(profile ? state.adminWorkspaceMembers.filter((member) => member.user_id === profile.id && member.status === "active").map((member) => member.workspace_id) : []);
+    const joinedCount = state.adminWorkspaces.filter((workspace) => joinedWorkspaceIds.has(workspace.id) && workspace.owner_id !== profile?.id).length;
+    const planNames = ownedWorkspaces.map((workspace) => {
+      const subscription = state.adminSubscriptions.find((item) => item.workspace_id === workspace.id);
+      const plan = state.adminPlans.find((item) => item.id === subscription?.plan_id);
+      return `${workspace.name}: ${plan?.display_name || "Not set"}`;
+    });
     const article = document.createElement("article");
     article.className = "record-card";
     article.innerHTML = `
       <div class="record-main">
         <strong>${escapeHtml(fullName)}</strong>
         <span>${escapeHtml(email)}${profile?.created_at ? ` &middot; registered ${new Date(profile.created_at).toLocaleDateString()}` : " &middot; login not registered yet"}</span>
+        ${profile ? `<small>${ownedWorkspaces.length} owned workspace${ownedWorkspaces.length === 1 ? "" : "s"} &middot; ${joinedCount} joined${planNames.length ? ` &middot; ${escapeHtml(planNames.join("; "))}` : ""}</small>` : ""}
         <div class="badge-row">
           ${statusBadge(profile ? "registered" : "not registered")}
           ${statusBadge(head?.status || "free signup")}
-          ${head ? statusBadge(head.billing_status) : ""}
           ${head ? statusBadge(head.can_add_members ? "members unlocked" : "members locked") : ""}
           <span class="mini-badge">${ownedCount}/${Number(head?.family_limit ?? 0)} families</span>
-          ${head ? `<span class="mini-badge">${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>` : ""}
         </div>
       </div>
       <div class="record-side">
@@ -2024,7 +2565,7 @@ function renderRecentPlatformPayments() {
 function renderPlatformPayments() {
   const list = $("#paymentsList");
   if (!state.payments.length) {
-    list.innerHTML = emptyState("No payment history", "Record manual platform payments as cash, EFT, card, bank deposit, or other.");
+    list.innerHTML = emptyState("No legacy payment notes", "New subscription payments are submitted by workspace owners and reviewed above.");
     return;
   }
   list.innerHTML = "";
@@ -2109,6 +2650,7 @@ async function createFamily(event) {
   const name = $("#familyName").value.trim();
   if (!name) return;
   try {
+    const subscriptionBootstrap = !hasActiveMembership();
     const created = await createFamilyWorkspace(
       name,
       $("#familyBudget").value,
@@ -2116,7 +2658,14 @@ async function createFamily(event) {
     );
     if (!created) return;
     await loadApp();
-    showToast("Household created.");
+    if (subscriptionBootstrap) {
+      state.familyTab = "subscription";
+      setRoute("family", "subscription");
+      renderFamilyApp();
+      showToast("Household created. Submit a Household plan payment for review.");
+    } else {
+      showToast("Household created.");
+    }
   } catch (error) {
     showToast(error.message);
   }
@@ -2128,6 +2677,7 @@ async function createFamilyFromMembers(event) {
   const name = $("#memberFamilyName").value.trim();
   if (!name) return;
   try {
+    const subscriptionBootstrap = !hasActiveMembership();
     const created = await createFamilyWorkspace(
       name,
       $("#memberFamilyBudget").value,
@@ -2136,7 +2686,14 @@ async function createFamilyFromMembers(event) {
     if (!created) return;
     $("#memberFamilyForm").reset();
     await loadApp();
-    showToast("Family created.");
+    if (subscriptionBootstrap) {
+      state.familyTab = "subscription";
+      setRoute("family", "subscription");
+      renderFamilyApp();
+      showToast("Household created. Submit a Household plan payment for review.");
+    } else {
+      showToast("Family created.");
+    }
   } catch (error) {
     showToast(error.message);
   }
@@ -2196,6 +2753,7 @@ async function saveObligation(event) {
     $("#paymentItemDialog").close();
     resetObligationForm();
     await loadFamilyData();
+    await loadWorkspaceSubscriptionData();
     renderFamilyApp();
   } catch (error) {
     showToast(error.message);
@@ -2203,6 +2761,10 @@ async function saveObligation(event) {
 }
 
 function openPaymentItemDialog() {
+  if (state.workspaceEntitlement?.read_only || state.workspaceEntitlement?.effective_status === "suspended") {
+    showToast("This shared workspace is read-only. The owner must renew it before payments can be changed.");
+    return;
+  }
   resetObligationForm();
   const dialog = $("#paymentItemDialog");
   if (!dialog.open) dialog.showModal();
@@ -2251,7 +2813,12 @@ function resetObligationForm() {
 }
 
 function hasPaidPlan() {
-  return hasActiveMembership();
+  return Boolean(
+    state.workspaceEntitlement &&
+    state.workspaceEntitlement.plan_code !== "free" &&
+    state.workspaceEntitlement.effective_status === "active" &&
+    !state.workspaceEntitlement.read_only
+  );
 }
 
 function userCreatedPersonalPaymentCount() {
@@ -2264,6 +2831,10 @@ function userCreatedPersonalPaymentCount() {
 }
 
 function openRecordPayment(key) {
+  if (state.workspaceEntitlement?.read_only || state.workspaceEntitlement?.effective_status === "suspended") {
+    showToast("This shared workspace is read-only. The owner must renew it before payments can be recorded.");
+    return;
+  }
   const periodStart = key.slice(key.lastIndexOf(":") + 1);
   const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, periodStart.slice(0, 7));
   const occurrence = occurrences.find((item) => item.key === key);
@@ -2424,9 +2995,6 @@ async function addHead(event) {
     full_name: $("#headName").value.trim(),
     email,
     created_by: state.session.user.id,
-    monthly_fee: Number($("#headMonthlyFee").value || 0),
-    fee_currency: $("#headFeeCurrency").value,
-    billing_status: $("#headBillingStatus").value,
     family_limit: Math.max(0, Number($("#headFamilyLimit").value || 0)),
     can_add_members: $("#headCanAddMembers").checked,
     status: "active"
@@ -2460,7 +3028,7 @@ function configureProfileAccess(profileId) {
   $("#headEmail").value = profile.email || "";
   $("#headFamilyLimit").value = 1;
   $("#headForm").scrollIntoView({ behavior: "smooth", block: "center" });
-  window.setTimeout(() => $("#headMonthlyFee").focus(), 250);
+  window.setTimeout(() => $("#headFamilyLimit").focus(), 250);
 }
 
 async function addPlatformPayment(event) {
@@ -2487,14 +3055,11 @@ async function addPlatformPayment(event) {
         notes: $("#paymentNotes").value.trim() || null
       })
     );
-    const headUpdate = { billing_status: "paid", last_payment_at: new Date().toISOString() };
-    if ($("#paidUntil").value) headUpdate.paid_until = $("#paidUntil").value;
-    await query("head billing update", supabase.from("family_heads").update(headUpdate).eq("id", head.id));
     $("#paymentForm").reset();
     $("#paymentDate").value = toDateValue(new Date());
     await loadAdminData();
     renderAdmin();
-    showToast("Platform payment recorded.");
+    showToast("Legacy payment note recorded. Subscription access changes only through an approved review request.");
   } catch (error) {
     showToast(error.message);
   }
@@ -2615,6 +3180,7 @@ async function removeFamilyMember(memberId) {
       })
     );
     await loadFamilyData();
+    await loadWorkspaceSubscriptionData();
     renderFamilyApp();
     showToast("Member removed from the family. Their membership record was retained as inactive.");
   } catch (error) {
@@ -2642,6 +3208,7 @@ async function deleteSelectedFamily() {
     state.family = null;
     await loadFamily();
     await loadFamilyData();
+    await loadWorkspaceSubscriptionData();
     renderFamilyApp();
     showToast(proofCleanupFailed
       ? "Family deleted from the database. Some receipt files still need admin cleanup."
@@ -2712,6 +3279,15 @@ function formatFileSize(bytes) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function validateProofFile(file) {
+  if (!PAYMENT_PROOF_TYPES.has(file.type)) {
+    throw new Error("Proof must be a JPG, PNG, WebP, or PDF file.");
+  }
+  if (file.size > PAYMENT_PROOF_MAX_BYTES) {
+    throw new Error("Proof files must be 10 MB or smaller.");
+  }
+}
+
 function statusBadge(status) {
   return `<span class="mini-badge ${badgeClass(status)}">${escapeHtml(status)}</span>`;
 }
@@ -2746,6 +3322,17 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.openDrawer !== undefined) openDrawer();
   if (event.target.dataset.closeDrawer !== undefined) closeDrawer();
   if (event.target.closest("[data-open-notifications]")) openNotificationDialog();
+  if (event.target.closest("[data-open-renewal-dialog]")) openRenewalDialog();
+  if (event.target.closest("[data-close-renewal-dialog]")) $("#renewalDialog").close();
+
+  const selectedRenewalPlan = event.target.closest("[data-select-renewal-plan]");
+  if (selectedRenewalPlan) openRenewalDialog(selectedRenewalPlan.dataset.selectRenewalPlan);
+
+  const subscriptionReview = event.target.closest("[data-review-subscription]");
+  if (subscriptionReview) await reviewSubscriptionPayment(subscriptionReview.dataset.reviewSubscription, subscriptionReview.dataset.reviewDecision);
+
+  const subscriptionProof = event.target.closest("[data-open-subscription-proof]");
+  if (subscriptionProof) await openSubscriptionProof(subscriptionProof.dataset.openSubscriptionProof);
 
   const dueMonthToggle = event.target.closest("[data-toggle-due-month]");
   if (dueMonthToggle) {
@@ -2962,6 +3549,11 @@ $("#recordPaymentType").addEventListener("change", (event) => {
 $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPlatformPayment);
 $("#adminNoteForm").addEventListener("submit", saveAdminNote);
+$("#planPriceForm").addEventListener("submit", savePlanPrice);
+$("#renewalForm").addEventListener("submit", submitSubscriptionRenewal);
+$("#renewalPlan").addEventListener("change", updateRenewalQuote);
+$("#renewalPeriod").addEventListener("change", updateRenewalQuote);
+$("#renewalCurrency").addEventListener("change", updateRenewalQuote);
 $("#cancelEditObligationButton").addEventListener("click", () => $("#paymentItemDialog").close());
 $("#paymentItemDialog").addEventListener("close", resetObligationForm);
 $("#inviteMemberDialog").addEventListener("close", () => {

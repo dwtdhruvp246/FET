@@ -2259,3 +2259,131 @@ input[type="file"] {
     transform: rotate(360deg);
   }
 }
+/* Workspace subscriptions */
+.subscription-topbar,
+.subscription-review-panel { margin-bottom: 1.25rem; }
+
+.subscription-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.subscription-current-card,
+.plan-card,
+.invoice-summary {
+  border: 1px solid rgba(15, 118, 110, 0.17);
+  background: rgba(255, 255, 255, 0.84);
+  border-radius: 22px;
+}
+
+.subscription-current-card {
+  display: grid;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 1.05rem 1.1rem;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.06);
+}
+
+.subscription-current-card span,
+.subscription-current-card small,
+.plan-card p,
+.plan-price-list span { color: var(--muted); }
+
+.subscription-current-card strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(1.05rem, 2vw, 1.55rem);
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plan-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 245px), 1fr));
+  gap: 1rem;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  min-width: 0;
+  padding: 1.15rem;
+}
+
+.plan-card.current {
+  border-color: rgba(16, 185, 129, 0.62);
+  background: linear-gradient(145deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.94));
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, 0.13);
+}
+
+.plan-card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.plan-card h4 { margin: 0; color: var(--ink); font-size: 1.2rem; }
+.plan-card p { min-height: 3.4em; margin: 0; line-height: 1.55; }
+.plan-card dl, .plan-price-list { display: grid; gap: 0.55rem; margin: 0; }
+
+.plan-card dl div,
+.plan-price-list div,
+.invoice-summary div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.plan-card dt { color: var(--muted); }
+.plan-card dd { margin: 0; color: var(--ink); font-weight: 800; text-align: right; }
+.plan-card button { margin-top: auto; }
+.subscription-history-grid, .subscription-admin-grid { margin-top: 1.25rem; }
+.subscription-review-card .record-side { min-width: min(100%, 290px); }
+.renewal-dialog { width: min(760px, calc(100vw - 2rem)); }
+
+.invoice-summary { display: grid; gap: 0.65rem; padding: 1rem; }
+.invoice-summary .invoice-total {
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(100, 116, 139, 0.22);
+  color: var(--ink);
+  font-size: 1.08rem;
+}
+
+.locked-feature-panel {
+  max-width: 720px;
+  margin: 2rem auto;
+  padding: clamp(1.25rem, 4vw, 2.4rem);
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  border-radius: 26px;
+  background: linear-gradient(145deg, rgba(236, 253, 245, 0.96), rgba(255, 255, 255, 0.94));
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.09);
+  text-align: center;
+}
+
+.locked-feature-panel h3 { margin: 0.35rem 0 0.75rem; font-size: clamp(1.35rem, 3vw, 2rem); }
+.locked-feature-panel p:not(.eyebrow) { max-width: 58ch; margin: 0 auto 1.15rem; color: var(--muted); line-height: 1.6; }
+
+@media (max-width: 980px) {
+  .subscription-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 560px) {
+  .subscription-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+  .subscription-current-card { padding: 0.85rem; border-radius: 17px; }
+  .subscription-current-card strong { font-size: clamp(0.94rem, 5.5vw, 1.15rem); }
+  .subscription-current-card small, .subscription-current-card span {
+    overflow: hidden;
+    font-size: 0.75rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .plan-card { border-radius: 18px; }
+  .plan-card p { min-height: 0; }
+  .subscription-review-card .record-side { min-width: 0; }
+}
