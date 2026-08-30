@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=34" />
+    <link rel="stylesheet" href="styles.css?v=35" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=38"></script>
+    <script type="module" src="app.js?v=39"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -516,9 +516,10 @@
 
     <dialog id="renewalDialog" class="payment-dialog renewal-dialog" aria-labelledby="renewalDialogTitle">
       <form id="renewalForm" class="form-grid">
-        <div class="panel-heading inline full"><div><p class="eyebrow">Subscription payment</p><h3 id="renewalDialogTitle">Submit payment for review</h3><p class="muted-copy">Submitting payment does not activate access automatically. Authorized finance staff will review it.</p></div><button class="icon-button" type="button" data-close-renewal-dialog aria-label="Close subscription payment form">Close</button></div>
+        <div class="panel-heading inline full"><div><p class="eyebrow">Subscription payment</p><h3 id="renewalDialogTitle">Submit payment for review</h3><p id="renewalDialogDescription" class="muted-copy">Submitting payment does not activate access automatically. Authorized finance staff will review it.</p></div><button class="icon-button" type="button" data-close-renewal-dialog aria-label="Close subscription payment form">Close</button></div>
         <label for="renewalPlan">Plan<select id="renewalPlan" required></select></label>
         <label for="renewalPeriod">Billing period<select id="renewalPeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
+        <label id="renewalFamilyNameField" class="full hidden" for="renewalFamilyName">Family name<input id="renewalFamilyName" maxlength="100" placeholder="For example, Parekh Family" /><small>This family will be created only after the payment is approved.</small></label>
         <label for="renewalCurrency">Currency<select id="renewalCurrency" required></select></label>
         <label for="renewalAmount">Amount due<input id="renewalAmount" type="number" readonly required /></label>
         <label for="renewalMethod">Payment method<select id="renewalMethod" required><option value="EFT">EFT</option><option value="Bank deposit">Bank deposit</option><option value="Cash">Cash</option><option value="Card">Card</option><option value="Other">Other</option></select></label>

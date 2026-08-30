@@ -260,6 +260,12 @@ function friendlyMessage(message = "") {
   if (text.includes("FAMILY_LIMIT_REACHED")) {
     return "You have reached your family limit. Ask the Mushavo Budget admin to increase it.";
   }
+  if (text.includes("FAMILY_PLAN_REQUEST_ALREADY_PENDING")) {
+    return "A Family plan request is already waiting for review. The family will be created after it is approved.";
+  }
+  if (text.includes("FAMILY_NAME_REQUIRED")) {
+    return "Enter the name of the family you want to create.";
+  }
   if (text.includes("PERSONAL_PAYMENT_LIMIT_REACHED")) {
     return "Free accounts can keep up to 5 active personal payments. Family payments remain unlimited.";
   }
@@ -1739,7 +1745,11 @@ function renderWorkspacePlans() {
     const annual = activePriceFor(plan.id, "annual", monthly?.currency) || activePriceFor(plan.id, "annual");
     const appliesToSelectedWorkspace = plan.workspace_type === workspace?.workspace_type;
     const current = appliesToSelectedWorkspace && plan.code === state.workspaceEntitlement?.plan_code;
-    const canSelect = appliesToSelectedWorkspace && plan.code !== "free" && currentWorkspaceIsOwned();
+    const startsNewFamily = workspace?.workspace_type === "personal" && plan.workspace_type === "household";
+    const familyPlanPending = startsNewFamily && state.renewalRequests.some((request) =>
+      request.provision_workspace_on_approval && request.status === "pending_review"
+    );
+    const canSelect = currentWorkspaceIsOwned() && plan.code !== "free" && (appliesToSelectedWorkspace || startsNewFamily);
     const workspaceTypeLabel = plan.workspace_type === "household" ? "Family" : titleCase(plan.workspace_type);
     const availabilityMessage = plan.workspace_type === "household"
       ? "Select a Family workspace to choose this plan."
@@ -1753,8 +1763,8 @@ function renderWorkspacePlans() {
         <div><dt>Monthly</dt><dd>${monthly ? money(planInvoiceTotal(plan, monthly), monthly.currency) : plan.code === "free" ? "Free" : "Not configured"}</dd></div>
         <div><dt>Annual</dt><dd>${annual ? money(planInvoiceTotal(plan, annual), annual.currency) : plan.code === "free" ? "Free" : "Not configured"}</dd></div>
       </dl>
-      ${canSelect ? `<button type="button" data-select-renewal-plan="${plan.code}" ${monthly || annual ? "" : "disabled"}>${current ? "Renew plan" : "Choose plan"}</button>` : ""}
-      ${!appliesToSelectedWorkspace ? `<small class="plan-availability-note">${availabilityMessage}</small>` : ""}
+      ${canSelect ? `<button type="button" data-select-renewal-plan="${plan.code}" ${(monthly || annual) && !familyPlanPending ? "" : "disabled"}>${familyPlanPending ? "Awaiting approval" : current ? "Renew plan" : startsNewFamily ? "Choose Family plan" : "Choose plan"}</button>` : ""}
+      ${!appliesToSelectedWorkspace && !startsNewFamily ? `<small class="plan-availability-note">${availabilityMessage}</small>` : ""}
     `;
     list.append(card);
   });
@@ -1772,7 +1782,7 @@ function renderRenewalHistory() {
     const payment = state.subscriptionPayments.find((item) => item.renewal_request_id === request.id);
     const article = document.createElement("article");
     article.className = "record-card";
-    article.innerHTML = `<div class="record-main"><strong>${escapeHtml(invoice?.plan_name || "Subscription")}</strong><span>${escapeHtml(invoice?.invoice_number || "Invoice pending")} &middot; ${titleCase(invoice?.billing_period)} &middot; ${new Date(request.created_at).toLocaleDateString()}</span>${request.rejection_reason ? `<small>${escapeHtml(request.rejection_reason)}</small>` : ""}<div class="badge-row">${statusBadge(request.status)}</div></div><div class="record-side"><strong>${invoice ? money(invoice.total_amount, invoice.currency) : ""}</strong>${payment?.receipt_number ? `<small>Receipt ${escapeHtml(payment.receipt_number)}</small>` : ""}</div>`;
+    article.innerHTML = `<div class="record-main"><strong>${escapeHtml(invoice?.plan_name || "Subscription")}</strong><span>${escapeHtml(invoice?.invoice_number || "Invoice pending")} &middot; ${titleCase(invoice?.billing_period)} &middot; ${new Date(request.created_at).toLocaleDateString()}</span>${request.provision_workspace_on_approval ? `<small>New family: ${escapeHtml(request.requested_workspace_name || "Family workspace")}</small>` : ""}${request.rejection_reason ? `<small>${escapeHtml(request.rejection_reason)}</small>` : ""}<div class="badge-row">${statusBadge(request.status)}</div></div><div class="record-side"><strong>${invoice ? money(invoice.total_amount, invoice.currency) : ""}</strong>${payment?.receipt_number ? `<small>Receipt ${escapeHtml(payment.receipt_number)}</small>` : ""}</div>`;
     list.append(article);
   });
 }
@@ -1892,7 +1902,11 @@ function openNotificationDialog() {
 
 function eligibleRenewalPlans() {
   const workspace = currentBudgetWorkspace();
-  return state.plans.filter((plan) => plan.workspace_type === workspace?.workspace_type && plan.code !== "free");
+  return state.plans.filter((plan) => {
+    if (plan.code === "free") return false;
+    if (plan.workspace_type === workspace?.workspace_type) return true;
+    return workspace?.workspace_type === "personal" && plan.workspace_type === "household";
+  });
 }
 
 function openRenewalDialog(planCode = null) {
@@ -1921,6 +1935,8 @@ function openRenewalDialog(planCode = null) {
 
 function updateRenewalQuote() {
   const plan = state.plans.find((item) => item.code === $("#renewalPlan").value);
+  const workspace = currentBudgetWorkspace();
+  const startsNewFamily = workspace?.workspace_type === "personal" && plan?.workspace_type === "household";
   const period = $("#renewalPeriod").value;
   const availablePrices = state.planPrices.filter((price) => price.plan_id === plan?.id && price.billing_period === period && price.is_active);
   const currencySelect = $("#renewalCurrency");
@@ -1931,6 +1947,12 @@ function updateRenewalQuote() {
   const price = availablePrices.find((item) => item.currency === currencySelect.value) || availablePrices[0] || null;
   if (price) currencySelect.value = price.currency;
   const total = planInvoiceTotal(plan, price);
+  $("#renewalFamilyNameField").classList.toggle("hidden", !startsNewFamily);
+  $("#renewalFamilyName").required = startsNewFamily;
+  $("#renewalDialogTitle").textContent = startsNewFamily ? "Start a Family plan" : "Submit payment for review";
+  $("#renewalDialogDescription").textContent = startsNewFamily
+    ? "Enter the family name and submit payment. The Family workspace will be created only after an administrator approves the payment."
+    : "Submitting payment does not activate access automatically. Authorized finance staff will review it.";
   $("#renewalAmount").value = price ? total.toFixed(2) : "";
   $("#renewalSubmitButton").disabled = !price;
   const includedSeats = plan?.code === "household" ? 4 : plan?.code === "business" ? 6 : 1;
@@ -1962,12 +1984,31 @@ async function submitSubscriptionRenewal(event) {
   const amount = planInvoiceTotal(plan, price);
   const proof = $("#renewalProof").files[0] || null;
   const submitButton = $("#renewalSubmitButton");
+  const startsNewFamily = workspace?.workspace_type === "personal" && plan?.workspace_type === "household";
+  const familyName = $("#renewalFamilyName").value.trim();
   let proofPath = null;
   try {
     if (!workspace || !plan || !price) throw new Error("Choose a plan with an active price.");
+    if (startsNewFamily && !familyName) throw new Error("FAMILY_NAME_REQUIRED");
     setSubmitting(submitButton, true, "Submitting...");
     if (proof) proofPath = await uploadSubscriptionProof(proof, workspace.id);
-    await query("subscription payment submit", supabase.rpc("submit_subscription_renewal", {
+    const request = startsNewFamily
+      ? supabase.rpc("submit_family_plan_request", {
+        p_personal_workspace_id: workspace.id,
+        p_family_name: familyName,
+        p_billing_period: period,
+        p_currency: currency,
+        p_amount: amount,
+        p_payment_method: $("#renewalMethod").value,
+        p_payment_date: $("#renewalPaymentDate").value,
+        p_reference_number: $("#renewalReference").value.trim(),
+        p_notes: $("#renewalNotes").value.trim() || null,
+        p_proof_path: proofPath,
+        p_proof_name: proof?.name || null,
+        p_proof_mime_type: proof?.type || null,
+        p_proof_size_bytes: proof?.size || null
+      })
+      : supabase.rpc("submit_subscription_renewal", {
       p_workspace_id: workspace.id,
       p_plan_code: plan.code,
       p_billing_period: period,
@@ -1981,12 +2022,15 @@ async function submitSubscriptionRenewal(event) {
       p_proof_name: proof?.name || null,
       p_proof_mime_type: proof?.type || null,
       p_proof_size_bytes: proof?.size || null
-    }));
+      });
+    await query("subscription payment submit", request);
     $("#renewalForm").reset();
     $("#renewalDialog").close();
     await loadWorkspaceSubscriptionData();
     renderSubscription();
-    showToast("Payment submitted for review. Access changes only after approval.");
+    showToast(startsNewFamily
+      ? "Family plan submitted for review. The family will be created after approval."
+      : "Payment submitted for review. Access changes only after approval.");
   } catch (error) {
     if (proofPath) await supabase.storage.from(SUBSCRIPTION_PROOF_BUCKET).remove([proofPath]).catch(() => {});
     showToast(error.message);
@@ -2308,7 +2352,7 @@ function renderSubscriptionReviews() {
     const article = document.createElement("article");
     article.className = "record-card subscription-review-card";
     article.innerHTML = `
-      <div class="record-main"><strong>${escapeHtml(workspace?.name || "Workspace")}</strong><span>${escapeHtml(invoice?.plan_name || "Plan")} &middot; ${titleCase(invoice?.billing_period)} &middot; reference ${escapeHtml(payment.reference_number)}</span><small>Submitted ${new Date(payment.created_at).toLocaleString()} by an authenticated workspace owner.</small><div class="badge-row">${statusBadge(payment.status)}${proof ? '<span class="mini-badge">proof attached</span>' : ""}</div></div>
+      <div class="record-main"><strong>${escapeHtml(request?.provision_workspace_on_approval ? request.requested_workspace_name || "New Family workspace" : workspace?.name || "Workspace")}</strong><span>${escapeHtml(invoice?.plan_name || "Plan")} &middot; ${titleCase(invoice?.billing_period)} &middot; reference ${escapeHtml(payment.reference_number)}</span><small>${request?.provision_workspace_on_approval ? "Creates a new Family workspace after approval." : "Renews or changes the selected workspace plan."} Submitted ${new Date(payment.created_at).toLocaleString()} by an authenticated workspace owner.</small><div class="badge-row">${statusBadge(payment.status)}${request?.provision_workspace_on_approval ? '<span class="mini-badge">new family</span>' : ""}${proof ? '<span class="mini-badge">proof attached</span>' : ""}</div></div>
       <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong><div class="row-actions">${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}${canReview ? `<button class="primary" type="button" data-review-subscription="${payment.id}" data-review-decision="approved">Approve</button><button type="button" data-review-subscription="${payment.id}" data-review-decision="rejected">Reject</button>` : '<span class="mini-badge">Read only</span>'}</div></div>
     `;
     list.append(article);
