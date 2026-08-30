@@ -26,6 +26,7 @@ const state = {
   familyInvitations: [],
   notifications: [],
   heads: [],
+  adminProfiles: [],
   adminFamilies: [],
   adminMembers: [],
   adminPaymentItems: [],
@@ -806,6 +807,9 @@ async function loadAdminData(tab = state.adminTab) {
   }
   if (["households", "users", "finance"].includes(tab)) {
     add("heads", "heads load", supabase.from("family_heads").select("*").order("created_at", { ascending: false }));
+  }
+  if (tab === "users") {
+    add("adminProfiles", "registered users load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
   }
   if (tab === "households") {
     add("adminMembers", "admin members load", supabase.from("family_members").select("*").order("created_at", { ascending: true }));
@@ -1919,35 +1923,78 @@ function renderAdminFamilies() {
 
 function renderHeads() {
   const list = $("#headsList");
-  if (!state.heads.length) {
-    list.innerHTML = emptyState("No configured users", "Household owners can be configured manually or from the Households page.");
+  const directoryUsers = adminDirectoryUsers();
+  $("#adminUserDirectoryMeta").textContent = `${directoryUsers.length} total · ${state.adminProfiles.length} registered`;
+  if (!directoryUsers.length) {
+    list.innerHTML = emptyState("No users yet", "Registered accounts and users added by an administrator will appear here.");
     return;
   }
   list.innerHTML = "";
-  state.heads.forEach((head) => {
+  directoryUsers.forEach(({ profile, head, fullName, email }) => {
     const ownedCount = state.adminFamilies.filter((family) =>
-      (family.owner_email || "").toLowerCase() === head.email.toLowerCase()
+      (family.owner_email || "").toLowerCase() === email.toLowerCase()
     ).length;
     const article = document.createElement("article");
     article.className = "record-card";
     article.innerHTML = `
       <div class="record-main">
-        <strong>${escapeHtml(head.full_name)}</strong>
-        <span>${escapeHtml(head.email)} &middot; ${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>
-        <div class="badge-row">${statusBadge(head.status)}${statusBadge(head.billing_status)}${statusBadge(head.can_add_members ? "members unlocked" : "members locked")}<span class="mini-badge">${ownedCount}/${Number(head.family_limit ?? 1)} families</span></div>
+        <strong>${escapeHtml(fullName)}</strong>
+        <span>${escapeHtml(email)}${profile?.created_at ? ` &middot; registered ${new Date(profile.created_at).toLocaleDateString()}` : " &middot; login not registered yet"}</span>
+        <div class="badge-row">
+          ${statusBadge(profile ? "registered" : "not registered")}
+          ${statusBadge(head?.status || "free signup")}
+          ${head ? statusBadge(head.billing_status) : ""}
+          ${head ? statusBadge(head.can_add_members ? "members unlocked" : "members locked") : ""}
+          <span class="mini-badge">${ownedCount}/${Number(head?.family_limit ?? 0)} families</span>
+          ${head ? `<span class="mini-badge">${money(head.monthly_fee, head.fee_currency || "USD")} monthly</span>` : ""}
+        </div>
       </div>
       <div class="record-side">
-        <div class="row-actions">
+        ${head ? `<div class="row-actions">
           <label class="inline-number-control">Family limit<input data-family-limit-input="${head.id}" type="number" min="0" max="100" step="1" value="${Number(head.family_limit ?? 1)}" /></label>
           <button type="button" data-save-family-limit="${head.id}">Save limit</button>
           <button type="button" data-toggle-member-access="${head.id}" data-next-member-access="${head.can_add_members ? "false" : "true"}">${head.can_add_members ? "Lock members" : "Unlock members"}</button>
           <button type="button" data-toggle-head="${head.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">${head.status === "active" ? "Suspend" : "Reactivate"}</button>
-          <button type="button" data-delete-head="${head.id}">Revoke</button>
-        </div>
+          <button type="button" data-delete-head="${head.id}">Revoke access</button>
+        </div>` : `<button type="button" data-configure-profile="${profile.id}">Configure access</button>`}
       </div>
     `;
     list.append(article);
   });
+}
+
+function adminDirectoryUsers() {
+  const headsByUserId = new Map(
+    state.heads.filter((head) => head.user_id).map((head) => [head.user_id, head])
+  );
+  const headsByEmail = new Map(
+    state.heads.map((head) => [(head.email || "").toLowerCase(), head])
+  );
+  const includedHeadIds = new Set();
+  const rows = state.adminProfiles.map((profile) => {
+    const email = (profile.email || "").toLowerCase();
+    const head = headsByUserId.get(profile.id) || headsByEmail.get(email) || null;
+    if (head) includedHeadIds.add(head.id);
+    return {
+      profile,
+      head,
+      fullName: profile.full_name || head?.full_name || email.split("@")[0] || "Mushavo user",
+      email,
+      createdAt: profile.created_at
+    };
+  });
+
+  state.heads
+    .filter((head) => !includedHeadIds.has(head.id))
+    .forEach((head) => rows.push({
+      profile: null,
+      head,
+      fullName: head.full_name,
+      email: (head.email || "").toLowerCase(),
+      createdAt: head.created_at
+    }));
+
+  return rows.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 }
 
 function renderPaymentHeadOptions() {
@@ -2371,7 +2418,9 @@ async function deletePaymentItem(itemId) {
 async function addHead(event) {
   event.preventDefault();
   const email = $("#headEmail").value.trim().toLowerCase();
+  const matchingProfile = state.adminProfiles.find((profile) => (profile.email || "").toLowerCase() === email);
   const payload = {
+    user_id: matchingProfile?.id || null,
     full_name: $("#headName").value.trim(),
     email,
     created_by: state.session.user.id,
@@ -2401,6 +2450,17 @@ async function addHead(event) {
   } catch (error) {
     showToast(error.message);
   }
+}
+
+function configureProfileAccess(profileId) {
+  const profile = state.adminProfiles.find((item) => item.id === profileId);
+  if (!profile) return;
+  $("#headForm").reset();
+  $("#headName").value = profile.full_name || "";
+  $("#headEmail").value = profile.email || "";
+  $("#headFamilyLimit").value = 1;
+  $("#headForm").scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(() => $("#headMonthlyFee").focus(), 250);
 }
 
 async function addPlatformPayment(event) {
@@ -2723,6 +2783,9 @@ document.addEventListener("click", async (event) => {
   if (event.target.dataset.signOutError !== undefined) {
     await supabase.auth.signOut();
   }
+
+  const configureProfileId = event.target.dataset.configureProfile;
+  if (configureProfileId) configureProfileAccess(configureProfileId);
 
   const adminTab = event.target.dataset.adminTab;
   if (adminTab) {

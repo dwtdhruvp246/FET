@@ -483,7 +483,8 @@ code {
 .mini-badge.paid,
 .mini-badge.members-unlocked,
 .mini-badge.clear,
-.mini-badge.on-track {
+.mini-badge.on-track,
+.mini-badge.registered {
   border-color: rgba(16, 185, 129, 0.22);
   background: rgba(209, 250, 229, 0.8);
   color: #047857;
@@ -495,6 +496,12 @@ code {
 .mini-badge.payment-not-set,
 .mini-badge.trial,
 .mini-badge.expiring-soon {
+  border-color: rgba(217, 119, 6, 0.2);
+  background: rgba(254, 243, 199, 0.88);
+  color: #b45309;
+}
+
+.mini-badge.not-registered {
   border-color: rgba(217, 119, 6, 0.2);
   background: rgba(254, 243, 199, 0.88);
   color: #b45309;
