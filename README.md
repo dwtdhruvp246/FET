@@ -19,7 +19,7 @@ A static recurring personal and family payments tracker powered by Supabase Auth
 - Partial and full payment records with optional private receipt/image/PDF proof
 - Member contact fields for email/phone and future reminders
 - `Family & Members` workspace with family details and registered-user invitations
-- Multiple family workspaces with an admin-controlled family limit
+- Multiple family workspaces for active members, with an admin-controlled family limit
 - Family switching and family-specific member invitation dropdowns
 - Permanent owner-controlled family deletion with database cascades
 - Safe member removal that retains an inactive membership record

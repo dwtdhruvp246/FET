@@ -1054,7 +1054,7 @@ function canAddMembers() {
 }
 
 function canCreateFamily() {
-  return ownedFamilies().length === 0;
+  return hasActiveMembership() && ownedFamilies().length < familyLimit();
 }
 
 function hasActiveMembership() {
@@ -1112,15 +1112,9 @@ function renderMemberAccess() {
   const createTitle = $("#createFamilyTitle");
   const createPanelCopy = createTitle?.parentElement?.querySelector(".muted-copy");
   const createButton = $("#memberFamilyForm").querySelector('button[type="submit"]');
-  if (!hasActiveMembership() && owned.length === 0) {
-    createTitle.textContent = "Create a Household workspace";
-    if (createPanelCopy) createPanelCopy.textContent = "The workspace starts read-only. Submit the Household plan payment from Subscription for admin review.";
-    createButton.textContent = "Create household to subscribe";
-  } else {
-    createTitle.textContent = "Create another family";
-    if (createPanelCopy) createPanelCopy.textContent = "Your admin controls how many families your account may own.";
-    createButton.textContent = "Create family";
-  }
+  createTitle.textContent = "Create another family";
+  if (createPanelCopy) createPanelCopy.textContent = "Your admin controls how many families your account may own.";
+  createButton.textContent = "Create family";
   $("#memberFamilyForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowedToCreate;
   });
@@ -2055,10 +2049,9 @@ async function createFamilyWorkspace(name, monthlyBudget, currency) {
       : "An active subscription is required to create a family.");
     return null;
   }
-  const rpcName = hasActiveMembership() ? "create_family_workspace" : "create_household_subscription_workspace";
   const familyId = await query(
     "family create",
-    supabase.rpc(rpcName, {
+    supabase.rpc("create_family_workspace", {
       p_name: name,
       p_monthly_budget: Number(monthlyBudget || 0),
       p_currency: currency
@@ -2650,7 +2643,6 @@ async function createFamily(event) {
   const name = $("#familyName").value.trim();
   if (!name) return;
   try {
-    const subscriptionBootstrap = !hasActiveMembership();
     const created = await createFamilyWorkspace(
       name,
       $("#familyBudget").value,
@@ -2658,14 +2650,7 @@ async function createFamily(event) {
     );
     if (!created) return;
     await loadApp();
-    if (subscriptionBootstrap) {
-      state.familyTab = "subscription";
-      setRoute("family", "subscription");
-      renderFamilyApp();
-      showToast("Household created. Submit a Household plan payment for review.");
-    } else {
-      showToast("Household created.");
-    }
+    showToast("Household created.");
   } catch (error) {
     showToast(error.message);
   }
@@ -2677,7 +2662,6 @@ async function createFamilyFromMembers(event) {
   const name = $("#memberFamilyName").value.trim();
   if (!name) return;
   try {
-    const subscriptionBootstrap = !hasActiveMembership();
     const created = await createFamilyWorkspace(
       name,
       $("#memberFamilyBudget").value,
@@ -2686,14 +2670,7 @@ async function createFamilyFromMembers(event) {
     if (!created) return;
     $("#memberFamilyForm").reset();
     await loadApp();
-    if (subscriptionBootstrap) {
-      state.familyTab = "subscription";
-      setRoute("family", "subscription");
-      renderFamilyApp();
-      showToast("Household created. Submit a Household plan payment for review.");
-    } else {
-      showToast("Family created.");
-    }
+    showToast("Family created.");
   } catch (error) {
     showToast(error.message);
   }

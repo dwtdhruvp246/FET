@@ -73,8 +73,8 @@ Finance Staff can approve and reject subscription payments. Support Staff can vi
 9. In Admin **Finance**, reject one request and confirm a reason is required and shown to the user.
 10. Submit again and approve. Confirm the receipt number, invoice status, review row, entitlement history, notification, plan access, and paid-through time are created once.
 11. Click Approve again and confirm the entitlement is not extended twice.
-12. Create a Household workspace from a Free account. Confirm it starts read-only until Household payment approval.
-13. Approve Household payment and confirm the Family Head can invite members.
+12. From a Free account, confirm the family creation form is unavailable and a direct call to `create_family_workspace` is rejected with `ACTIVE_FAMILY_MEMBERSHIP_REQUIRED`.
+13. Activate the user's membership, create a Household workspace, approve its Household entitlement where required, and confirm the Family Head can invite members.
 14. Confirm members one through four can use the Household plan without buying subscriptions.
 15. Create an invitation for a fifth total person. Confirm the pending invitation is included in the renewal invoice total and that acceptance is blocked until the additional seat is covered by an approved invoice.
 16. Remove a member and confirm their membership becomes inactive rather than losing historical references.
