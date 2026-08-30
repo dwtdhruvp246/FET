@@ -17,7 +17,7 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=32" />
+    <link rel="stylesheet" href="styles.css?v=33" />
     <script src="config.js?v=24"></script>
     <script type="module" src="app.js?v=37"></script>
   </head>
@@ -444,19 +444,13 @@
               <div><p class="eyebrow">Subscription</p><h2>Plan and billing</h2><p class="muted-copy">The plan belongs to this workspace. Invited members inherit its access and never need a separate subscription.</p></div>
               <button id="openRenewalButton" class="primary" type="button" data-open-renewal-dialog>Submit payment</button>
             </header>
-            <section class="subscription-summary-grid" aria-label="Current subscription">
-              <article class="subscription-current-card">
-                <span>Current plan</span><strong id="subscriptionPlanName">Free</strong><small id="subscriptionStatusText">Active</small>
-              </article>
-              <article class="subscription-current-card">
-                <span>Workspace</span><strong id="subscriptionWorkspaceName">Personal budget</strong><small id="subscriptionWorkspaceType">Personal</small>
-              </article>
-              <article class="subscription-current-card">
-                <span>Paid through</span><strong id="subscriptionPaidThrough">No expiry</strong><small>Stored and calculated in UTC</small>
-              </article>
-              <article class="subscription-current-card">
-                <span>Usage</span><strong id="subscriptionUsage">0 / 5</strong><small id="subscriptionUsageCaption">Active payment items</small>
-              </article>
+            <section class="subscription-details-panel" aria-label="Current subscription">
+              <dl class="subscription-details-list">
+                <div><dt>Current plan</dt><dd><strong id="subscriptionPlanName">Free</strong><small id="subscriptionStatusText">Active</small></dd></div>
+                <div><dt>Workspace</dt><dd><strong id="subscriptionWorkspaceName">Personal budget</strong><small id="subscriptionWorkspaceType">Personal</small></dd></div>
+                <div><dt>Paid through</dt><dd><strong id="subscriptionPaidThrough">No expiry</strong><small>Stored and calculated in UTC</small></dd></div>
+                <div><dt>Usage</dt><dd><strong id="subscriptionUsage">0 / 5</strong><small id="subscriptionUsageCaption">Active payment items</small></dd></div>
+              </dl>
             </section>
             <section id="subscriptionAccessNotice" class="notice hidden"></section>
             <section class="ledger-panel">
