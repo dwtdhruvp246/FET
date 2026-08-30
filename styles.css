@@ -676,10 +676,20 @@ code {
   align-items: start;
 }
 
+.admin-users-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .record-list,
 .breakdown-list {
   display: grid;
   gap: 12px;
+}
+
+.record-list {
+  container-name: record-list;
+  container-type: inline-size;
+  min-width: 0;
 }
 
 .due-month-group {
@@ -929,11 +939,24 @@ code {
 }
 
 .record-card {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.record-card:has(> .date-chip),
+.record-card:has(> .category-chip),
+.record-card:has(> .avatar) {
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .admin-household-card {
   grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.record-card > *,
+.record-side > *,
+.row-actions > * {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .record-main {
@@ -967,6 +990,69 @@ code {
 
 .record-side strong {
   font-variant-numeric: tabular-nums;
+}
+
+.record-side .row-actions {
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+#headsList .record-card {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+#headsList .record-side {
+  grid-column: 1 / -1;
+  width: 100%;
+  justify-items: stretch;
+  text-align: left;
+}
+
+#headsList .row-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 145px), 1fr));
+  align-items: end;
+  width: 100%;
+}
+
+#headsList .row-actions > button,
+#headsList .inline-number-control {
+  width: 100%;
+}
+
+#headsList .inline-number-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px;
+}
+
+@container record-list (max-width: 760px) {
+  .record-card:not(.occurrence-card) {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .record-card:not(.occurrence-card):has(> .date-chip),
+  .record-card:not(.occurrence-card):has(> .category-chip),
+  .record-card:not(.occurrence-card):has(> .avatar) {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .record-card:not(.occurrence-card) > .record-side {
+    grid-column: 1 / -1;
+    width: 100%;
+    justify-items: stretch;
+    text-align: left;
+  }
+
+  .record-card:not(.occurrence-card) > .record-side .row-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .record-card:not(.occurrence-card) > .record-side button {
+    flex: 1 1 132px;
+  }
 }
 
 .date-chip,
@@ -1933,6 +2019,10 @@ input[type="file"] {
   .topbar-actions,
   .filters {
     width: 100%;
+  }
+
+  #headsList .row-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .row-actions button,
