@@ -1683,7 +1683,13 @@ function activePriceFor(planId, billingPeriod, currency = null) {
 function planInvoiceTotal(plan, price) {
   if (!plan || !price) return 0;
   const includedSeats = plan.code === "household" ? 4 : plan.code === "business" ? 6 : 1;
-  const extraSeats = Math.max(0, Number(state.billableMemberCount || 1) - includedSeats);
+  const selectedWorkspace = currentBudgetWorkspace();
+  const relevantMemberCount = selectedWorkspace?.workspace_type === plan.workspace_type
+    ? Number(state.billableMemberCount || 1)
+    : includedSeats;
+  const extraSeats = ["household", "business"].includes(plan.code)
+    ? Math.max(0, relevantMemberCount - includedSeats)
+    : 0;
   return Number(price.amount || 0) + extraSeats * Number(price.extra_member_amount || 0);
 }
 
@@ -1723,22 +1729,32 @@ function renderSubscription() {
 function renderWorkspacePlans() {
   const list = $("#workspacePlanList");
   const workspace = currentBudgetWorkspace();
-  const plans = state.plans.filter((plan) => plan.workspace_type === workspace?.workspace_type);
+  const comparableWorkspaceTypes = workspace?.workspace_type === "business"
+    ? new Set(["business"])
+    : new Set(["personal", "household"]);
+  const plans = state.plans.filter((plan) => comparableWorkspaceTypes.has(plan.workspace_type));
   list.innerHTML = "";
   plans.forEach((plan) => {
     const monthly = activePriceFor(plan.id, "monthly");
     const annual = activePriceFor(plan.id, "annual", monthly?.currency) || activePriceFor(plan.id, "annual");
-    const current = plan.code === state.workspaceEntitlement?.plan_code;
+    const appliesToSelectedWorkspace = plan.workspace_type === workspace?.workspace_type;
+    const current = appliesToSelectedWorkspace && plan.code === state.workspaceEntitlement?.plan_code;
+    const canSelect = appliesToSelectedWorkspace && plan.code !== "free" && currentWorkspaceIsOwned();
+    const workspaceTypeLabel = plan.workspace_type === "household" ? "Family" : titleCase(plan.workspace_type);
+    const availabilityMessage = plan.workspace_type === "household"
+      ? "Select a Family workspace to choose this plan."
+      : "Select Personal budget to choose this plan.";
     const card = document.createElement("article");
     card.className = `plan-card${current ? " current" : ""}`;
     card.innerHTML = `
-      <div class="plan-card-heading"><span class="mini-badge ${current ? "active" : ""}">${current ? "Current" : titleCase(plan.workspace_type)}</span><h4>${escapeHtml(plan.display_name)}</h4></div>
+      <div class="plan-card-heading"><span class="mini-badge ${current ? "active" : ""}">${current ? "Current" : workspaceTypeLabel}</span><h4>${escapeHtml(plan.display_name)}</h4></div>
       <p>${escapeHtml(plan.description)}</p>
       <dl>
         <div><dt>Monthly</dt><dd>${monthly ? money(planInvoiceTotal(plan, monthly), monthly.currency) : plan.code === "free" ? "Free" : "Not configured"}</dd></div>
         <div><dt>Annual</dt><dd>${annual ? money(planInvoiceTotal(plan, annual), annual.currency) : plan.code === "free" ? "Free" : "Not configured"}</dd></div>
       </dl>
-      ${plan.code === "free" || !currentWorkspaceIsOwned() ? "" : `<button type="button" data-select-renewal-plan="${plan.code}" ${monthly || annual ? "" : "disabled"}>${current ? "Renew plan" : "Choose plan"}</button>`}
+      ${canSelect ? `<button type="button" data-select-renewal-plan="${plan.code}" ${monthly || annual ? "" : "disabled"}>${current ? "Renew plan" : "Choose plan"}</button>` : ""}
+      ${!appliesToSelectedWorkspace ? `<small class="plan-availability-note">${availabilityMessage}</small>` : ""}
     `;
     list.append(card);
   });
@@ -2061,24 +2077,56 @@ async function createFamilyWorkspace(name, monthlyBudget, currency) {
   return familyId;
 }
 
+function paymentItemsForReportWorkspace() {
+  const workspace = currentBudgetWorkspace();
+  if (!workspace) return [];
+  return state.paymentItems.filter((item) => {
+    if (item.workspace_id) return item.workspace_id === workspace.id;
+    if (workspace.workspace_type === "personal") {
+      return item.visibility === "personal" && item.owner_id === state.session?.user?.id;
+    }
+    return item.visibility === "family" && item.family_id === workspace.legacy_family_id;
+  });
+}
+
+function paymentRecordsForReportWorkspace(items) {
+  const workspace = currentBudgetWorkspace();
+  if (!workspace) return [];
+  const paymentItemIds = new Set(items.map((item) => item.id));
+  return state.paymentRecords.filter((record) => {
+    if (record.workspace_id) return record.workspace_id === workspace.id;
+    return paymentItemIds.has(record.payment_item_id);
+  });
+}
+
 function renderReports() {
+  const workspace = currentBudgetWorkspace();
   const hasAnalytics = Boolean(
     state.workspaceEntitlement?.finance_analytics &&
     state.workspaceEntitlement?.effective_status === "active" &&
     !state.workspaceEntitlement?.read_only
   );
+  const workspaceLabel = workspace?.name || (state.family ? state.family.name : "Personal budget");
+  const workspaceTypeLabel = workspace?.workspace_type === "household" ? "Family" : titleCase(workspace?.workspace_type || "personal");
+  const periodLabel = parseDate(monthStart(state.filterMonth)).toLocaleString("en", { month: "long", year: "numeric" });
+  $("#reportMonthFilter").value = state.filterMonth;
+  $("#reportPeriodLabel").textContent = hasAnalytics
+    ? `${workspaceLabel} payment performance for ${periodLabel}.`
+    : `${workspaceLabel} report access for ${periodLabel}.`;
+  $("#reportsLockEyebrow").textContent = `${workspaceTypeLabel} reports`;
+  $("#reportsLockTitle").textContent = `${workspaceLabel} reports are locked`;
+  $("#reportsLockText").textContent = `The selected ${workspaceTypeLabel.toLowerCase()} workspace does not have an active analytics plan. Choose another workspace above or upgrade this workspace.`;
   $("#reportsLockNotice").classList.toggle("hidden", hasAnalytics);
   document.querySelector(".report-summary-grid").classList.toggle("hidden", !hasAnalytics);
   document.querySelector(".report-analysis-grid").classList.toggle("hidden", !hasAnalytics);
   if (!hasAnalytics) return;
-  const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, state.filterMonth);
+  const reportItems = paymentItemsForReportWorkspace();
+  const reportRecords = paymentRecordsForReportWorkspace(reportItems);
+  const occurrences = generateOccurrences(reportItems, reportRecords, state.filterMonth);
   const paid = occurrences.filter((item) => item.status === "paid").length;
   const partial = occurrences.filter((item) => item.status === "partial").length;
   const overdue = occurrences.filter((item) => item.status === "overdue").length;
   const paidRate = occurrences.length ? Math.round((paid / occurrences.length) * 100) : 0;
-  const periodLabel = parseDate(monthStart(state.filterMonth)).toLocaleString("en", { month: "long", year: "numeric" });
-  $("#reportMonthFilter").value = state.filterMonth;
-  $("#reportPeriodLabel").textContent = `Payment performance for ${periodLabel}.`;
   $("#paidRate").textContent = `${paidRate}%`;
   $("#reportCompletionCaption").textContent = `${paid} of ${occurrences.length} payments completed`;
   $("#reportDueTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.amount })));
@@ -2086,8 +2134,8 @@ function renderReports() {
   $("#reportOutstandingTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.outstanding })));
   $("#reportOverdueCaption").textContent = `${overdue} overdue payment${overdue === 1 ? "" : "s"}`;
   $("#partialCount").textContent = partial;
-  $("#activeObligationCount").textContent = state.paymentItems.filter((item) => item.status !== "inactive").length;
-  $("#yearExpected").textContent = formatCurrencyTotals(estimateYearTotals(state.paymentItems));
+  $("#activeObligationCount").textContent = reportItems.filter((item) => item.status !== "inactive").length;
+  $("#yearExpected").textContent = formatCurrencyTotals(estimateYearTotals(reportItems));
   $("#collectionProgressRing").style.setProperty("--progress", `${paidRate * 3.6}deg`);
   $("#collectionProgressValue").textContent = `${paidRate}%`;
   $("#collectionProgressTitle").textContent = !occurrences.length
@@ -2101,9 +2149,9 @@ function renderReports() {
     ? "Add a payment to begin tracking monthly reliability."
     : `${occurrences.length - paid} payment${occurrences.length - paid === 1 ? " remains" : "s remain"}; ${partial} partial and ${overdue} overdue.`;
   renderStatusAnalysis(occurrences);
-  renderReportTrend();
+  renderReportTrend(reportItems, reportRecords);
   renderCategoryReport(occurrences);
-  renderPaymentRecordList();
+  renderPaymentRecordList(reportRecords);
 }
 
 function renderStatusAnalysis(occurrences) {
@@ -2120,11 +2168,11 @@ function renderStatusAnalysis(occurrences) {
   }).join("");
 }
 
-function renderReportTrend() {
+function renderReportTrend(reportItems, reportRecords) {
   const list = $("#reportTrendList");
   const months = Array.from({ length: 6 }, (_, index) => offsetMonthValue(state.filterMonth, index - 5));
   list.innerHTML = months.map((monthValue) => {
-    const occurrences = generateOccurrences(state.paymentItems, state.paymentRecords, monthValue);
+    const occurrences = generateOccurrences(reportItems, reportRecords, monthValue);
     const completed = occurrences.filter((item) => item.status === "paid").length;
     const percentage = occurrences.length ? Math.round((completed / occurrences.length) * 100) : 0;
     const label = parseDate(monthStart(monthValue)).toLocaleString("en", { month: "short", year: "2-digit" });
@@ -2174,14 +2222,14 @@ function renderCategoryReport(occurrences) {
   });
 }
 
-function renderPaymentRecordList() {
+function renderPaymentRecordList(reportRecords) {
   const list = $("#paymentRecordsList");
-  if (!state.paymentRecords.length) {
+  if (!reportRecords.length) {
     list.innerHTML = emptyState("No payment records", "Partial and full payments will appear here after they are saved.");
     return;
   }
   list.innerHTML = "";
-  state.paymentRecords.slice(0, 20).forEach((record) => list.append(renderFamilyPaymentRecord(record)));
+  reportRecords.slice(0, 20).forEach((record) => list.append(renderFamilyPaymentRecord(record)));
 }
 
 function renderFamilyPaymentRecord(record) {

@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=33" />
+    <link rel="stylesheet" href="styles.css?v=34" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=37"></script>
+    <script type="module" src="app.js?v=38"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -412,12 +412,15 @@
           <section class="screen-panel hidden" data-family-panel="reports">
             <header class="topbar report-topbar">
               <div><p class="eyebrow">Reports</p><h2>Payment analytics</h2><p id="reportPeriodLabel" class="muted-copy">Performance for the selected month.</p></div>
-              <label class="report-month-control" for="reportMonthFilter">Report month<input id="reportMonthFilter" type="month" /></label>
+              <div class="report-filter-controls">
+                <label class="report-workspace-control" for="reportWorkspaceFilter">Workspace<select id="reportWorkspaceFilter" data-family-selector aria-label="Choose the workspace for this report"></select></label>
+                <label class="report-month-control" for="reportMonthFilter">Report month<input id="reportMonthFilter" type="month" /></label>
+              </div>
             </header>
             <section id="reportsLockNotice" class="locked-feature-panel hidden">
-              <p class="eyebrow">Personal feature</p>
-              <h3>Finance analytics are locked on Free</h3>
-              <p>Upgrade to Personal, Household, or Business to view spending insights, trends, advanced reports, and financial summaries.</p>
+              <p id="reportsLockEyebrow" class="eyebrow">Workspace reports</p>
+              <h3 id="reportsLockTitle">Finance analytics are locked</h3>
+              <p id="reportsLockText">Choose a workspace with an active analytics plan, or upgrade this workspace to view its reports.</p>
               <button class="primary" type="button" data-family-tab="subscription">View plans</button>
             </section>
             <section class="report-summary-grid" aria-label="Monthly payment summary">
@@ -454,7 +457,7 @@
             </section>
             <section id="subscriptionAccessNotice" class="notice hidden"></section>
             <section class="ledger-panel">
-              <div class="panel-heading"><p class="eyebrow">Compare plans</p><h3>Plans for this workspace</h3><p class="muted-copy">Prices are published by Mushavo Budget administrators and are never calculated in the browser.</p></div>
+              <div class="panel-heading"><p class="eyebrow">Compare plans</p><h3>Personal and family plans</h3><p class="muted-copy">Compare every available Personal and Household plan. A plan can only be selected for a matching workspace.</p></div>
               <div id="workspacePlanList" class="plan-card-grid"></div>
             </section>
             <section class="content-grid subscription-history-grid">
