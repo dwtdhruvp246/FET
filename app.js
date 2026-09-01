@@ -30,6 +30,11 @@ const state = {
   workspaceMembers: [],
   workspaceSubscription: null,
   workspaceEntitlement: null,
+  workspaceSettings: null,
+  supportedCurrencies: [],
+  exchangeRates: [],
+  exchangeRateStatus: null,
+  paymentConversions: [],
   billableMemberCount: 1,
   memberUsage: null,
   plans: [],
@@ -58,11 +63,17 @@ const state = {
   adminSubscriptionProofs: [],
   adminSubscriptionReviews: [],
   adminSubscriptionMonitor: [],
+  adminFinanceSettings: null,
+  adminPaymentConversions: [],
+  adminRateStatus: null,
   adminTab: "dashboard",
   familyTab: "dashboard",
   editingObligationId: null,
   filterMonth: toMonthValue(new Date()),
-  filterStatus: "all"
+  filterStatus: "all",
+  reportCurrencyFilter: "all",
+  reportViewMode: "original",
+  reportReportingCurrency: null
 };
 
 const realtime = {
@@ -183,14 +194,48 @@ function lastDayOfMonth(year, monthIndex) {
 
 function money(amount, currency = "USD") {
   try {
+    const digits = state.supportedCurrencies.find((item) => item.code === currency)?.decimal_digits;
     return new Intl.NumberFormat(currencyNames[currency] || "en-US", {
       style: "currency",
       currency,
-      maximumFractionDigits: 2
+      currencyDisplay: "code",
+      minimumFractionDigits: Number.isInteger(digits) ? digits : undefined,
+      maximumFractionDigits: Number.isInteger(digits) ? digits : 4
     }).format(Number(amount || 0));
   } catch (_error) {
     return `${currency} ${Number(amount || 0).toFixed(2)}`;
   }
+}
+
+const DECIMAL_SCALE_DIGITS = 12;
+const DECIMAL_SCALE = 10n ** BigInt(DECIMAL_SCALE_DIGITS);
+
+function decimalToScaled(value) {
+  const normalized = `${value ?? 0}`.trim();
+  const negative = normalized.startsWith("-");
+  const unsigned = negative ? normalized.slice(1) : normalized;
+  const [whole = "0", fraction = ""] = unsigned.split(".");
+  const digits = `${whole || "0"}${fraction.padEnd(DECIMAL_SCALE_DIGITS, "0").slice(0, DECIMAL_SCALE_DIGITS)}`.replace(/^0+(?=\d)/, "");
+  const scaled = BigInt(digits || "0");
+  return negative ? -scaled : scaled;
+}
+
+function scaledToDecimal(value, fractionDigits = 4) {
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const whole = absolute / DECIMAL_SCALE;
+  const remainder = `${absolute % DECIMAL_SCALE}`.padStart(DECIMAL_SCALE_DIGITS, "0");
+  const fraction = remainder.slice(0, Math.max(0, fractionDigits)).replace(/0+$/, "");
+  return `${negative ? "-" : ""}${whole}${fraction ? `.${fraction}` : ""}`;
+}
+
+function multiplyScaled(left, right) {
+  return (left * right + DECIMAL_SCALE / 2n) / DECIMAL_SCALE;
+}
+
+function activeWorkspaceCurrencies() {
+  const enabled = state.workspaceSettings?.enabled_currencies;
+  return Array.isArray(enabled) && enabled.length ? enabled : PAYMENT_CURRENCIES.map(([code]) => code);
 }
 
 function renderPaymentCurrencyOptions(searchTerm = "", selectedCurrency = "") {
@@ -198,8 +243,9 @@ function renderPaymentCurrencyOptions(searchTerm = "", selectedCurrency = "") {
   if (!select) return;
   const queryText = searchTerm.trim().toLowerCase();
   const currentValue = selectedCurrency || select.value || "USD";
+  const allowed = new Set(activeWorkspaceCurrencies());
   const matches = PAYMENT_CURRENCIES.filter(([code, name]) =>
-    !queryText || code.toLowerCase().includes(queryText) || name.toLowerCase().includes(queryText)
+    allowed.has(code) && (!queryText || code.toLowerCase().includes(queryText) || name.toLowerCase().includes(queryText))
   );
   if (!queryText && currentValue && !matches.some(([code]) => code === currentValue)) {
     const currentCurrency = PAYMENT_CURRENCIES.find(([code]) => code === currentValue);
@@ -284,6 +330,33 @@ function friendlyMessage(message = "") {
   }
   if (text.includes("ACTIVE_FAMILY_SUBSCRIPTION_REQUIRED")) {
     return "An active Family subscription is required before inviting members.";
+  }
+  if (text.includes("PARTIAL_PAYMENT_CURRENCY_MISMATCH")) {
+    return "A partial payment must use the same currency as its payment item.";
+  }
+  if (text.includes("PAYMENT_CURRENCY_NOT_ENABLED")) {
+    return "Enable this currency in Workspace currency settings before saving the payment.";
+  }
+  if (text.includes("DEFAULT_AND_REPORTING_CURRENCY_MUST_BE_ENABLED")) {
+    return "The default and reporting currencies must both be included in the enabled currency list.";
+  }
+  if (text.includes("INVALID_ENABLED_CURRENCIES") || text.includes("UNSUPPORTED_CURRENCY")) {
+    return "Choose at least one supported currency.";
+  }
+  if (text.includes("CURRENCY_SETTINGS_ACCESS_REQUIRED")) {
+    return "Only the workspace owner or an authorized Business finance manager can change these currency settings.";
+  }
+  if (text.includes("FINANCE_CURRENCY_ACCESS_REQUIRED")) {
+    return "Your admin role does not include Finance currency management.";
+  }
+  if (text.includes("RATE_SYNC_RATE_LIMITED")) {
+    return "Rates were synced recently. Wait five minutes before starting another manual sync.";
+  }
+  if (text.includes("SERVER_CONFIGURATION_INCOMPLETE")) {
+    return "The exchange-rate service is not configured. Add the CurrencyAPI and cron secrets to the Supabase Edge Function.";
+  }
+  if (text.includes("RATE_SNAPSHOT_STORE_FAILED") || text.includes("SYNC_RUN_CREATE_FAILED")) {
+    return "The rate service reached the provider but could not save the result. Check the Supabase migration and function logs.";
   }
   if (text.includes("PERSONAL_PAYMENT_LIMIT_REACHED")) {
     return "Free accounts can keep up to 5 active personal payments. Family payments remain unlimited.";
@@ -648,6 +721,11 @@ function resetState() {
   state.workspaceMembers = [];
   state.workspaceSubscription = null;
   state.workspaceEntitlement = null;
+  state.workspaceSettings = null;
+  state.supportedCurrencies = [];
+  state.exchangeRates = [];
+  state.exchangeRateStatus = null;
+  state.paymentConversions = [];
   state.billableMemberCount = 1;
   state.memberUsage = null;
   state.plans = [];
@@ -676,9 +754,15 @@ function resetState() {
   state.adminSubscriptionProofs = [];
   state.adminSubscriptionReviews = [];
   state.adminSubscriptionMonitor = [];
+  state.adminFinanceSettings = null;
+  state.adminPaymentConversions = [];
+  state.adminRateStatus = null;
   state.adminTab = "dashboard";
   state.familyTab = "dashboard";
   state.editingObligationId = null;
+  state.reportCurrencyFilter = "all";
+  state.reportViewMode = "original";
+  state.reportReportingCurrency = null;
 }
 
 async function loadApp() {
@@ -926,23 +1010,25 @@ function currentWorkspaceIsOwned() {
 
 async function loadWorkspaceSubscriptionData() {
   await query("personal workspace provision", supabase.rpc("provision_my_budget_workspace"));
-  const [workspaces, members, plans, prices, limits] = await Promise.all([
+  const [workspaces, members, plans, prices, limits, supportedCurrencies] = await Promise.all([
     query("workspace load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: true })),
     query("workspace membership load", supabase.from("workspace_members").select("*").order("created_at", { ascending: true })),
     query("plan catalogue load", supabase.from("plans").select("*").eq("is_active", true).order("sort_order", { ascending: true })),
     query("plan prices load", supabase.from("plan_prices").select("*").eq("is_active", true).order("effective_from", { ascending: false })),
-    query("plan limits load", supabase.from("plan_limits").select("*"))
+    query("plan limits load", supabase.from("plan_limits").select("*")),
+    query("supported currencies load", supabase.from("supported_currencies").select("*").eq("is_active", true).order("code"))
   ]);
   state.workspaces = workspaces;
   state.workspaceMembers = members;
   state.plans = plans;
   state.planPrices = prices;
   state.planLimits = limits;
+  state.supportedCurrencies = supportedCurrencies;
 
   const workspace = currentBudgetWorkspace();
   if (!workspace) throw new Error("Your subscription workspace could not be reconciled. Run the complete Supabase schema again.");
 
-  const [subscriptions, entitlements, billableMemberCount, memberUsage, requests, invoices, payments, history] = await Promise.all([
+  const [subscriptions, entitlements, billableMemberCount, memberUsage, requests, invoices, payments, history, settings, rates, rateStatus, conversions] = await Promise.all([
     query("workspace subscription load", supabase.from("workspace_subscriptions").select("*").eq("workspace_id", workspace.id).limit(1)),
     query("workspace entitlement load", supabase.rpc("effective_workspace_entitlement", { p_workspace_id: workspace.id })),
     query("workspace seat usage load", supabase.rpc("workspace_billable_member_count", { p_workspace_id: workspace.id })),
@@ -950,7 +1036,11 @@ async function loadWorkspaceSubscriptionData() {
     query("renewal requests load", supabase.from("subscription_renewal_requests").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
     query("subscription invoices load", supabase.from("subscription_invoices").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
     query("subscription payments load", supabase.from("subscription_payments").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
-    query("entitlement history load", supabase.from("subscription_entitlement_history").select("*, plans(display_name, code)").eq("workspace_id", workspace.id).order("created_at", { ascending: false }))
+    query("entitlement history load", supabase.from("subscription_entitlement_history").select("*, plans(display_name, code)").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
+    query("workspace currency settings load", supabase.from("workspace_settings").select("*").eq("workspace_id", workspace.id).single()),
+    query("exchange rates load", supabase.from("exchange_rate_snapshots").select("quote_currency, rate, provider_effective_at, fetched_at, provider").eq("base_currency", "USD").order("provider_effective_at", { ascending: false }).limit(500)),
+    query("exchange rate status load", supabase.rpc("exchange_rate_status", { p_include_admin_details: false })),
+    query("payment conversions load", supabase.from("payment_conversions").select("*").eq("workspace_id", workspace.id).order("rate_effective_at", { ascending: false }))
   ]);
   state.workspaceSubscription = subscriptions[0] || null;
   state.workspaceEntitlement = entitlements[0] || null;
@@ -966,6 +1056,10 @@ async function loadWorkspaceSubscriptionData() {
   state.subscriptionInvoices = invoices;
   state.subscriptionPayments = payments;
   state.entitlementHistory = history;
+  state.workspaceSettings = settings;
+  state.exchangeRates = rates;
+  state.exchangeRateStatus = rateStatus;
+  state.paymentConversions = conversions;
 }
 
 async function loadAdminData(tab = state.adminTab) {
@@ -1032,6 +1126,11 @@ async function loadAdminData(tab = state.adminTab) {
       add("adminProfiles", "finance user profiles load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
       add("adminWorkspaces", "admin workspaces load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
       add("adminSubscriptions", "admin subscriptions load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
+      add("supportedCurrencies", "finance supported currencies load", supabase.from("supported_currencies").select("*").eq("is_active", true).order("code"));
+      add("exchangeRates", "finance exchange rates load", supabase.from("exchange_rate_snapshots").select("quote_currency, rate, provider_effective_at, fetched_at, provider").eq("base_currency", "USD").order("provider_effective_at", { ascending: false }).limit(500));
+      add("adminFinanceSettings", "admin finance currency settings load", supabase.from("admin_finance_settings").select("*").eq("id", 1).single());
+      add("adminPaymentConversions", "admin payment conversions load", supabase.from("payment_conversions").select("*").is("workspace_id", null).order("rate_effective_at", { ascending: false }));
+      add("adminRateStatus", "admin exchange rate status load", supabase.rpc("exchange_rate_status", { p_include_admin_details: true }));
     }
     add("adminRenewalRequests", "admin renewal requests load", supabase.from("subscription_renewal_requests").select("*").order("created_at", { ascending: false }));
     add("adminSubscriptionInvoices", "admin subscription invoices load", supabase.from("subscription_invoices").select("*").order("created_at", { ascending: false }));
@@ -1302,22 +1401,39 @@ function occurrenceStatus(item, dueDate, paid, amount) {
 
 function renderDashboard() {
   const occurrences = selectedOccurrences();
-  const due = occurrences.reduce((sum, item) => sum + item.amount, 0);
-  const paid = occurrences.reduce((sum, item) => sum + item.paid, 0);
-  const outstanding = occurrences.reduce((sum, item) => sum + item.outstanding, 0);
+  const dueRows = occurrences.map((item) => ({ amount: item.amount, currency: item.item.currency }));
+  const paidRows = occurrences.map((item) => ({ amount: item.paid, currency: item.item.currency }));
+  const outstandingRows = occurrences.map((item) => ({ amount: item.outstanding, currency: item.item.currency }));
   const overdue = occurrences.filter((item) => item.status === "overdue");
   const myDue = myOccurrences(occurrences).filter((item) => item.status !== "paid");
-  const currency = familyCurrency();
-  const percentage = due > 0 ? Math.min((paid / due) * 100, 100) : 0;
+  const reportingCurrency = selectedReportingCurrency();
+  const useConverted = Boolean(state.workspaceSettings?.conversion_enabled);
+  const convertedDue = useConverted ? convertedTotalScaled(dueRows, reportingCurrency) : null;
+  const convertedPaid = useConverted ? convertedTotalScaled(paidRows, reportingCurrency) : null;
+  const currencyCount = new Set(dueRows.map((row) => row.currency)).size;
+  const percentage = convertedDue != null && convertedDue > 0n && convertedPaid != null
+    ? Math.min(Number((convertedPaid * 10000n) / convertedDue) / 100, 100)
+    : currencyCount <= 1
+      ? (() => {
+        const due = occurrences.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        const paid = occurrences.reduce((sum, item) => sum + Number(item.paid || 0), 0);
+        return due > 0 ? Math.min((paid / due) * 100, 100) : 0;
+      })()
+      : occurrences.length ? (occurrences.filter((item) => item.status === "paid").length / occurrences.length) * 100 : 0;
 
-  $("#dueAmount").textContent = money(due, currency);
-  $("#outstandingAmount").textContent = money(outstanding, currency);
-  $("#outstandingText").textContent = outstanding > 0 ? "Still outstanding" : "All clear";
+  $("#dueAmount").textContent = convertedDue != null
+    ? money(scaledToDecimal(convertedDue), reportingCurrency)
+    : formatCurrencyTotals(dueRows);
+  const convertedOutstanding = useConverted ? convertedTotalScaled(outstandingRows, reportingCurrency) : null;
+  $("#outstandingAmount").textContent = convertedOutstanding != null
+    ? money(scaledToDecimal(convertedOutstanding), reportingCurrency)
+    : formatCurrencyTotals(outstandingRows);
+  $("#outstandingText").textContent = occurrences.some((item) => item.outstanding > 0) ? (convertedOutstanding != null ? "Estimated reporting total" : "Still outstanding") : "All clear";
   $("#overdueCount").textContent = overdue.length;
   $("#overdueText").textContent = overdue.length ? "Needs follow-up" : "No overdue dues";
   $("#myDueCount").textContent = myDue.length;
   $("#paidMeter").style.width = `${percentage}%`;
-  $("#paidProgressText").textContent = due > 0 ? `${Math.round(percentage)}% paid this month` : "No dues yet";
+  $("#paidProgressText").textContent = occurrences.length ? `${Math.round(percentage)}% paid this month` : "No dues yet";
 
   renderPriorityDueList(occurrences);
   renderMemberResponsibility(occurrences);
@@ -1721,6 +1837,98 @@ function renderSettings() {
     : `${paymentCount}/${entitlement.active_payment_limit} active personal payments used`;
   $("#settingsMemberAccess").textContent = canManageAnyFamily ? "Can invite family members" : "Can join invited families";
   $("#settingsEmail").textContent = state.session.user.email || "-";
+  renderWorkspaceCurrencySettings();
+}
+
+function currencyCatalogue() {
+  return state.supportedCurrencies.length
+    ? state.supportedCurrencies.map((item) => [item.code, item.name])
+    : PAYMENT_CURRENCIES;
+}
+
+function populateCurrencySelect(select, selectedValues, allowedCodes = null) {
+  if (!select) return;
+  const selected = new Set(Array.isArray(selectedValues) ? selectedValues : [selectedValues].filter(Boolean));
+  const allowed = allowedCodes ? new Set(allowedCodes) : null;
+  select.innerHTML = "";
+  currencyCatalogue().forEach(([code, name]) => {
+    if (allowed && !allowed.has(code)) return;
+    const option = new Option(`${code} — ${name}`, code);
+    option.selected = selected.has(code);
+    select.append(option);
+  });
+}
+
+function canManageCurrentWorkspaceCurrencies() {
+  const workspace = currentBudgetWorkspace();
+  if (!workspace) return false;
+  if (workspace.owner_id === state.session?.user?.id) return true;
+  return state.workspaceMembers.some((member) =>
+    member.workspace_id === workspace.id && member.user_id === state.session?.user?.id && member.status === "active" &&
+    ["business_owner", "business_admin", "finance_manager"].includes(member.role)
+  );
+}
+
+function renderWorkspaceCurrencySettings() {
+  const settings = state.workspaceSettings || {
+    default_payment_currency: "USD",
+    enabled_currencies: ["USD"],
+    reporting_currency: "USD",
+    conversion_enabled: false
+  };
+  populateCurrencySelect($("#workspaceEnabledCurrencies"), settings.enabled_currencies);
+  populateCurrencySelect($("#workspaceDefaultCurrency"), settings.default_payment_currency, settings.enabled_currencies);
+  populateCurrencySelect($("#workspaceReportingCurrency"), settings.reporting_currency, settings.enabled_currencies);
+  $("#workspaceConversionEnabled").checked = Boolean(settings.conversion_enabled);
+  const canManage = canManageCurrentWorkspaceCurrencies();
+  $("#workspaceCurrencySettingsForm").querySelectorAll("input, select, button").forEach((field) => {
+    field.disabled = !canManage;
+  });
+  $("#saveWorkspaceCurrencyButton").title = canManage ? "" : "Only an authorized workspace finance manager can change these settings.";
+  const presentation = rateStatusPresentation();
+  $("#workspaceRateStatus").textContent = presentation.text;
+  $("#workspaceRateStatus").dataset.level = presentation.level;
+}
+
+function selectedOptions(select) {
+  return [...select.selectedOptions].map((option) => option.value);
+}
+
+function refreshWorkspaceCurrencyDependentOptions() {
+  const enabled = selectedOptions($("#workspaceEnabledCurrencies"));
+  const defaultValue = $("#workspaceDefaultCurrency").value;
+  const reportingValue = $("#workspaceReportingCurrency").value;
+  populateCurrencySelect($("#workspaceDefaultCurrency"), enabled.includes(defaultValue) ? defaultValue : enabled[0], enabled);
+  populateCurrencySelect($("#workspaceReportingCurrency"), enabled.includes(reportingValue) ? reportingValue : enabled[0], enabled);
+}
+
+async function saveWorkspaceCurrencySettings(event) {
+  event.preventDefault();
+  const workspace = currentBudgetWorkspace();
+  const button = event.submitter || $("#saveWorkspaceCurrencyButton");
+  if (!workspace) return;
+  try {
+    setSubmitting(button, true, "Saving...");
+    await query("workspace currency settings save", supabase.rpc("save_workspace_currency_settings", {
+      p_workspace_id: workspace.id,
+      p_default_payment_currency: $("#workspaceDefaultCurrency").value,
+      p_enabled_currencies: selectedOptions($("#workspaceEnabledCurrencies")),
+      p_reporting_currency: $("#workspaceReportingCurrency").value,
+      p_conversion_enabled: $("#workspaceConversionEnabled").checked
+    }));
+    if ($("#workspaceConversionEnabled").checked) {
+      await query("workspace historical conversion backfill", supabase.rpc("backfill_workspace_currency_conversions", {
+        p_workspace_id: workspace.id
+      }));
+    }
+    await loadWorkspaceSubscriptionData();
+    renderFamilyApp();
+    showToast("Workspace currency settings saved. Existing amounts were not changed.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    setSubmitting(button, false, "Save currency settings");
+  }
 }
 
 function titleCase(value) {
@@ -2293,8 +2501,28 @@ function renderReports() {
   $("#reportsLockNotice").classList.toggle("hidden", hasAnalytics);
   document.querySelector(".report-summary-grid").classList.toggle("hidden", !hasAnalytics);
   document.querySelector(".report-analysis-grid").classList.toggle("hidden", !hasAnalytics);
+  $("#reportRatePanel").classList.toggle("hidden", !hasAnalytics);
   if (!hasAnalytics) return;
-  const reportItems = paymentItemsForReportWorkspace();
+  const allReportItems = paymentItemsForReportWorkspace();
+  const availableCurrencies = [...new Set(allReportItems.map((item) => item.currency || "USD"))].sort();
+  const currencyFilter = $("#reportCurrencyFilter");
+  const currentFilter = availableCurrencies.includes(state.reportCurrencyFilter) ? state.reportCurrencyFilter : "all";
+  currencyFilter.innerHTML = '<option value="all">All currencies</option>';
+  availableCurrencies.forEach((currency) => currencyFilter.append(new Option(currency, currency)));
+  state.reportCurrencyFilter = currentFilter;
+  currencyFilter.value = currentFilter;
+  const conversionAvailable = Boolean(state.workspaceSettings?.conversion_enabled);
+  $("#reportViewMode").disabled = !conversionAvailable;
+  if (!conversionAvailable) state.reportViewMode = "original";
+  $("#reportViewMode").value = state.reportViewMode;
+  const enabledReportingCurrencies = activeWorkspaceCurrencies();
+  const configuredReportingCurrency = state.workspaceSettings?.reporting_currency || "USD";
+  if (!enabledReportingCurrencies.includes(state.reportReportingCurrency)) {
+    state.reportReportingCurrency = configuredReportingCurrency;
+  }
+  populateCurrencySelect($("#reportReportingCurrency"), state.reportReportingCurrency, enabledReportingCurrencies);
+  $("#reportReportingCurrency").disabled = !conversionAvailable || state.reportViewMode !== "converted";
+  const reportItems = allReportItems.filter((item) => currentFilter === "all" || item.currency === currentFilter);
   const reportRecords = paymentRecordsForReportWorkspace(reportItems);
   const occurrences = generateOccurrences(reportItems, reportRecords, state.filterMonth);
   const paid = occurrences.filter((item) => item.status === "paid").length;
@@ -2303,13 +2531,16 @@ function renderReports() {
   const paidRate = occurrences.length ? Math.round((paid / occurrences.length) * 100) : 0;
   $("#paidRate").textContent = `${paidRate}%`;
   $("#reportCompletionCaption").textContent = `${paid} of ${occurrences.length} payments completed`;
-  $("#reportDueTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.amount })));
-  $("#reportPaidTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.paid })));
-  $("#reportOutstandingTotal").textContent = formatCurrencyTotals(occurrences.map((item) => ({ currency: item.item.currency, amount: item.outstanding })));
+  const dueRows = occurrences.map((item) => ({ currency: item.item.currency, amount: item.amount }));
+  const paidRows = occurrences.map((item) => ({ currency: item.item.currency, amount: item.paid }));
+  const outstandingRows = occurrences.map((item) => ({ currency: item.item.currency, amount: item.outstanding }));
+  $("#reportDueTotal").textContent = formatReportMoney(dueRows);
+  $("#reportPaidTotal").textContent = formatReportMoney(paidRows);
+  $("#reportOutstandingTotal").textContent = formatReportMoney(outstandingRows);
   $("#reportOverdueCaption").textContent = `${overdue} overdue payment${overdue === 1 ? "" : "s"}`;
   $("#partialCount").textContent = partial;
   $("#activeObligationCount").textContent = reportItems.filter((item) => item.status !== "inactive").length;
-  $("#yearExpected").textContent = formatCurrencyTotals(estimateYearTotals(reportItems));
+  $("#yearExpected").textContent = formatReportMoney(estimateYearTotals(reportItems));
   $("#collectionProgressRing").style.setProperty("--progress", `${paidRate * 3.6}deg`);
   $("#collectionProgressValue").textContent = `${paidRate}%`;
   $("#collectionProgressTitle").textContent = !occurrences.length
@@ -2326,6 +2557,28 @@ function renderReports() {
   renderReportTrend(reportItems, reportRecords);
   renderCategoryReport(occurrences);
   renderPaymentRecordList(reportRecords);
+  renderReportRatePanel();
+}
+
+function formatReportMoney(rows) {
+  if (state.reportViewMode !== "converted") return formatCurrencyTotals(rows);
+  return formatConvertedTotal(rows, reportReportingCurrency()) || "Rate unavailable";
+}
+
+function reportReportingCurrency() {
+  return state.reportReportingCurrency || selectedReportingCurrency();
+}
+
+function renderReportRatePanel() {
+  const presentation = rateStatusPresentation();
+  const converted = state.reportViewMode === "converted";
+  $("#reportRateTitle").textContent = converted
+    ? `Converted estimates in ${reportReportingCurrency()}`
+    : "Original currency totals";
+  $("#reportRateText").textContent = converted
+    ? `${presentation.text} Completed payment conversions are locked; unpaid balances use the latest stored rate.`
+    : "Amounts are grouped by their original currency. Change Money view to compare them in one reporting currency.";
+  $("#reportRatePanel").dataset.level = converted ? presentation.level : "original";
 }
 
 function renderStatusAnalysis(occurrences) {
@@ -2369,17 +2622,27 @@ function estimateYearTotals(items) {
 function renderCategoryReport(occurrences) {
   const list = $("#categoryReportList");
   const rows = Object.values(occurrences.reduce((acc, occurrence) => {
-    const key = `${occurrence.item.category}:${occurrence.item.currency}`;
-    acc[key] ||= { name: occurrence.item.category, amount: 0, outstanding: 0, currency: occurrence.item.currency };
-    acc[key].amount += occurrence.amount;
-    acc[key].outstanding += occurrence.outstanding;
+    const target = state.reportViewMode === "converted" ? reportReportingCurrency() : occurrence.item.currency;
+    const due = state.reportViewMode === "converted"
+      ? convertAmountScaled(occurrence.amount, occurrence.item.currency, target)
+      : decimalToScaled(occurrence.amount);
+    const outstanding = state.reportViewMode === "converted"
+      ? convertAmountScaled(occurrence.outstanding, occurrence.item.currency, target)
+      : decimalToScaled(occurrence.outstanding);
+    const key = `${occurrence.item.category}:${target}`;
+    acc[key] ||= { name: occurrence.item.category, amount: 0n, outstanding: 0n, currency: target, missingRate: false };
+    if (due == null || outstanding == null) acc[key].missingRate = true;
+    else {
+      acc[key].amount += due;
+      acc[key].outstanding += outstanding;
+    }
     return acc;
   }, {}));
   if (!rows.length) {
     list.innerHTML = emptyState("No category data", "Reports update when monthly obligations exist.");
     return;
   }
-  const max = Math.max(...rows.map((row) => row.amount), 1);
+  const max = rows.reduce((largest, row) => row.amount > largest ? row.amount : largest, 1n);
   list.innerHTML = "";
   rows.forEach((row) => {
     const item = document.createElement("article");
@@ -2388,8 +2651,8 @@ function renderCategoryReport(occurrences) {
       <div class="category-chip">${escapeHtml(row.name.slice(0, 2).toUpperCase())}</div>
       <div>
         <strong>${escapeHtml(row.name)}</strong>
-        <span>${money(row.amount, row.currency)} due &middot; ${money(row.outstanding, row.currency)} outstanding</span>
-        <div class="meter small-meter"><span style="width:${Math.min((row.amount / max) * 100, 100)}%"></span></div>
+        <span>${row.missingRate ? "Rate unavailable" : `${money(scaledToDecimal(row.amount), row.currency)} due &middot; ${money(scaledToDecimal(row.outstanding), row.currency)} outstanding`}</span>
+        <div class="meter small-meter"><span style="width:${Number((row.amount * 100n) / max)}%"></span></div>
       </div>
     `;
     list.append(item);
@@ -2410,6 +2673,8 @@ function renderFamilyPaymentRecord(record) {
   const item = state.paymentItems.find((paymentItem) => paymentItem.id === record.payment_item_id);
   const member = memberById(record.paid_by_member_id);
   const article = document.createElement("article");
+  const recordCurrency = record.currency || item?.currency || familyCurrency();
+  const locked = lockedConversionFor("payment_record", record.id, reportReportingCurrency());
   article.className = "record-card";
   article.innerHTML = `
     <div class="date-chip"><strong>${parseDate(record.payment_date).getDate()}</strong><span>${parseDate(record.payment_date).toLocaleString("en", { month: "short" })}</span></div>
@@ -2420,7 +2685,8 @@ function renderFamilyPaymentRecord(record) {
       ${record.proof_name ? `<small>Proof: ${escapeHtml(record.proof_name)}${record.proof_size_bytes ? ` &middot; ${formatFileSize(record.proof_size_bytes)}` : ""}</small>` : ""}
     </div>
     <div class="record-side">
-      <strong>${money(record.amount, item?.currency || familyCurrency())}</strong>
+      <strong>${money(record.amount, recordCurrency)}</strong>
+      ${locked ? `<small>${money(locked.converted_amount, locked.reporting_currency)} at locked rate ${escapeHtml(locked.exchange_rate)}</small>` : ""}
       <div class="row-actions">
         ${record.proof_path ? `<button type="button" data-open-proof="${record.id}">View proof</button>` : ""}
         <button type="button" data-delete-record="${record.id}">Delete</button>
@@ -2437,6 +2703,7 @@ function renderAdmin() {
   if (state.adminTab === "users") renderHeads();
   if (state.adminTab === "plans") renderAdminPlans();
   if (state.adminTab === "finance") {
+    renderAdminFinanceCurrencyPanel();
     renderPaymentHeadOptions();
     renderPlatformPayments();
     renderSubscriptionReviews();
@@ -2445,6 +2712,163 @@ function renderAdmin() {
   if (state.adminTab === "support") {
     renderAdminNoteOptions();
     renderAdminNotes();
+  }
+}
+
+function adminReportingCurrency() {
+  return state.adminFinanceSettings?.reporting_currency || "USD";
+}
+
+function approvedAdminPaymentRows() {
+  return [
+    ...state.payments.filter((payment) => adminFinanceRecordVisible(payment, "platform_payment")).map((payment) => ({
+      entity_type: "platform_payment", entity_id: payment.id, amount: payment.amount,
+      currency: payment.currency, at: payment.payment_date
+    })),
+    ...state.adminSubscriptionPayments.filter((payment) => payment.status === "approved" && adminFinanceRecordVisible(payment, "subscription_payment")).map((payment) => ({
+      entity_type: "subscription_payment", entity_id: payment.id, amount: payment.amount,
+      currency: payment.currency, at: payment.reviewed_at || payment.payment_date
+    }))
+  ];
+}
+
+function adminFinanceFilterValues() {
+  return {
+    currency: $("#adminFinanceCurrencyFilter")?.value || "all",
+    status: $("#adminFinanceStatusFilter")?.value || "all",
+    type: $("#adminFinanceTypeFilter")?.value || "all",
+    from: $("#adminFinanceFromDate")?.value || "",
+    to: $("#adminFinanceToDate")?.value || "",
+    search: ($("#adminFinanceSearch")?.value || "").trim().toLowerCase()
+  };
+}
+
+function adminFinanceRecordVisible(payment, type) {
+  const filters = adminFinanceFilterValues();
+  const status = type === "platform_payment" ? "approved" : payment.status;
+  const date = payment.payment_date || payment.created_at?.slice(0, 10) || "";
+  if (filters.type !== "all" && filters.type !== type) return false;
+  if (filters.currency !== "all" && payment.currency !== filters.currency) return false;
+  if (filters.status !== "all" && status !== filters.status) return false;
+  if (filters.from && date < filters.from) return false;
+  if (filters.to && date > filters.to) return false;
+  if (filters.search) {
+    const workspace = state.adminWorkspaces.find((row) => row.id === payment.workspace_id);
+    const owner = state.adminProfiles.find((row) => row.id === workspace?.owner_id);
+    const haystack = [payment.reference_number, workspace?.name, owner?.email,
+      payment.family_heads?.full_name, payment.family_heads?.email].filter(Boolean).join(" ").toLowerCase();
+    if (!haystack.includes(filters.search)) return false;
+  }
+  return true;
+}
+
+function lockedConversionFor(entityType, entityId, reportingCurrency) {
+  const source = state.isAdmin ? state.adminPaymentConversions : state.paymentConversions;
+  return source.find((row) =>
+    row.entity_type === entityType && row.entity_id === entityId && row.reporting_currency === reportingCurrency
+  ) || null;
+}
+
+function adminConvertedPaymentTotal(rows, targetCurrency) {
+  let total = 0n;
+  for (const row of rows) {
+    const locked = lockedConversionFor(row.entity_type, row.entity_id, targetCurrency);
+    if (locked) total += decimalToScaled(locked.converted_amount);
+    else {
+      const converted = convertAmountScaled(row.amount, row.currency, targetCurrency, row.at);
+      if (converted == null) return null;
+      total += converted;
+    }
+  }
+  return total;
+}
+
+function renderAdminFinanceCurrencyPanel() {
+  const settings = state.adminFinanceSettings || {
+    reporting_currency: "USD",
+    enabled_receipt_currencies: ["USD"],
+    conversion_enabled: true
+  };
+  populateCurrencySelect($("#adminEnabledCurrencies"), settings.enabled_receipt_currencies);
+  populateCurrencySelect($("#adminReportingCurrency"), settings.reporting_currency, settings.enabled_receipt_currencies);
+  $("#adminConversionEnabled").checked = Boolean(settings.conversion_enabled);
+  populateCurrencySelect($("#paymentCurrency"), $("#paymentCurrency").value || settings.reporting_currency, settings.enabled_receipt_currencies);
+  const filterSelect = $("#adminFinanceCurrencyFilter");
+  const filterValue = filterSelect.value || "all";
+  filterSelect.innerHTML = '<option value="all">All currencies</option>';
+  settings.enabled_receipt_currencies.forEach((currency) => filterSelect.append(new Option(currency, currency)));
+  filterSelect.value = settings.enabled_receipt_currencies.includes(filterValue) ? filterValue : "all";
+
+  const status = state.adminRateStatus || {};
+  const presentation = rateStatusPresentation(status);
+  $("#adminRateProvider").textContent = "CurrencyAPI";
+  $("#adminRateLastSuccess").textContent = status.last_success_at ? new Date(status.last_success_at).toLocaleString() : "Never";
+  $("#adminRateEffectiveAt").textContent = status.provider_effective_at ? new Date(status.provider_effective_at).toLocaleString() : "Unavailable";
+  $("#adminRateCurrencyCount").textContent = Number(status.currencies_updated || 0);
+  $("#adminRateLastAttempt").textContent = status.last_attempt_at
+    ? `${new Date(status.last_attempt_at).toLocaleString()} · ${titleCase(status.last_attempt_status || "unknown")}`
+    : "Never";
+  $("#adminRateAlert").classList.remove("hidden");
+  $("#adminRateAlert").dataset.level = presentation.level;
+  $("#adminRateAlert").textContent = status.safe_error_summary
+    ? `${presentation.text} Last safe error: ${status.safe_error_summary}`
+    : presentation.text;
+
+  const rows = approvedAdminPaymentRows();
+  $("#adminOriginalCurrencyTotals").textContent = rows.length
+    ? formatCurrencyTotals(rows)
+    : "No received payments";
+  const converted = settings.conversion_enabled ? adminConvertedPaymentTotal(rows, settings.reporting_currency) : null;
+  $("#adminConvertedCurrencyTotal").textContent = !settings.conversion_enabled
+    ? "Consolidated conversion is disabled"
+    : converted == null
+      ? "Converted total unavailable until matching rates exist"
+      : `${money(scaledToDecimal(converted), settings.reporting_currency)} locked reporting total`;
+}
+
+function refreshAdminCurrencyDependentOptions() {
+  const enabled = selectedOptions($("#adminEnabledCurrencies"));
+  const reporting = $("#adminReportingCurrency").value;
+  populateCurrencySelect($("#adminReportingCurrency"), enabled.includes(reporting) ? reporting : enabled[0], enabled);
+}
+
+async function saveAdminFinanceCurrencySettings(event) {
+  event.preventDefault();
+  const button = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
+  try {
+    setSubmitting(button, true, "Saving...");
+    await query("admin finance currency settings save", supabase.rpc("save_admin_finance_currency_settings", {
+      p_reporting_currency: $("#adminReportingCurrency").value,
+      p_enabled_receipt_currencies: selectedOptions($("#adminEnabledCurrencies")),
+      p_conversion_enabled: $("#adminConversionEnabled").checked
+    }));
+    if ($("#adminConversionEnabled").checked) {
+      await query("admin historical conversion backfill", supabase.rpc("backfill_currency_conversions"));
+    }
+    await loadAdminData("finance");
+    renderAdmin();
+    showToast("Finance currency settings saved.");
+  } catch (error) {
+    showToast(friendlyMessage(error.message));
+  } finally {
+    setSubmitting(button, false, "Save Finance currencies");
+  }
+}
+
+async function syncExchangeRates() {
+  const button = $("#syncExchangeRatesButton");
+  try {
+    setSubmitting(button, true, "Syncing...");
+    const { data, error } = await supabase.functions.invoke("sync-exchange-rates", { body: { source: "admin_manual" } });
+    if (error) throw error;
+    if (!data || !["success", "partial_failure"].includes(data.status)) throw new Error(data?.error || "RATE_SYNC_FAILED");
+    await loadAdminData("finance");
+    renderAdmin();
+    showToast(`${Number(data.rates_stored || 0)} exchange rates stored.`);
+  } catch (error) {
+    showToast(friendlyMessage(error.message || "Exchange-rate sync failed."));
+  } finally {
+    setSubmitting(button, false, "Sync rates now");
   }
 }
 
@@ -2468,7 +2892,9 @@ function renderAdminPlans() {
 
 function renderSubscriptionReviews() {
   const list = $("#subscriptionReviewList");
-  const pending = state.adminSubscriptionPayments.filter((payment) => payment.status === "pending_review");
+  const pending = state.adminSubscriptionPayments.filter((payment) =>
+    payment.status === "pending_review" && adminFinanceRecordVisible(payment, "subscription_payment")
+  );
   if (!pending.length) {
     list.innerHTML = emptyState("No payments waiting", "New user proof submissions will appear here for finance review.");
     return;
@@ -2493,7 +2919,9 @@ function renderSubscriptionReviews() {
 function renderSubscriptionPaymentHistory() {
   const list = $("#subscriptionPaymentHistoryList");
   if (!list) return;
-  const history = state.adminSubscriptionPayments.filter((payment) => payment.status !== "pending_review");
+  const history = state.adminSubscriptionPayments.filter((payment) =>
+    payment.status !== "pending_review" && adminFinanceRecordVisible(payment, "subscription_payment")
+  );
   if (!history.length) {
     list.innerHTML = emptyState("No reviewed subscription payments", "Approved and rejected payments will remain here after review.");
     return;
@@ -2505,6 +2933,7 @@ function renderSubscriptionPaymentHistory() {
     const workspace = state.adminWorkspaces.find((item) => item.id === payment.workspace_id);
     const owner = state.adminProfiles.find((profile) => profile.id === workspace?.owner_id);
     const proof = state.adminSubscriptionProofs.find((item) => item.payment_id === payment.id);
+    const locked = lockedConversionFor("subscription_payment", payment.id, adminReportingCurrency());
     const article = document.createElement("article");
     article.className = "record-card";
     article.innerHTML = `
@@ -2514,10 +2943,39 @@ function renderSubscriptionPaymentHistory() {
         <small>${escapeHtml(payment.reference_number || "No reference")} &middot; ${new Date(payment.payment_date || payment.created_at).toLocaleDateString()}${invoice ? ` &middot; ${Number(invoice.billable_member_count || 1)} paid place${Number(invoice.billable_member_count || 1) === 1 ? "" : "s"}` : ""}</small>
         <div class="badge-row">${statusBadge(payment.status)}${payment.receipt_number ? `<span class="mini-badge">${escapeHtml(payment.receipt_number)}</span>` : ""}${proof ? '<span class="mini-badge">proof attached</span>' : ""}</div>
       </div>
-      <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong><div class="row-actions"><button type="button" data-view-subscription-payment="${payment.id}">View details</button>${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}</div></div>
+      <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong>${locked ? `<small>${money(locked.converted_amount, locked.reporting_currency)} at locked rate ${escapeHtml(locked.exchange_rate)}</small>` : ""}<div class="row-actions"><button type="button" data-view-subscription-payment="${payment.id}">View details</button>${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}${payment.status === "approved" && !locked ? `<button type="button" data-manual-conversion="${payment.id}" data-conversion-entity="subscription_payment">Enter manual rate</button>` : ""}</div></div>
     `;
     list.append(article);
   });
+}
+
+async function saveManualConversion(entityType, entityId) {
+  const payment = entityType === "subscription_payment"
+    ? state.adminSubscriptionPayments.find((row) => row.id === entityId)
+    : state.payments.find((row) => row.id === entityId);
+  if (!payment) return;
+  const target = adminReportingCurrency();
+  const raw = window.prompt(`Enter how many ${target} equal 1 ${payment.currency}. This locked rate will be used only for this completed payment:`);
+  if (raw == null) return;
+  const rate = Number(raw);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    showToast("Enter a positive exchange rate.");
+    return;
+  }
+  try {
+    await query("manual payment conversion save", supabase.rpc("save_manual_payment_conversion", {
+      p_entity_type: entityType,
+      p_entity_id: entityId,
+      p_reporting_currency: target,
+      p_exchange_rate: rate,
+      p_converted_amount: Number(payment.amount) * rate
+    }));
+    await loadAdminData("finance");
+    renderAdmin();
+    showToast("Manual exchange rate saved and locked to this payment.");
+  } catch (error) {
+    showToast(friendlyMessage(error.message));
+  }
 }
 
 function adminMonitorForWorkspace(workspaceId) {
@@ -2951,21 +3409,23 @@ function renderRecentPlatformPayments() {
 
 function renderPlatformPayments() {
   const list = $("#paymentsList");
-  if (!state.payments.length) {
+  const payments = state.payments.filter((payment) => adminFinanceRecordVisible(payment, "platform_payment"));
+  if (!payments.length) {
     list.innerHTML = emptyState("No legacy payment notes", "New subscription payments are submitted by workspace owners and reviewed above.");
     return;
   }
   list.innerHTML = "";
-  state.payments.forEach((payment) => list.append(renderPlatformPayment(payment, true)));
+  payments.forEach((payment) => list.append(renderPlatformPayment(payment, true)));
 }
 
 function renderPlatformPayment(payment, withActions = false) {
   const article = document.createElement("article");
+  const locked = lockedConversionFor("platform_payment", payment.id, adminReportingCurrency());
   article.className = "record-card";
   article.innerHTML = `
     <div class="date-chip"><strong>${parseDate(payment.payment_date).getDate()}</strong><span>${parseDate(payment.payment_date).toLocaleString("en", { month: "short" })}</span></div>
     <div class="record-main"><strong>${escapeHtml(payment.family_heads?.full_name || "Unknown user")}</strong><span>${escapeHtml(payment.family_heads?.email || "")} &middot; ${escapeHtml(payment.payment_method)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span></div>
-    <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong>${withActions ? `<button type="button" data-delete-payment="${payment.id}">Delete</button>` : ""}</div>
+    <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong>${locked ? `<small>${money(locked.converted_amount, locked.reporting_currency)} locked</small>` : ""}${withActions ? `<div class="row-actions">${!locked ? `<button type="button" data-manual-conversion="${payment.id}" data-conversion-entity="platform_payment">Enter manual rate</button>` : ""}<button type="button" data-delete-payment="${payment.id}">Delete</button></div>` : ""}</div>
   `;
   return article;
 }
@@ -3214,7 +3674,7 @@ function resetObligationForm() {
   $("#dueDay").value = 1;
   $("#reminderDays").value = 3;
   $("#obligationCurrencySearch").value = "";
-  renderPaymentCurrencyOptions("", state.family?.currency || "USD");
+  renderPaymentCurrencyOptions("", state.workspaceSettings?.default_payment_currency || state.family?.currency || "USD");
   $("#paymentScope").value = state.family ? "family" : "personal";
   $("#obligationTitle").textContent = "Add payment";
   $("#obligationSubmitButton").textContent = "Add payment";
@@ -3254,6 +3714,7 @@ function openRecordPayment(key) {
   $("#recordPaymentTitle").textContent = `Record ${occurrence.item.name}`;
   $("#recordPaymentMeta").textContent = `${money(occurrence.outstanding, occurrence.item.currency)} outstanding, due ${occurrence.dueDate}`;
   $("#recordOutstanding").value = occurrence.outstanding.toFixed(2);
+  $("#recordCurrency").value = occurrence.item.currency;
   $("#recordPaymentType").value = "full";
   $("#recordAmount").value = occurrence.outstanding.toFixed(2);
   $("#recordAmount").max = occurrence.outstanding.toFixed(2);
@@ -3303,6 +3764,7 @@ async function savePaymentRecord(event) {
         due_date: $("#recordDueDate").value,
         paid_by_member_id: item.visibility === "family" ? $("#recordPaidBy").value || null : null,
         amount,
+        currency: item.currency,
         payment_date: $("#recordPaymentDate").value,
         payment_method: $("#recordMethod").value,
         reference_number: $("#recordReference").value.trim() || null,
@@ -3675,10 +4137,137 @@ function formatOccurrenceCurrencyTotals(occurrences) {
 function formatCurrencyTotals(rows) {
   if (!rows.length) return money(0, "USD");
   const totals = rows.reduce((acc, row) => {
-    acc[row.currency || "USD"] = (acc[row.currency || "USD"] || 0) + Number(row.amount || 0);
+    const currency = row.currency || "USD";
+    acc[currency] = (acc[currency] || 0n) + decimalToScaled(row.amount || 0);
     return acc;
   }, {});
-  return Object.entries(totals).map(([currency, amount]) => money(amount, currency)).join(" / ");
+  return Object.entries(totals).map(([currency, amount]) => money(scaledToDecimal(amount), currency)).join(" / ");
+}
+
+function latestBaseRate(currency, at = null) {
+  const code = `${currency || "USD"}`.toUpperCase();
+  if (code === "USD") return { rate: "1", provider_effective_at: at || new Date().toISOString(), provider: "identity" };
+  const cutoff = at ? new Date(at).getTime() : Number.POSITIVE_INFINITY;
+  return state.exchangeRates.find((row) =>
+    row.quote_currency === code && new Date(row.provider_effective_at).getTime() <= cutoff
+  ) || null;
+}
+
+function crossRateScaled(sourceCurrency, targetCurrency, at = null) {
+  if (sourceCurrency === targetCurrency) return DECIMAL_SCALE;
+  const source = latestBaseRate(sourceCurrency, at);
+  const target = latestBaseRate(targetCurrency, at);
+  if (!source || !target) return null;
+  const sourceRate = decimalToScaled(source.rate);
+  const targetRate = decimalToScaled(target.rate);
+  if (sourceRate <= 0n || targetRate <= 0n) return null;
+  return (targetRate * DECIMAL_SCALE) / sourceRate;
+}
+
+function convertAmountScaled(amount, sourceCurrency, targetCurrency, at = null) {
+  const rate = crossRateScaled(sourceCurrency, targetCurrency, at);
+  return rate == null ? null : multiplyScaled(decimalToScaled(amount), rate);
+}
+
+function formatConvertedTotal(rows, targetCurrency) {
+  const total = convertedTotalScaled(rows, targetCurrency);
+  if (total == null) return null;
+  return money(scaledToDecimal(total), targetCurrency);
+}
+
+function convertedTotalScaled(rows, targetCurrency) {
+  let total = 0n;
+  for (const row of rows) {
+    const converted = convertAmountScaled(row.amount, row.currency || "USD", targetCurrency, row.at || null);
+    if (converted == null) return null;
+    total += converted;
+  }
+  return total;
+}
+
+function selectedReportingCurrency() {
+  return state.workspaceSettings?.reporting_currency || "USD";
+}
+
+function rateStatusPresentation(status = state.exchangeRateStatus) {
+  const lastSuccess = status?.last_success_at ? new Date(status.last_success_at) : null;
+  const hours = Number(status?.stale_hours);
+  if (!lastSuccess || Number.isNaN(lastSuccess.getTime())) {
+    return { level: "missing", text: "No successful exchange-rate sync is available. Original currencies remain visible separately." };
+  }
+  const updated = lastSuccess.toLocaleString();
+  if (hours > 36) return { level: "danger", text: `Rates are more than 36 hours old. Last successful CurrencyAPI sync: ${updated}.` };
+  if (hours > 18) return { level: "warning", text: `Rates may be stale. Last successful CurrencyAPI sync: ${updated}.` };
+  return { level: "current", text: `CurrencyAPI rates last updated ${updated}.` };
+}
+
+function csvCell(value) {
+  const text = `${value ?? ""}`.replaceAll('"', '""');
+  return `"${text}"`;
+}
+
+function downloadCsv(filename, headings, rows) {
+  const csv = [headings, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 0);
+}
+
+function exportReportCsv() {
+  const items = paymentItemsForReportWorkspace().filter((item) =>
+    state.reportCurrencyFilter === "all" || item.currency === state.reportCurrencyFilter
+  );
+  const records = paymentRecordsForReportWorkspace(items);
+  const target = reportReportingCurrency();
+  const rows = records.map((record) => {
+    const item = items.find((candidate) => candidate.id === record.payment_item_id);
+    const source = record.currency || item?.currency || "USD";
+    const locked = lockedConversionFor("payment_record", record.id, target);
+    return [
+      record.payment_date, item?.name || "Payment", record.amount, source,
+      locked?.converted_amount || "", locked?.reporting_currency || "",
+      locked?.exchange_rate || "", locked?.rate_effective_at || "",
+      locked?.rate_source || "", record.payment_method || "", record.reference_number || ""
+    ];
+  });
+  downloadCsv(`mushavo-report-${state.filterMonth}.csv`, [
+    "Payment date", "Payment", "Original amount", "Original currency", "Converted amount",
+    "Reporting currency", "Exchange rate", "Rate effective at (UTC)", "Rate source", "Method", "Reference"
+  ], rows);
+}
+
+function exportAdminFinanceCsv() {
+  const target = adminReportingCurrency();
+  const records = [
+    ...state.payments.filter((payment) => adminFinanceRecordVisible(payment, "platform_payment")).map((payment) => ({
+      entity_type: "platform_payment", entity_id: payment.id, at: payment.payment_date,
+      amount: payment.amount, currency: payment.currency, status: "approved", reference: payment.reference_number
+    })),
+    ...state.adminSubscriptionPayments.filter((payment) => adminFinanceRecordVisible(payment, "subscription_payment")).map((payment) => ({
+      entity_type: "subscription_payment", entity_id: payment.id, at: payment.payment_date,
+      amount: payment.amount, currency: payment.currency, status: payment.status, reference: payment.reference_number
+    }))
+  ];
+  const rows = records.map((payment) => {
+    const locked = lockedConversionFor(payment.entity_type, payment.entity_id, target);
+    return [payment.entity_type, payment.entity_id, payment.status, payment.reference, payment.at, payment.amount, payment.currency,
+      locked?.converted_amount || "", locked?.reporting_currency || "", locked?.exchange_rate || "",
+      locked?.rate_effective_at || "", locked?.rate_source || ""];
+  });
+  downloadCsv(`mushavo-finance-${toDateValue(new Date())}.csv`, [
+    "Record type", "Record ID", "Status", "Reference", "Payment date", "Original amount", "Original currency",
+    "Converted amount", "Reporting currency", "Exchange rate", "Rate effective at (UTC)", "Rate source"
+  ], rows);
+}
+
+function printCurrentView(kind) {
+  document.body.dataset.printView = kind;
+  window.print();
+  delete document.body.dataset.printView;
 }
 
 function formatFileSize(bytes) {
@@ -3754,6 +4343,12 @@ document.addEventListener("click", async (event) => {
 
   const subscriptionProof = event.target.closest("[data-open-subscription-proof]");
   if (subscriptionProof) await openSubscriptionProof(subscriptionProof.dataset.openSubscriptionProof);
+
+  const manualConversion = event.target.closest("[data-manual-conversion]");
+  if (manualConversion) await saveManualConversion(
+    manualConversion.dataset.conversionEntity,
+    manualConversion.dataset.manualConversion
+  );
 
   const dueMonthToggle = event.target.closest("[data-toggle-due-month]");
   if (dueMonthToggle) {
@@ -3972,6 +4567,23 @@ $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPlatformPayment);
 $("#adminNoteForm").addEventListener("submit", saveAdminNote);
 $("#planPriceForm").addEventListener("submit", savePlanPrice);
+$("#workspaceCurrencySettingsForm").addEventListener("submit", saveWorkspaceCurrencySettings);
+$("#workspaceEnabledCurrencies").addEventListener("change", refreshWorkspaceCurrencyDependentOptions);
+$("#adminCurrencySettingsForm").addEventListener("submit", saveAdminFinanceCurrencySettings);
+$("#adminEnabledCurrencies").addEventListener("change", refreshAdminCurrencyDependentOptions);
+document.querySelectorAll("#adminFinanceCurrencyFilter, #adminFinanceStatusFilter, #adminFinanceTypeFilter, #adminFinanceFromDate, #adminFinanceToDate, #adminFinanceSearch").forEach((field) => {
+  field.addEventListener(field.type === "search" ? "input" : "change", () => {
+    renderAdminFinanceCurrencyPanel();
+    renderPlatformPayments();
+    renderSubscriptionReviews();
+    renderSubscriptionPaymentHistory();
+  });
+});
+$("#syncExchangeRatesButton").addEventListener("click", syncExchangeRates);
+$("#exportReportCsvButton").addEventListener("click", exportReportCsv);
+$("#printReportButton").addEventListener("click", () => printCurrentView("reports"));
+$("#exportAdminFinanceCsvButton").addEventListener("click", exportAdminFinanceCsv);
+$("#printAdminFinanceButton").addEventListener("click", () => printCurrentView("admin-finance"));
 $("#renewalForm").addEventListener("submit", submitSubscriptionRenewal);
 $("#renewalPlan").addEventListener("change", updateRenewalQuote);
 $("#renewalPeriod").addEventListener("change", updateRenewalQuote);
@@ -4010,6 +4622,18 @@ $("#monthFilter").addEventListener("change", (event) => {
 $("#reportMonthFilter").addEventListener("change", (event) => {
   state.filterMonth = event.target.value;
   $("#monthFilter").value = state.filterMonth;
+  renderReports();
+});
+$("#reportCurrencyFilter").addEventListener("change", (event) => {
+  state.reportCurrencyFilter = event.target.value;
+  renderReports();
+});
+$("#reportViewMode").addEventListener("change", (event) => {
+  state.reportViewMode = event.target.value;
+  renderReports();
+});
+$("#reportReportingCurrency").addEventListener("change", (event) => {
+  state.reportReportingCurrency = event.target.value;
   renderReports();
 });
 $("#statusFilter").addEventListener("change", (event) => {

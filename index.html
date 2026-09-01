@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=36" />
+    <link rel="stylesheet" href="styles.css?v=37" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=42"></script>
+    <script type="module" src="app.js?v=43"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -230,6 +230,34 @@
 
           <section class="screen-panel hidden" data-admin-panel="finance">
             <header class="topbar"><div><p class="eyebrow">Finance</p><h2>Platform subscription payments</h2></div></header>
+            <section class="ledger-panel exchange-rate-panel" aria-labelledby="exchangeRateTitle">
+              <div class="panel-heading inline"><div><p class="eyebrow">Multi-currency</p><h3 id="exchangeRateTitle">Exchange-rate service</h3><p class="muted-copy">CurrencyAPI rates are fetched server-side and cached. Original payment amounts are never overwritten.</p></div><button id="syncExchangeRatesButton" type="button">Sync rates now</button></div>
+              <div id="adminRateAlert" class="notice hidden" role="status"></div>
+              <dl class="exchange-rate-status-grid">
+                <div><dt>Provider</dt><dd id="adminRateProvider">CurrencyAPI</dd></div>
+                <div><dt>Last successful sync</dt><dd id="adminRateLastSuccess">Never</dd></div>
+                <div><dt>Latest provider data</dt><dd id="adminRateEffectiveAt">Unavailable</dd></div>
+                <div><dt>Currencies updated</dt><dd id="adminRateCurrencyCount">0</dd></div>
+                <div><dt>Schedule</dt><dd>00:15 and 12:15 UTC</dd></div>
+                <div><dt>Last attempt</dt><dd id="adminRateLastAttempt">Never</dd></div>
+              </dl>
+              <form id="adminCurrencySettingsForm" class="form-grid currency-settings-form">
+                <label for="adminReportingCurrency">Finance reporting currency<select id="adminReportingCurrency" required></select></label>
+                <label class="full" for="adminEnabledCurrencies">Enabled receipt currencies<select id="adminEnabledCurrencies" multiple size="6" required></select><small>Hold Ctrl or Command to select more than one currency.</small></label>
+                <label class="checkbox-field full"><input id="adminConversionEnabled" type="checkbox" />Create consolidated converted totals</label>
+                <button class="primary" type="submit">Save Finance currencies</button>
+                <div class="button-row"><button id="exportAdminFinanceCsvButton" type="button">Export CSV</button><button id="printAdminFinanceButton" type="button">Print / Save PDF</button></div>
+              </form>
+              <div class="admin-finance-filters" aria-label="Finance filters">
+                <label for="adminFinanceCurrencyFilter">Original currency<select id="adminFinanceCurrencyFilter"><option value="all">All currencies</option></select></label>
+                <label for="adminFinanceStatusFilter">Status<select id="adminFinanceStatusFilter"><option value="all">All statuses</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></label>
+                <label for="adminFinanceTypeFilter">Payment type<select id="adminFinanceTypeFilter"><option value="all">All payment types</option><option value="subscription_payment">Subscription payments</option><option value="platform_payment">Legacy notes</option></select></label>
+                <label for="adminFinanceFromDate">From<input id="adminFinanceFromDate" type="date" /></label>
+                <label for="adminFinanceToDate">To<input id="adminFinanceToDate" type="date" /></label>
+                <label for="adminFinanceSearch">Account or reference<input id="adminFinanceSearch" type="search" placeholder="Email, workspace, reference" /></label>
+              </div>
+              <div class="finance-currency-summary"><strong id="adminOriginalCurrencyTotals">No received payments</strong><span id="adminConvertedCurrencyTotal">Converted total unavailable</span></div>
+            </section>
             <section class="ledger-panel subscription-review-panel">
               <div class="panel-heading"><p class="eyebrow">Payment review</p><h3>Pending proof submissions</h3><p class="muted-copy">Approvals are applied once and create an entitlement history record and receipt.</p></div>
               <div id="subscriptionReviewList" class="record-list"></div>
@@ -421,8 +449,12 @@
               <div class="report-filter-controls">
                 <label class="report-workspace-control" for="reportWorkspaceFilter">Workspace<select id="reportWorkspaceFilter" data-family-selector aria-label="Choose the workspace for this report"></select></label>
                 <label class="report-month-control" for="reportMonthFilter">Report month<input id="reportMonthFilter" type="month" /></label>
+                <label for="reportCurrencyFilter">Original currency<select id="reportCurrencyFilter"><option value="all">All currencies</option></select></label>
+                <label for="reportViewMode">Money view<select id="reportViewMode"><option value="original">Original currencies</option><option value="converted">Converted reporting currency</option></select></label>
+                <label for="reportReportingCurrency">Reporting currency<select id="reportReportingCurrency"></select></label>
               </div>
             </header>
+            <section id="reportRatePanel" class="report-rate-panel hidden" aria-live="polite"><div><strong id="reportRateTitle">Exchange-rate status</strong><span id="reportRateText">Converted unpaid balances are estimates.</span></div><div class="button-row"><button id="exportReportCsvButton" type="button">Export CSV</button><button id="printReportButton" type="button">Print / Save PDF</button></div></section>
             <section id="reportsLockNotice" class="locked-feature-panel hidden">
               <p id="reportsLockEyebrow" class="eyebrow">Workspace reports</p>
               <h3 id="reportsLockTitle">Finance analytics are locked</h3>
@@ -484,6 +516,17 @@
               </dl>
             </section>
             <section class="content-grid settings-content-grid">
+              <section class="ledger-panel currency-settings-panel">
+                <div class="panel-heading"><p class="eyebrow">Currencies</p><h3>Workspace currency settings</h3><p class="muted-copy">Original amounts remain unchanged when you change these display and reporting preferences.</p></div>
+                <form id="workspaceCurrencySettingsForm" class="form-grid currency-settings-form">
+                  <label for="workspaceDefaultCurrency">Default payment currency<select id="workspaceDefaultCurrency" required></select></label>
+                  <label for="workspaceReportingCurrency">Reporting currency<select id="workspaceReportingCurrency" required></select></label>
+                  <label class="full" for="workspaceEnabledCurrencies">Enabled currencies<select id="workspaceEnabledCurrencies" multiple size="7" required></select><small>Hold Ctrl or Command to select more than one. The default and reporting currencies must be enabled.</small></label>
+                  <label class="checkbox-field full"><input id="workspaceConversionEnabled" type="checkbox" />Enable consolidated converted reporting</label>
+                  <button id="saveWorkspaceCurrencyButton" class="primary" type="submit">Save currency settings</button>
+                </form>
+                <div id="workspaceRateStatus" class="currency-rate-copy">No exchange-rate data has been loaded yet.</div>
+              </section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
             </section>
           </section>
@@ -555,7 +598,8 @@
         <input id="recordDueDate" type="hidden" />
         <input id="recordOutstanding" type="hidden" />
         <label for="recordPaymentType">Payment type<select id="recordPaymentType"><option value="full">Pay in full</option><option value="partial">Partial payment</option></select></label>
-        <label for="recordAmount">Amount paid<input id="recordAmount" type="number" min="0.01" step="0.01" required /></label>
+        <label for="recordAmount">Amount paid<input id="recordAmount" type="number" min="0.0001" step="0.0001" required /></label>
+        <label for="recordCurrency">Currency<input id="recordCurrency" readonly aria-readonly="true" /></label>
         <label for="recordPaidBy">Paid by<select id="recordPaidBy"></select></label>
         <label for="recordPaymentDate">Payment date<input id="recordPaymentDate" type="date" required /></label>
         <label for="recordMethod">Method<select id="recordMethod"><option value="Cash">Cash</option><option value="EFT">EFT</option><option value="Card">Card</option><option value="Bank deposit">Bank deposit</option><option value="Other">Other</option></select></label>

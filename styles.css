@@ -2685,3 +2685,154 @@ input[type="file"] {
   .plan-card p { min-height: 0; }
   .subscription-review-card .record-side { min-width: 0; }
 }
+
+/* Multi-currency settings, reporting, and Admin Finance */
+.exchange-rate-panel,
+.currency-settings-panel {
+  margin-bottom: 1.25rem;
+}
+
+.exchange-rate-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  margin: 1rem 0 1.25rem;
+  border-block: 1px solid rgba(100, 116, 139, 0.18);
+}
+
+.exchange-rate-status-grid > div {
+  min-width: 0;
+  padding: 0.9rem;
+  border-bottom: 1px solid rgba(100, 116, 139, 0.12);
+}
+
+.exchange-rate-status-grid dt,
+.exchange-rate-status-grid dd {
+  margin: 0;
+}
+
+.exchange-rate-status-grid dt {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.exchange-rate-status-grid dd {
+  margin-top: 0.3rem;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.currency-settings-form select[multiple] {
+  min-height: 10rem;
+  padding: 0.55rem;
+}
+
+.currency-settings-form select[multiple] option {
+  padding: 0.42rem 0.5rem;
+  border-radius: 8px;
+}
+
+.admin-finance-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 1.15rem;
+}
+
+.currency-rate-copy,
+.finance-currency-summary,
+.report-rate-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(15, 118, 110, 0.2);
+  border-radius: 16px;
+  background: rgba(240, 253, 250, 0.72);
+  color: var(--muted);
+}
+
+.finance-currency-summary strong,
+.report-rate-panel strong {
+  color: var(--ink);
+}
+
+.report-rate-panel > div:first-child {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.report-rate-panel[data-level="warning"],
+.notice[data-level="warning"] {
+  border-color: rgba(217, 119, 6, 0.35);
+  background: rgba(255, 251, 235, 0.9);
+}
+
+.report-rate-panel[data-level="danger"],
+.report-rate-panel[data-level="missing"],
+.notice[data-level="danger"],
+.notice[data-level="missing"] {
+  border-color: rgba(220, 38, 38, 0.28);
+  background: rgba(254, 242, 242, 0.9);
+}
+
+@media (max-width: 760px) {
+  .admin-finance-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .exchange-rate-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-rate-panel,
+  .finance-currency-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .report-rate-panel .button-row,
+  .report-rate-panel button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 430px) {
+  .admin-finance-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .exchange-rate-status-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media print {
+  body[data-print-view] .app-sidebar,
+  body[data-print-view] .mobile-topbar,
+  body[data-print-view] button,
+  body[data-print-view] dialog,
+  body[data-print-view] .toast,
+  body[data-print-view] .report-filter-controls {
+    display: none !important;
+  }
+
+  body[data-print-view] .app-shell,
+  body[data-print-view] .app-content,
+  body[data-print-view] .screen-panel {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  body[data-print-view="reports"] [data-family-panel]:not([data-family-panel="reports"]),
+  body[data-print-view="admin-finance"] [data-admin-panel]:not([data-admin-panel="finance"]) {
+    display: none !important;
+  }
+}
