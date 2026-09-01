@@ -1433,7 +1433,7 @@ code {
 
 .family-overview-stats {
   display: grid;
-  grid-template-columns: repeat(3, minmax(74px, 1fr));
+  grid-template-columns: repeat(5, minmax(70px, 1fr));
   gap: 8px;
 }
 
@@ -1455,6 +1455,101 @@ code {
   font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.family-overview-actions .row-actions {
+  justify-content: flex-end;
+}
+
+.subscription-history-panel {
+  margin-top: 22px;
+}
+
+.admin-details-dialog {
+  width: min(880px, calc(100vw - 32px));
+}
+
+.admin-details-shell,
+.admin-details-body,
+.admin-detail-section,
+.admin-detail-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-details-body {
+  margin-top: 18px;
+}
+
+.admin-detail-section {
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 20px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.admin-detail-section h4 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.admin-detail-list {
+  display: grid;
+  margin: 0;
+}
+
+.admin-detail-list > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.45fr) minmax(0, 1fr);
+  gap: 16px;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  padding: 11px 0;
+}
+
+.admin-detail-list > div:first-child {
+  border-top: 0;
+}
+
+.admin-detail-list dt {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.admin-detail-list dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.admin-detail-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(241, 245, 249, 0.72);
+}
+
+.admin-detail-card > div,
+.admin-detail-note {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.admin-detail-card span,
+.admin-detail-card small,
+.admin-detail-note span {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.admin-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
 }
 
 .family-management-grid,
@@ -1953,10 +2048,11 @@ input[type="file"] {
   }
 
   .family-overview-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
-  .family-overview-stats > div:first-child {
+  .family-overview-stats > div:nth-child(odd) {
     border-left: 0;
     padding-left: 0;
   }
@@ -1967,6 +2063,23 @@ input[type="file"] {
   }
 
   .family-overview-actions button {
+    width: 100%;
+  }
+
+  .family-overview-actions .row-actions,
+  .admin-detail-card {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .admin-detail-list > div {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+
+  .admin-detail-card button,
+  .admin-detail-actions button {
     width: 100%;
   }
 

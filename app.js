@@ -31,6 +31,7 @@ const state = {
   workspaceSubscription: null,
   workspaceEntitlement: null,
   billableMemberCount: 1,
+  memberUsage: null,
   plans: [],
   planPrices: [],
   planLimits: [],
@@ -55,6 +56,8 @@ const state = {
   adminSubscriptionInvoices: [],
   adminSubscriptionPayments: [],
   adminSubscriptionProofs: [],
+  adminSubscriptionReviews: [],
+  adminSubscriptionMonitor: [],
   adminTab: "dashboard",
   familyTab: "dashboard",
   editingObligationId: null,
@@ -270,8 +273,17 @@ function friendlyMessage(message = "") {
   if (text.includes("INVALID_FAMILY_MEMBER_COUNT")) {
     return "The total number of people must be at least the number included in the Family plan.";
   }
-  if (text.includes("INVALID_FAMILY_MEMBER_COUNT")) {
-    return "The total number of people must be at least the number included in the Family plan.";
+  if (text.includes("MEMBER_LIMIT_REACHED")) {
+    return "All paid family places are currently in use or reserved by pending invitations. Purchase another place before inviting someone else.";
+  }
+  if (text.includes("MEMBER_LIMIT_BELOW_CURRENT_USAGE")) {
+    return "The selected member limit cannot be lower than the active members and pending invitations already using this family.";
+  }
+  if (text.includes("APPROVED_MEMBER_LIMIT_BELOW_USAGE")) {
+    return "This payment cannot be approved because its paid member limit is below the family's current active member count.";
+  }
+  if (text.includes("ACTIVE_FAMILY_SUBSCRIPTION_REQUIRED")) {
+    return "An active Family subscription is required before inviting members.";
   }
   if (text.includes("PERSONAL_PAYMENT_LIMIT_REACHED")) {
     return "Free accounts can keep up to 5 active personal payments. Family payments remain unlimited.";
@@ -286,7 +298,7 @@ function friendlyMessage(message = "") {
     return "The plan price or member count changed. Reopen the payment form to load the latest invoice total.";
   }
   if (text.includes("SUBSCRIPTION_REVIEW_ALREADY_PENDING")) {
-    return "A payment for this plan and billing period is already waiting for review.";
+    return "A subscription payment for this workspace is already waiting for review.";
   }
   if (text.includes("ADDITIONAL_SEAT_PAYMENT_REQUIRED")) {
     return "This member would use an additional paid seat. The Family Head must submit and receive approval for a Household payment covering the new seat first.";
@@ -637,6 +649,7 @@ function resetState() {
   state.workspaceSubscription = null;
   state.workspaceEntitlement = null;
   state.billableMemberCount = 1;
+  state.memberUsage = null;
   state.plans = [];
   state.planPrices = [];
   state.planLimits = [];
@@ -661,6 +674,8 @@ function resetState() {
   state.adminSubscriptionInvoices = [];
   state.adminSubscriptionPayments = [];
   state.adminSubscriptionProofs = [];
+  state.adminSubscriptionReviews = [];
+  state.adminSubscriptionMonitor = [];
   state.adminTab = "dashboard";
   state.familyTab = "dashboard";
   state.editingObligationId = null;
@@ -927,10 +942,11 @@ async function loadWorkspaceSubscriptionData() {
   const workspace = currentBudgetWorkspace();
   if (!workspace) throw new Error("Your subscription workspace could not be reconciled. Run the complete Supabase schema again.");
 
-  const [subscriptions, entitlements, billableMemberCount, requests, invoices, payments, history] = await Promise.all([
+  const [subscriptions, entitlements, billableMemberCount, memberUsage, requests, invoices, payments, history] = await Promise.all([
     query("workspace subscription load", supabase.from("workspace_subscriptions").select("*").eq("workspace_id", workspace.id).limit(1)),
     query("workspace entitlement load", supabase.rpc("effective_workspace_entitlement", { p_workspace_id: workspace.id })),
     query("workspace seat usage load", supabase.rpc("workspace_billable_member_count", { p_workspace_id: workspace.id })),
+    query("workspace member capacity load", supabase.rpc("workspace_member_usage", { p_workspace_id: workspace.id })),
     query("renewal requests load", supabase.from("subscription_renewal_requests").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
     query("subscription invoices load", supabase.from("subscription_invoices").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
     query("subscription payments load", supabase.from("subscription_payments").select("*").eq("workspace_id", workspace.id).order("created_at", { ascending: false })),
@@ -939,6 +955,13 @@ async function loadWorkspaceSubscriptionData() {
   state.workspaceSubscription = subscriptions[0] || null;
   state.workspaceEntitlement = entitlements[0] || null;
   state.billableMemberCount = Number(billableMemberCount || 1);
+  state.memberUsage = memberUsage[0] || {
+    active_member_count: 1,
+    pending_invitation_count: 0,
+    used_member_count: 1,
+    member_limit: Number(subscriptions[0]?.member_limit || 1),
+    available_member_count: Math.max(0, Number(subscriptions[0]?.member_limit || 1) - 1)
+  };
   state.renewalRequests = requests;
   state.subscriptionInvoices = invoices;
   state.subscriptionPayments = payments;
@@ -962,9 +985,11 @@ async function loadAdminData(tab = state.adminTab) {
   }
   if (["households", "users", "finance"].includes(tab)) {
     add("heads", "heads load", supabase.from("family_heads").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptionMonitor", "subscription monitor load", supabase.rpc("admin_subscription_monitor"));
   }
   if (tab === "users") {
     add("adminProfiles", "registered users load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
+    add("adminMembers", "user family members load", supabase.from("family_members").select("*").order("created_at", { ascending: true }));
     add("adminWorkspaces", "user workspaces load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
     add("adminWorkspaceMembers", "user workspace membership load", supabase.from("workspace_members").select("*").order("created_at", { ascending: false }));
     add("adminSubscriptions", "user subscriptions load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
@@ -999,15 +1024,19 @@ async function loadAdminData(tab = state.adminTab) {
     add("adminPlans", "admin plans load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
     add("adminPlanPrices", "admin plan prices load", supabase.from("plan_prices").select("*").order("effective_from", { ascending: false }));
   }
-  if (["dashboard", "finance"].includes(tab)) {
+  if (["dashboard", "households", "users", "finance"].includes(tab)) {
     add("adminSubscriptionPayments", "admin subscription payments load", supabase.from("subscription_payments").select("*").order("created_at", { ascending: false }));
   }
-  if (tab === "finance") {
-    add("adminWorkspaces", "admin workspaces load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
-    add("adminSubscriptions", "admin subscriptions load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
+  if (["households", "users", "finance"].includes(tab)) {
+    if (tab === "finance") {
+      add("adminProfiles", "finance user profiles load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
+      add("adminWorkspaces", "admin workspaces load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
+      add("adminSubscriptions", "admin subscriptions load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
+    }
     add("adminRenewalRequests", "admin renewal requests load", supabase.from("subscription_renewal_requests").select("*").order("created_at", { ascending: false }));
     add("adminSubscriptionInvoices", "admin subscription invoices load", supabase.from("subscription_invoices").select("*").order("created_at", { ascending: false }));
     add("adminSubscriptionProofs", "admin subscription proofs load", supabase.from("subscription_payment_proofs").select("*").order("created_at", { ascending: false }));
+    add("adminSubscriptionReviews", "admin subscription reviews load", supabase.from("subscription_payment_reviews").select("*").order("created_at", { ascending: false }));
   }
 
   const results = await Promise.all(tasks);
@@ -1112,6 +1141,11 @@ function renderMemberAccess() {
   const allowedToCreate = canCreateFamily();
   const owned = ownedFamilies();
   const manageableFamilies = owned.filter((family) => canManageMembersForFamily(family.id));
+  const selectedMemberUsage = state.memberUsage || {};
+  const selectedMemberLimit = Math.max(1, Number(selectedMemberUsage.member_limit || state.workspaceSubscription?.member_limit || 1));
+  const selectedActiveMembers = Number(selectedMemberUsage.active_member_count ?? state.members.filter((member) => member.status === "active").length);
+  const selectedPendingInvites = Number(selectedMemberUsage.pending_invitation_count ?? state.familyInvitations.filter((invite) => invite.family_id === state.family?.id && invite.status === "pending").length);
+  const selectedAvailablePlaces = Math.max(0, Number(selectedMemberUsage.available_member_count ?? selectedMemberLimit - selectedActiveMembers - selectedPendingInvites));
   const familyCount = owned.length;
   const limit = familyLimit();
   const creationNotice = $("#familyCreationNotice");
@@ -1144,7 +1178,9 @@ function renderMemberAccess() {
   inviteFamily.value = manageableFamilies.some((family) => family.id === previousInviteFamily)
     ? previousInviteFamily
     : manageableFamilies.find((family) => family.id === state.family?.id)?.id || manageableFamilies[0]?.id || "";
-  const allowedToInvite = manageableFamilies.length > 0;
+  const selectedFamilyIsManageable = manageableFamilies.some((family) => family.id === state.family?.id);
+  const selectedFamilyHasCapacity = !selectedFamilyIsManageable || selectedAvailablePlaces > 0;
+  const allowedToInvite = manageableFamilies.length > 0 && selectedFamilyHasCapacity;
   $("#inviteMemberButton").disabled = !allowedToInvite;
   $("#inviteForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !allowedToInvite;
@@ -1152,9 +1188,11 @@ function renderMemberAccess() {
   const memberNotice = $("#memberAccessNotice");
   memberNotice.classList.toggle("hidden", allowedToInvite);
   if (!allowedToInvite) {
-    memberNotice.innerHTML = owned.length
-      ? "<strong>Member management is locked.</strong> The admin must activate member access before you can invite or remove family members."
-      : "<strong>Only a family owner can manage members.</strong> You can participate in families you joined, but only their owner can invite or remove members.";
+    memberNotice.innerHTML = selectedFamilyIsManageable && selectedAvailablePlaces === 0
+      ? `<strong>All ${selectedMemberLimit} paid places are in use.</strong> Active members and pending invitations reserve places. Purchase another place from Subscription before inviting someone else.`
+      : owned.length
+        ? "<strong>Member management is locked.</strong> The subscription must be active before you can invite or remove family members."
+        : "<strong>Only a family owner can manage members.</strong> You can participate in families you joined, but only their owner can invite or remove members.";
   }
 
   const selectedFamilyPanel = $("#selectedFamilyPanel");
@@ -1162,10 +1200,12 @@ function renderMemberAccess() {
   selectedFamilyPanel.classList.toggle("hidden", !ownsSelectedFamily);
   if (ownsSelectedFamily) {
     $("#selectedFamilyTitle").textContent = state.family.name;
-    $("#selectedFamilyMeta").textContent = `${money(state.family.monthly_budget, state.family.currency)} expected each month · ${familyCount} of ${limit} family slots used`;
-    $("#selectedFamilyMemberCount").textContent = state.members.filter((member) => member.status === "active").length;
+    $("#selectedFamilyMeta").textContent = `${money(state.family.monthly_budget, state.family.currency)} expected each month · ${selectedActiveMembers + selectedPendingInvites} of ${selectedMemberLimit} paid places reserved · ${familyCount} of ${limit} family workspaces used`;
+    $("#selectedFamilyMemberCount").textContent = selectedActiveMembers;
+    $("#selectedFamilyMemberLimit").textContent = selectedMemberLimit;
+    $("#selectedFamilyAvailableCount").textContent = selectedAvailablePlaces;
     $("#selectedFamilyPaymentCount").textContent = state.paymentItems.filter((item) => item.family_id === state.family.id && item.status !== "inactive").length;
-    $("#selectedFamilyInviteCount").textContent = state.familyInvitations.filter((invite) => invite.family_id === state.family.id && invite.status === "pending").length;
+    $("#selectedFamilyInviteCount").textContent = selectedPendingInvites;
   }
 }
 
@@ -1714,7 +1754,10 @@ function planInvoiceTotal(plan, price, memberCountOverride = null) {
   const selectedWorkspace = currentBudgetWorkspace();
   const relevantMemberCount = memberCountOverride == null
     ? selectedWorkspace?.workspace_type === plan.workspace_type
-      ? Number(state.billableMemberCount || 1)
+      ? Math.max(
+        Number(state.billableMemberCount || 1),
+        Number(state.memberUsage?.member_limit || state.workspaceSubscription?.member_limit || 1)
+      )
       : includedSeats
     : Math.max(includedSeats, Number(memberCountOverride || includedSeats));
   const extraSeats = ["household", "business"].includes(plan.code)
@@ -1729,9 +1772,14 @@ function renderSubscription() {
   const entitlement = state.workspaceEntitlement;
   if (!workspace || !entitlement) return;
   const activeItems = state.paymentItems.filter((item) => item.workspace_id === workspace.id && item.status !== "inactive").length;
-  const limitText = entitlement.active_payment_limit == null
-    ? `${activeItems} active`
-    : `${activeItems} / ${entitlement.active_payment_limit}`;
+  const tracksMemberPlaces = ["household", "business"].includes(workspace.workspace_type);
+  const memberLimit = Math.max(1, Number(state.memberUsage?.member_limit || state.workspaceSubscription?.member_limit || 1));
+  const memberUsage = Number(state.memberUsage?.used_member_count || state.billableMemberCount || 1);
+  const limitText = tracksMemberPlaces
+    ? `${memberUsage} / ${memberLimit}`
+    : entitlement.active_payment_limit == null
+      ? `${activeItems} active`
+      : `${activeItems} / ${entitlement.active_payment_limit}`;
   $("#subscriptionPlanName").textContent = entitlement.plan_name;
   $("#subscriptionStatusText").textContent = titleCase(entitlement.effective_status);
   $("#subscriptionWorkspaceName").textContent = workspace.name;
@@ -1740,9 +1788,9 @@ function renderSubscription() {
     ? new Date(entitlement.paid_through_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
     : "No expiry";
   $("#subscriptionUsage").textContent = limitText;
-  $("#subscriptionUsageCaption").textContent = workspace.workspace_type === "personal"
-    ? "Active payment items"
-    : `${state.billableMemberCount} billable member${state.billableMemberCount === 1 ? "" : "s"}`;
+  $("#subscriptionUsageCaption").textContent = tracksMemberPlaces
+    ? `${Number(state.memberUsage?.active_member_count || 1)} active · ${Number(state.memberUsage?.pending_invitation_count || 0)} pending · ${Number(state.memberUsage?.available_member_count || 0)} available`
+    : "Active payment items";
   $("#openRenewalButton").disabled = !currentWorkspaceIsOwned();
 
   const notice = $("#subscriptionAccessNotice");
@@ -1805,9 +1853,12 @@ function renderRenewalHistory() {
   state.renewalRequests.forEach((request) => {
     const invoice = state.subscriptionInvoices.find((item) => item.id === request.invoice_id);
     const payment = state.subscriptionPayments.find((item) => item.renewal_request_id === request.id);
+    const memberLimitSummary = ["household", "business"].includes(invoice?.plan_code)
+      ? `<small>${request.provision_workspace_on_approval ? `New family: ${escapeHtml(request.requested_workspace_name || "Family workspace")} &middot; ` : ""}${Number(invoice?.billable_member_count || 1)} total paid place${Number(invoice?.billable_member_count || 1) === 1 ? "" : "s"}</small>`
+      : "";
     const article = document.createElement("article");
     article.className = "record-card";
-    article.innerHTML = `<div class="record-main"><strong>${escapeHtml(invoice?.plan_name || "Subscription")}</strong><span>${escapeHtml(invoice?.invoice_number || "Invoice pending")} &middot; ${titleCase(invoice?.billing_period)} &middot; ${new Date(request.created_at).toLocaleDateString()}</span>${request.provision_workspace_on_approval ? `<small>New family: ${escapeHtml(request.requested_workspace_name || "Family workspace")} &middot; ${Number(invoice?.billable_member_count || 1)} people included</small>` : ""}${request.rejection_reason ? `<small>${escapeHtml(request.rejection_reason)}</small>` : ""}<div class="badge-row">${statusBadge(request.status)}</div></div><div class="record-side"><strong>${invoice ? money(invoice.total_amount, invoice.currency) : ""}</strong>${payment?.receipt_number ? `<small>Receipt ${escapeHtml(payment.receipt_number)}</small>` : ""}</div>`;
+    article.innerHTML = `<div class="record-main"><strong>${escapeHtml(invoice?.plan_name || "Subscription")}</strong><span>${escapeHtml(invoice?.invoice_number || "Invoice pending")} &middot; ${titleCase(invoice?.billing_period)} &middot; ${new Date(request.created_at).toLocaleDateString()}</span>${memberLimitSummary}${request.rejection_reason ? `<small>${escapeHtml(request.rejection_reason)}</small>` : ""}<div class="badge-row">${statusBadge(request.status)}</div></div><div class="record-side"><strong>${invoice ? money(invoice.total_amount, invoice.currency) : ""}</strong>${payment?.receipt_number ? `<small>Receipt ${escapeHtml(payment.receipt_number)}</small>` : ""}</div>`;
     list.append(article);
   });
 }
@@ -1953,8 +2004,16 @@ function openRenewalDialog(planCode = null) {
       ? state.workspaceEntitlement.plan_code
       : plans[0].code;
   const selectedPlan = plans.find((plan) => plan.code === select.value);
-  if (currentBudgetWorkspace()?.workspace_type === "personal" && selectedPlan?.workspace_type === "household") {
-    $("#renewalFamilyMemberCount").value = `${includedMemberSeats(selectedPlan)}`;
+  const selectedWorkspace = currentBudgetWorkspace();
+  const startsNewFamily = selectedWorkspace?.workspace_type === "personal" && selectedPlan?.workspace_type === "household";
+  const managesMemberLimit = startsNewFamily || selectedWorkspace?.workspace_type === selectedPlan?.workspace_type && ["household", "business"].includes(selectedPlan?.code);
+  if (managesMemberLimit) {
+    $("#renewalFamilyMemberCount").value = `${startsNewFamily
+      ? includedMemberSeats(selectedPlan)
+      : Math.max(
+        includedMemberSeats(selectedPlan),
+        Number(state.memberUsage?.member_limit || state.workspaceSubscription?.member_limit || state.billableMemberCount || 1)
+      )}`;
   }
   $("#renewalPaymentDate").value = toDateValue(new Date());
   updateRenewalQuote();
@@ -1966,6 +2025,9 @@ function updateRenewalQuote() {
   const plan = state.plans.find((item) => item.code === $("#renewalPlan").value);
   const workspace = currentBudgetWorkspace();
   const startsNewFamily = workspace?.workspace_type === "personal" && plan?.workspace_type === "household";
+  const managesMemberLimit = startsNewFamily || (
+    workspace?.workspace_type === plan?.workspace_type && ["household", "business"].includes(plan?.code)
+  );
   const period = $("#renewalPeriod").value;
   const availablePrices = state.planPrices.filter((price) => price.plan_id === plan?.id && price.billing_period === period && price.is_active);
   const currencySelect = $("#renewalCurrency");
@@ -1977,25 +2039,30 @@ function updateRenewalQuote() {
   if (price) currencySelect.value = price.currency;
   const includedSeats = includedMemberSeats(plan);
   const memberCountInput = $("#renewalFamilyMemberCount");
-  memberCountInput.min = `${includedSeats}`;
-  if (startsNewFamily && Number(memberCountInput.value || 0) < includedSeats) {
-    memberCountInput.value = `${includedSeats}`;
+  const minimumMemberCount = startsNewFamily
+    ? includedSeats
+    : Math.max(includedSeats, Number(state.memberUsage?.used_member_count || state.billableMemberCount || 1));
+  memberCountInput.min = `${minimumMemberCount}`;
+  if (managesMemberLimit && Number(memberCountInput.value || 0) < minimumMemberCount) {
+    memberCountInput.value = `${Math.max(minimumMemberCount, Number(state.memberUsage?.member_limit || state.workspaceSubscription?.member_limit || minimumMemberCount))}`;
   }
-  const requestedMemberCount = startsNewFamily
-    ? Math.max(includedSeats, Number(memberCountInput.value || includedSeats))
+  const requestedMemberCount = managesMemberLimit
+    ? Math.max(minimumMemberCount, Number(memberCountInput.value || minimumMemberCount))
     : null;
   const total = planInvoiceTotal(plan, price, requestedMemberCount);
   $("#renewalFamilyNameField").classList.toggle("hidden", !startsNewFamily);
-  $("#renewalFamilyMembersField").classList.toggle("hidden", !startsNewFamily);
+  $("#renewalFamilyMembersField").classList.toggle("hidden", !managesMemberLimit);
   $("#renewalFamilyName").required = startsNewFamily;
-  memberCountInput.required = startsNewFamily;
+  memberCountInput.required = managesMemberLimit;
   $("#renewalDialogTitle").textContent = startsNewFamily ? "Start a Family plan" : "Submit payment for review";
   $("#renewalDialogDescription").textContent = startsNewFamily
     ? `Enter the family name and the total number of people. The base plan includes ${includedSeats} people, including the Family Head.`
-    : "Submitting payment does not activate access automatically. Authorized finance staff will review it.";
+    : managesMemberLimit
+      ? "Choose the total number of paid places for this workspace. Active members and pending invitations cannot be removed from the calculation."
+      : "Submitting payment does not activate access automatically. Authorized finance staff will review it.";
   $("#renewalAmount").value = price ? total.toFixed(2) : "";
   $("#renewalSubmitButton").disabled = !price;
-  const extraSeats = startsNewFamily
+  const extraSeats = managesMemberLimit
     ? Math.max(0, requestedMemberCount - includedSeats)
     : Math.max(0, Number(state.billableMemberCount || 1) - includedSeats);
   const extraMemberPeriodPrice = Number(price?.extra_member_amount || 0) * extraMemberBillingMonths(price);
@@ -2004,7 +2071,7 @@ function updateRenewalQuote() {
       ? `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month, which is ${money(extraMemberPeriodPrice, price.currency)} for one year.`
       : `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month.`
     : `The base price includes ${includedSeats} people in total, including the Family Head.`;
-  const totalPeopleOnPlan = startsNewFamily
+  const totalPeopleOnPlan = managesMemberLimit
     ? requestedMemberCount
     : Math.max(includedSeats, Number(state.billableMemberCount || 1));
   $("#renewalInvoiceSummary").innerHTML = price
@@ -2034,15 +2101,21 @@ async function submitSubscriptionRenewal(event) {
   const proof = $("#renewalProof").files[0] || null;
   const submitButton = $("#renewalSubmitButton");
   const startsNewFamily = workspace?.workspace_type === "personal" && plan?.workspace_type === "household";
+  const managesMemberLimit = startsNewFamily || (
+    workspace?.workspace_type === plan?.workspace_type && ["household", "business"].includes(plan?.code)
+  );
   const includedSeats = includedMemberSeats(plan);
   const requestedMemberCount = Number($("#renewalFamilyMemberCount").value || includedSeats);
-  const amount = planInvoiceTotal(plan, price, startsNewFamily ? requestedMemberCount : null);
+  const minimumMemberCount = startsNewFamily
+    ? includedSeats
+    : Math.max(includedSeats, Number(state.memberUsage?.used_member_count || state.billableMemberCount || 1));
+  const amount = planInvoiceTotal(plan, price, managesMemberLimit ? requestedMemberCount : null);
   const familyName = $("#renewalFamilyName").value.trim();
   let proofPath = null;
   try {
     if (!workspace || !plan || !price) throw new Error("Choose a plan with an active price.");
     if (startsNewFamily && !familyName) throw new Error("FAMILY_NAME_REQUIRED");
-    if (startsNewFamily && (!Number.isInteger(requestedMemberCount) || requestedMemberCount < includedSeats || requestedMemberCount > 100)) {
+    if (managesMemberLimit && (!Number.isInteger(requestedMemberCount) || requestedMemberCount < minimumMemberCount || requestedMemberCount > 100)) {
       throw new Error("INVALID_FAMILY_MEMBER_COUNT");
     }
     setSubmitting(submitButton, true, "Submitting...");
@@ -2067,6 +2140,7 @@ async function submitSubscriptionRenewal(event) {
       : supabase.rpc("submit_subscription_renewal", {
       p_workspace_id: workspace.id,
       p_plan_code: plan.code,
+      p_total_member_count: managesMemberLimit ? requestedMemberCount : null,
       p_billing_period: period,
       p_currency: currency,
       p_amount: amount,
@@ -2366,6 +2440,7 @@ function renderAdmin() {
     renderPaymentHeadOptions();
     renderPlatformPayments();
     renderSubscriptionReviews();
+    renderSubscriptionPaymentHistory();
   }
   if (state.adminTab === "support") {
     renderAdminNoteOptions();
@@ -2409,9 +2484,165 @@ function renderSubscriptionReviews() {
     article.className = "record-card subscription-review-card";
     article.innerHTML = `
       <div class="record-main"><strong>${escapeHtml(request?.provision_workspace_on_approval ? request.requested_workspace_name || "New Family workspace" : workspace?.name || "Workspace")}</strong><span>${escapeHtml(invoice?.plan_name || "Plan")} &middot; ${titleCase(invoice?.billing_period)} &middot; reference ${escapeHtml(payment.reference_number)}</span><small>${request?.provision_workspace_on_approval ? `Creates a new Family workspace for ${Number(invoice?.billable_member_count || 1)} people after approval.` : "Renews or changes the selected workspace plan."} Submitted ${new Date(payment.created_at).toLocaleString()} by an authenticated workspace owner.</small><div class="badge-row">${statusBadge(payment.status)}${request?.provision_workspace_on_approval ? '<span class="mini-badge">new family</span>' : ""}${proof ? '<span class="mini-badge">proof attached</span>' : ""}</div></div>
-      <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong><div class="row-actions">${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}${canReview ? `<button class="primary" type="button" data-review-subscription="${payment.id}" data-review-decision="approved">Approve</button><button type="button" data-review-subscription="${payment.id}" data-review-decision="rejected">Reject</button>` : '<span class="mini-badge">Read only</span>'}</div></div>
+      <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong><div class="row-actions"><button type="button" data-view-subscription-payment="${payment.id}">View details</button>${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}${canReview ? `<button class="primary" type="button" data-review-subscription="${payment.id}" data-review-decision="approved">Approve</button><button type="button" data-review-subscription="${payment.id}" data-review-decision="rejected">Reject</button>` : '<span class="mini-badge">Read only</span>'}</div></div>
     `;
     list.append(article);
+  });
+}
+
+function renderSubscriptionPaymentHistory() {
+  const list = $("#subscriptionPaymentHistoryList");
+  if (!list) return;
+  const history = state.adminSubscriptionPayments.filter((payment) => payment.status !== "pending_review");
+  if (!history.length) {
+    list.innerHTML = emptyState("No reviewed subscription payments", "Approved and rejected payments will remain here after review.");
+    return;
+  }
+  list.innerHTML = "";
+  history.forEach((payment) => {
+    const request = state.adminRenewalRequests.find((item) => item.id === payment.renewal_request_id);
+    const invoice = state.adminSubscriptionInvoices.find((item) => item.id === request?.invoice_id);
+    const workspace = state.adminWorkspaces.find((item) => item.id === payment.workspace_id);
+    const owner = state.adminProfiles.find((profile) => profile.id === workspace?.owner_id);
+    const proof = state.adminSubscriptionProofs.find((item) => item.payment_id === payment.id);
+    const article = document.createElement("article");
+    article.className = "record-card";
+    article.innerHTML = `
+      <div class="record-main">
+        <strong>${escapeHtml(workspace?.name || request?.requested_workspace_name || "Subscription")}</strong>
+        <span>${escapeHtml(owner?.email || "Owner unavailable")} &middot; ${escapeHtml(invoice?.plan_name || "Plan")} &middot; ${titleCase(invoice?.billing_period)}</span>
+        <small>${escapeHtml(payment.reference_number || "No reference")} &middot; ${new Date(payment.payment_date || payment.created_at).toLocaleDateString()}${invoice ? ` &middot; ${Number(invoice.billable_member_count || 1)} paid place${Number(invoice.billable_member_count || 1) === 1 ? "" : "s"}` : ""}</small>
+        <div class="badge-row">${statusBadge(payment.status)}${payment.receipt_number ? `<span class="mini-badge">${escapeHtml(payment.receipt_number)}</span>` : ""}${proof ? '<span class="mini-badge">proof attached</span>' : ""}</div>
+      </div>
+      <div class="record-side"><strong>${money(payment.amount, payment.currency)}</strong><div class="row-actions"><button type="button" data-view-subscription-payment="${payment.id}">View details</button>${proof ? `<button type="button" data-open-subscription-proof="${proof.id}">View proof</button>` : ""}</div></div>
+    `;
+    list.append(article);
+  });
+}
+
+function adminMonitorForWorkspace(workspaceId) {
+  return state.adminSubscriptionMonitor.find((row) => row.workspace_id === workspaceId) || null;
+}
+
+function formatAdminDate(value, fallback = "Not set") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString();
+}
+
+function adminDetailRows(rows) {
+  return `<dl class="admin-detail-list">${rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${value}</dd></div>`).join("")}</dl>`;
+}
+
+function showAdminDetails({ eyebrow, title, subtitle = "", body }) {
+  $("#adminDetailsEyebrow").textContent = eyebrow;
+  $("#adminDetailsDialogTitle").textContent = title;
+  $("#adminDetailsSubtitle").textContent = subtitle;
+  $("#adminDetailsBody").innerHTML = body;
+  const dialog = $("#adminDetailsDialog");
+  if (!dialog.open) dialog.showModal();
+}
+
+function openAdminUserDetails(profileId, emailValue = "") {
+  const email = `${emailValue || ""}`.toLowerCase();
+  const profile = state.adminProfiles.find((item) => item.id === profileId)
+    || state.adminProfiles.find((item) => (item.email || "").toLowerCase() === email)
+    || null;
+  const head = state.heads.find((item) => item.user_id === profile?.id)
+    || state.heads.find((item) => (item.email || "").toLowerCase() === (profile?.email || email).toLowerCase())
+    || null;
+  const ownerId = profile?.id || head?.user_id || null;
+  const ownerEmail = profile?.email || head?.email || email || "Email unavailable";
+  const monitors = state.adminSubscriptionMonitor.filter((row) =>
+    row.owner_id === ownerId || (row.owner_email || "").toLowerCase() === ownerEmail.toLowerCase()
+  );
+  const ownedFamilyRows = monitors.filter((row) => row.workspace_type === "household");
+  const workspaceIds = new Set(monitors.map((row) => row.workspace_id));
+  const payments = state.adminSubscriptionPayments.filter((payment) => workspaceIds.has(payment.workspace_id));
+  const fullName = profile?.full_name || head?.full_name || ownerEmail.split("@")[0] || "Mushavo user";
+  const workspaceHtml = monitors.length
+    ? monitors.map((row) => `<article class="admin-detail-card"><div><strong>${escapeHtml(row.workspace_name)}</strong><span>${escapeHtml(row.plan_name || "Plan not set")} &middot; ${titleCase(row.subscription_status || "not set")}</span>${row.workspace_type === "household" ? `<small>${Number(row.active_member_count || 0)} active + ${Number(row.pending_invitation_count || 0)} pending / ${Number(row.member_limit || 1)} paid places &middot; ${Number(row.available_member_count || 0)} available</small>` : ""}</div><button type="button" data-view-admin-workspace="${row.workspace_id}">View workspace</button></article>`).join("")
+    : emptyState("No workspaces", "This user does not currently own a workspace visible to the subscription monitor.");
+  const paymentsHtml = payments.length
+    ? payments.slice(0, 10).map((payment) => `<article class="admin-detail-card"><div><strong>${money(payment.amount, payment.currency)}</strong><span>${titleCase(payment.status)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span><small>${formatAdminDate(payment.created_at)}</small></div><button type="button" data-view-subscription-payment="${payment.id}">View payment</button></article>`).join("")
+    : emptyState("No subscription payments", "This user has no submitted subscription payments.");
+  showAdminDetails({
+    eyebrow: "User monitoring",
+    title: fullName,
+    subtitle: ownerEmail,
+    body: `<section class="admin-detail-section"><h4>Account and access</h4>${adminDetailRows([
+      ["Registered", escapeHtml(formatAdminDate(profile?.created_at, profile ? "Registered" : "Login not registered"))],
+      ["Account status", statusBadge(head?.status || "free signup")],
+      ["Family workspaces", `<strong>${ownedFamilyRows.length} / ${Number(head?.family_limit ?? 0)}</strong>`],
+      ["Member management", statusBadge(head?.can_add_members ? "unlocked" : "locked")]
+    ])}</section><section class="admin-detail-section"><h4>Workspaces and paid places</h4><div class="admin-detail-stack">${workspaceHtml}</div></section><section class="admin-detail-section"><h4>Subscription payments</h4><div class="admin-detail-stack">${paymentsHtml}</div></section>`
+  });
+}
+
+function openAdminWorkspaceDetails(workspaceId) {
+  const workspace = state.adminWorkspaces.find((item) => item.id === workspaceId);
+  const monitor = adminMonitorForWorkspace(workspaceId);
+  if (!workspace && !monitor) return;
+  const familyId = workspace?.legacy_family_id || monitor?.family_id;
+  const familyMembers = state.adminMembers.filter((member) => member.family_id === familyId && member.status === "active");
+  const payments = state.adminSubscriptionPayments.filter((payment) => payment.workspace_id === workspaceId);
+  const membersHtml = familyMembers.length
+    ? familyMembers.map((member) => `<article class="admin-detail-card"><div><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.email || "No email")} &middot; ${escapeHtml(member.role)}</span></div><div class="row-actions">${statusBadge(member.status)}<button type="button" data-view-admin-user="${member.user_id || ""}" data-view-admin-user-email="${escapeHtml(member.email || "")}">View member</button></div></article>`).join("")
+    : emptyState("No member directory", "Member names are shown when this workspace is opened from the Workspaces page.");
+  const paymentsHtml = payments.length
+    ? payments.map((payment) => `<article class="admin-detail-card"><div><strong>${money(payment.amount, payment.currency)}</strong><span>${titleCase(payment.status)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span></div><button type="button" data-view-subscription-payment="${payment.id}">View payment</button></article>`).join("")
+    : emptyState("No subscription payments", "No subscription payments are connected to this workspace.");
+  showAdminDetails({
+    eyebrow: "Workspace monitoring",
+    title: monitor?.workspace_name || workspace?.name || "Workspace",
+    subtitle: monitor?.owner_email || "Owner email unavailable",
+    body: `<section class="admin-detail-section"><h4>Subscription and capacity</h4>${adminDetailRows([
+      ["Workspace type", escapeHtml(titleCase(monitor?.workspace_type || workspace?.workspace_type))],
+      ["Plan", escapeHtml(monitor?.plan_name || "Not set")],
+      ["Status", statusBadge(monitor?.subscription_status || "not set")],
+      ["Billing period", escapeHtml(titleCase(monitor?.billing_period || "not set"))],
+      ["Paid through", escapeHtml(formatAdminDate(monitor?.paid_through_at))],
+      ["Paid places", `<strong>${Number(monitor?.member_limit || 1)}</strong>`],
+      ["Active members", `<strong>${Number(monitor?.active_member_count || 0)}</strong>`],
+      ["Pending invitations", `<strong>${Number(monitor?.pending_invitation_count || 0)}</strong>`],
+      ["Available places", `<strong>${Number(monitor?.available_member_count || 0)}</strong>`]
+    ])}</section><section class="admin-detail-section"><h4>Members</h4><div class="admin-detail-stack">${membersHtml}</div></section><section class="admin-detail-section"><h4>Payment history</h4><div class="admin-detail-stack">${paymentsHtml}</div></section>`
+  });
+}
+
+function openSubscriptionPaymentDetails(paymentId) {
+  const payment = state.adminSubscriptionPayments.find((item) => item.id === paymentId);
+  if (!payment) return;
+  const request = state.adminRenewalRequests.find((item) => item.id === payment.renewal_request_id);
+  const invoice = state.adminSubscriptionInvoices.find((item) => item.id === request?.invoice_id);
+  const workspace = state.adminWorkspaces.find((item) => item.id === payment.workspace_id);
+  const owner = state.adminProfiles.find((profile) => profile.id === workspace?.owner_id);
+  const proof = state.adminSubscriptionProofs.find((item) => item.payment_id === payment.id);
+  const review = state.adminSubscriptionReviews.find((item) => item.payment_id === payment.id);
+  const reviewer = state.adminProfiles.find((profile) => profile.id === review?.reviewer_id);
+  showAdminDetails({
+    eyebrow: "Subscription payment",
+    title: invoice?.invoice_number || "Payment details",
+    subtitle: `${workspace?.name || request?.requested_workspace_name || "Workspace"} · ${owner?.email || "Owner unavailable"}`,
+    body: `<section class="admin-detail-section"><h4>Invoice</h4>${adminDetailRows([
+      ["Plan", escapeHtml(invoice?.plan_name || "Not set")],
+      ["Billing period", escapeHtml(titleCase(invoice?.billing_period || "not set"))],
+      ["Base amount", invoice ? `<strong>${money(invoice.base_amount, invoice.currency)}</strong>` : "Not available"],
+      ["Paid places", `<strong>${Number(invoice?.billable_member_count || 1)}</strong>`],
+      ["Included places", `<strong>${Number(invoice?.included_member_count || 1)}</strong>`],
+      ["Additional places", `<strong>${Number(invoice?.extra_member_count || 0)}</strong>`],
+      ["Total", `<strong>${money(payment.amount, payment.currency)}</strong>`]
+    ])}</section><section class="admin-detail-section"><h4>Payment and review</h4>${adminDetailRows([
+      ["Status", statusBadge(payment.status)],
+      ["Method", escapeHtml(payment.payment_method || "Not set")],
+      ["Payment date", escapeHtml(formatAdminDate(payment.payment_date))],
+      ["Reference", escapeHtml(payment.reference_number || "Not set")],
+      ["Receipt", escapeHtml(payment.receipt_number || "Not issued")],
+      ["Submitted", escapeHtml(formatAdminDate(payment.created_at))],
+      ["Reviewed", escapeHtml(formatAdminDate(review?.created_at))],
+      ["Reviewer", escapeHtml(reviewer?.email || review?.reviewer_id || "Not reviewed")],
+      ["Decision reason", escapeHtml(review?.reason || request?.rejection_reason || "No reason recorded")]
+    ])}${payment.notes ? `<p class="admin-detail-note"><strong>Notes</strong><span>${escapeHtml(payment.notes)}</span></p>` : ""}${proof ? `<div class="admin-detail-actions"><button type="button" data-open-subscription-proof="${proof.id}">View payment proof</button></div>` : ""}</section>`
   });
 }
 
@@ -2459,7 +2690,9 @@ async function reviewSubscriptionPayment(paymentId, decision) {
     }));
     await loadAdminData("finance");
     renderAdmin();
-    showToast(decision === "approved" ? "Payment approved and entitlement updated." : "Payment rejected with the supplied reason.");
+    showToast(decision === "approved"
+      ? "Payment approved. Reports, subscription access, and purchased member places are now active."
+      : "Payment rejected with the supplied reason.");
   } catch (error) {
     showToast(error.message);
   }
@@ -2558,6 +2791,8 @@ function renderAdminFamilies() {
       state.filterMonth
     );
     const overdue = occurrences.filter((item) => item.status === "overdue").length;
+    const workspace = state.adminWorkspaces.find((item) => item.legacy_family_id === family.id);
+    const monitor = adminMonitorForWorkspace(workspace?.id);
     const article = document.createElement("article");
     article.className = "record-card admin-household-card";
     article.innerHTML = `
@@ -2569,12 +2804,15 @@ function renderAdminFamilies() {
           ${statusBadge(head?.status || "free signup")}
           ${statusBadge(head?.billing_status || "payment not set")}
           <span class="mini-badge">${ownerFamilyCount}/${Number(head?.family_limit ?? 0)} family limit</span>
+          <span class="mini-badge">${Number(monitor?.used_member_count ?? memberCount)}/${Number(monitor?.member_limit ?? Math.max(memberCount, 1))} paid places</span>
+          ${Number(monitor?.pending_invitation_count || 0) ? `<span class="mini-badge">${Number(monitor.pending_invitation_count)} pending</span>` : ""}
           ${overdue ? statusBadge(`${overdue} overdue`) : '<span class="mini-badge active">clear</span>'}
         </div>
       </div>
       <div class="record-side">
         <strong>${formatOccurrenceCurrencyTotals(occurrences)}</strong>
         <div class="row-actions">
+          ${workspace ? `<button type="button" data-view-admin-workspace="${workspace.id}">View details</button>` : ""}
           <button type="button" data-toggle-family-member-access="${family.id}" data-next-member-access="${head?.can_add_members ? "false" : "true"}">${head?.can_add_members ? "Lock members" : "Unlock members"}</button>
           ${head ? `<button type="button" data-toggle-family-status="${family.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">${head.status === "active" ? "Suspend" : "Reactivate"}</button>` : ""}
         </div>
@@ -2590,7 +2828,7 @@ function renderAdminFamilies() {
     article.className = "record-card admin-household-card";
     article.innerHTML = `
       <div class="record-main"><strong>${escapeHtml(workspace.name)}</strong><span>${escapeHtml(owner?.email || workspace.owner_id)} &middot; ${titleCase(workspace.workspace_type)} workspace</span><div class="badge-row">${statusBadge(workspace.status)}${statusBadge(plan?.display_name || "Plan not set")}</div></div>
-      <div class="record-side"><small>Created ${new Date(workspace.created_at).toLocaleDateString()}</small></div>
+      <div class="record-side"><small>Created ${new Date(workspace.created_at).toLocaleDateString()}</small><button type="button" data-view-admin-workspace="${workspace.id}">View details</button></div>
     `;
     list.append(article);
   });
@@ -2617,6 +2855,12 @@ function renderHeads() {
       const plan = state.adminPlans.find((item) => item.id === subscription?.plan_id);
       return `${workspace.name}: ${plan?.display_name || "Not set"}`;
     });
+    const ownedMonitors = state.adminSubscriptionMonitor.filter((row) =>
+      row.owner_id === profile?.id || (row.owner_email || "").toLowerCase() === email.toLowerCase()
+    );
+    const familySeatUsage = ownedMonitors
+      .filter((row) => row.workspace_type === "household")
+      .reduce((totals, row) => ({ used: totals.used + Number(row.used_member_count || 0), limit: totals.limit + Number(row.member_limit || 0) }), { used: 0, limit: 0 });
     const article = document.createElement("article");
     article.className = "record-card";
     article.innerHTML = `
@@ -2629,9 +2873,11 @@ function renderHeads() {
           ${statusBadge(head?.status || "free signup")}
           ${head ? statusBadge(head.can_add_members ? "members unlocked" : "members locked") : ""}
           <span class="mini-badge">${ownedCount}/${Number(head?.family_limit ?? 0)} families</span>
+          ${familySeatUsage.limit ? `<span class="mini-badge">${familySeatUsage.used}/${familySeatUsage.limit} family places</span>` : ""}
         </div>
       </div>
       <div class="record-side">
+        <button type="button" data-view-admin-user="${profile?.id || ""}" data-view-admin-user-email="${escapeHtml(email)}">View details</button>
         ${head ? `<div class="row-actions">
           <label class="inline-number-control">Family limit<input data-family-limit-input="${head.id}" type="number" min="0" max="100" step="1" value="${Number(head.family_limit ?? 1)}" /></label>
           <button type="button" data-save-family-limit="${head.id}">Save limit</button>
@@ -2821,6 +3067,44 @@ async function createFamilyFromMembers(event) {
     showToast("Family created.");
   } catch (error) {
     showToast(error.message);
+  }
+}
+
+function openFamilyNameDialog() {
+  if (!state.family || state.family.owner_id !== state.session?.user?.id) {
+    showToast("Only the Family Head can edit the family name.");
+    return;
+  }
+  $("#editableFamilyName").value = state.family.name || "";
+  const dialog = $("#familyNameDialog");
+  if (!dialog.open) dialog.showModal();
+  window.setTimeout(() => $("#editableFamilyName").focus(), 0);
+}
+
+async function saveFamilyName(event) {
+  event.preventDefault();
+  const familyName = $("#editableFamilyName").value.trim();
+  const submitButton = event.submitter || event.currentTarget.querySelector('button[type="submit"]');
+  if (!state.family || state.family.owner_id !== state.session?.user?.id) {
+    showToast("Only the Family Head can edit the family name.");
+    return;
+  }
+  if (!familyName) {
+    showToast("Enter a family name.");
+    return;
+  }
+  try {
+    setSubmitting(submitButton, true, "Saving...");
+    await query("family name update", supabase.from("families").update({ name: familyName }).eq("id", state.family.id));
+    $("#familyNameDialog").close();
+    await Promise.all([loadFamily(), loadWorkspaceSubscriptionData()]);
+    await loadFamilyData();
+    renderFamilyApp();
+    showToast("Family name updated.");
+  } catch (error) {
+    showToast(error.message);
+  } finally {
+    setSubmitting(submitButton, false, "Save family name");
   }
 }
 
@@ -3449,6 +3733,18 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-open-notifications]")) openNotificationDialog();
   if (event.target.closest("[data-open-renewal-dialog]")) openRenewalDialog();
   if (event.target.closest("[data-close-renewal-dialog]")) $("#renewalDialog").close();
+  if (event.target.closest("[data-edit-family-name]")) openFamilyNameDialog();
+  if (event.target.closest("[data-close-family-name-dialog]")) $("#familyNameDialog").close();
+  if (event.target.closest("[data-close-admin-details]")) $("#adminDetailsDialog").close();
+
+  const adminUserDetails = event.target.closest("[data-view-admin-user]");
+  if (adminUserDetails) openAdminUserDetails(adminUserDetails.dataset.viewAdminUser, adminUserDetails.dataset.viewAdminUserEmail);
+
+  const adminWorkspaceDetails = event.target.closest("[data-view-admin-workspace]");
+  if (adminWorkspaceDetails) openAdminWorkspaceDetails(adminWorkspaceDetails.dataset.viewAdminWorkspace);
+
+  const subscriptionPaymentDetails = event.target.closest("[data-view-subscription-payment]");
+  if (subscriptionPaymentDetails) openSubscriptionPaymentDetails(subscriptionPaymentDetails.dataset.viewSubscriptionPayment);
 
   const selectedRenewalPlan = event.target.closest("[data-select-renewal-plan]");
   if (selectedRenewalPlan) openRenewalDialog(selectedRenewalPlan.dataset.selectRenewalPlan);
@@ -3660,6 +3956,7 @@ document.addEventListener("click", async (event) => {
 $("#authForm").addEventListener("submit", signIn);
 $("#familyForm").addEventListener("submit", createFamily);
 $("#memberFamilyForm").addEventListener("submit", createFamilyFromMembers);
+$("#familyNameForm").addEventListener("submit", saveFamilyName);
 $("#inviteForm").addEventListener("submit", inviteMember);
 $("#obligationForm").addEventListener("submit", saveObligation);
 $("#recordPaymentForm").addEventListener("submit", savePaymentRecord);
