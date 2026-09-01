@@ -1704,6 +1704,10 @@ function includedMemberSeats(plan) {
   return plan?.code === "household" ? 4 : plan?.code === "business" ? 6 : 1;
 }
 
+function extraMemberBillingMonths(price) {
+  return price?.billing_period === "annual" ? 12 : 1;
+}
+
 function planInvoiceTotal(plan, price, memberCountOverride = null) {
   if (!plan || !price) return 0;
   const includedSeats = includedMemberSeats(plan);
@@ -1716,7 +1720,8 @@ function planInvoiceTotal(plan, price, memberCountOverride = null) {
   const extraSeats = ["household", "business"].includes(plan.code)
     ? Math.max(0, relevantMemberCount - includedSeats)
     : 0;
-  return Number(price.amount || 0) + extraSeats * Number(price.extra_member_amount || 0);
+  return Number(price.amount || 0)
+    + extraSeats * Number(price.extra_member_amount || 0) * extraMemberBillingMonths(price);
 }
 
 function renderSubscription() {
@@ -1993,14 +1998,17 @@ function updateRenewalQuote() {
   const extraSeats = startsNewFamily
     ? Math.max(0, requestedMemberCount - includedSeats)
     : Math.max(0, Number(state.billableMemberCount || 1) - includedSeats);
+  const extraMemberPeriodPrice = Number(price?.extra_member_amount || 0) * extraMemberBillingMonths(price);
   $("#renewalFamilyMembersHelp").textContent = price
-    ? `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person adds ${money(price.extra_member_amount, price.currency)} for this ${period} billing period. You can invite everyone after approval.`
+    ? period === "annual"
+      ? `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month, which is ${money(extraMemberPeriodPrice, price.currency)} for one year.`
+      : `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month.`
     : `The base price includes ${includedSeats} people in total, including the Family Head.`;
   const totalPeopleOnPlan = startsNewFamily
     ? requestedMemberCount
     : Math.max(includedSeats, Number(state.billableMemberCount || 1));
   $("#renewalInvoiceSummary").innerHTML = price
-    ? `<div><span>Total people on this plan</span><strong>${totalPeopleOnPlan}</strong></div><div><span>Included in base price</span><strong>${includedSeats} people</strong></div><div><span>Base plan</span><strong>${money(price.amount, price.currency)}</strong></div><div><span>Additional people (${extraSeats})</span><strong>${money(extraSeats * Number(price.extra_member_amount || 0), price.currency)}</strong></div><div class="invoice-total"><span>Total submitted</span><strong>${money(total, price.currency)}</strong></div>`
+    ? `<div><span>Total people on this plan</span><strong>${totalPeopleOnPlan}</strong></div><div><span>Included in base price</span><strong>${includedSeats} people</strong></div><div><span>Base plan</span><strong>${money(price.amount, price.currency)}</strong></div><div><span>Additional people (${extraSeats})</span><strong>${money(extraSeats * extraMemberPeriodPrice, price.currency)}</strong></div><div class="invoice-total"><span>Total submitted</span><strong>${money(total, price.currency)}</strong></div>`
     : `<strong>Price not configured.</strong><span>An administrator must publish a ${period} price before this plan can be purchased.</span>`;
 }
 
@@ -2376,7 +2384,7 @@ function renderAdminPlans() {
       <div class="plan-card-heading"><span class="mini-badge">${titleCase(plan.workspace_type)}</span><h4>${escapeHtml(plan.display_name)}</h4></div>
       <p>${escapeHtml(plan.description)}</p>
       <div class="plan-price-list">
-        ${activePrices.length ? activePrices.map((price) => `<div><strong>${titleCase(price.billing_period)}</strong><span>${money(price.amount, price.currency)} base${Number(price.extra_member_amount) ? ` &middot; ${money(price.extra_member_amount, price.currency)} per extra member` : ""}</span></div>`).join("") : "<span>No active prices configured.</span>"}
+        ${activePrices.length ? activePrices.map((price) => `<div><strong>${titleCase(price.billing_period)}</strong><span>${money(price.amount, price.currency)} base${Number(price.extra_member_amount) ? ` &middot; ${money(price.extra_member_amount, price.currency)} per extra member/month` : ""}</span></div>`).join("") : "<span>No active prices configured.</span>"}
       </div>
     `;
     list.append(card);

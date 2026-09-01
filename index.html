@@ -19,7 +19,7 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="stylesheet" href="styles.css?v=35" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=40"></script>
+    <script type="module" src="app.js?v=41"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -189,7 +189,7 @@
                   <label for="planPricePeriod">Billing period<select id="planPricePeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
                   <label for="planPriceCurrency">Currency<input id="planPriceCurrency" maxlength="3" value="USD" required /></label>
                   <label for="planPriceAmount">Base price<input id="planPriceAmount" type="number" min="0.01" step="0.01" required /></label>
-                  <label class="full" for="planPriceExtra">Additional member price<input id="planPriceExtra" type="number" min="0" step="0.01" value="0" required /><small>Household charges from the 5th total person; Business charges after the owner plus five team members.</small></label>
+                  <label class="full" for="planPriceExtra">Additional member price per month<input id="planPriceExtra" type="number" min="0" step="0.01" value="0" required /><small>For annual plans, this monthly amount is multiplied by 12. Household charges from the 5th total person; Business charges after the owner plus five team members.</small></label>
                   <button class="primary full" type="submit">Save active price</button>
                 </form>
               </section>
@@ -519,8 +519,8 @@
         <div class="panel-heading inline full"><div><p class="eyebrow">Subscription payment</p><h3 id="renewalDialogTitle">Submit payment for review</h3><p id="renewalDialogDescription" class="muted-copy">Submitting payment does not activate access automatically. Authorized finance staff will review it.</p></div><button class="icon-button" type="button" data-close-renewal-dialog aria-label="Close subscription payment form">Close</button></div>
         <label for="renewalPlan">Plan<select id="renewalPlan" required></select></label>
         <label for="renewalPeriod">Billing period<select id="renewalPeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
-        <label id="renewalFamilyNameField" class="full hidden" for="renewalFamilyName">Family name<input id="renewalFamilyName" maxlength="100" placeholder="For example, Parekh Family" /><small>This family will be created only after the payment is approved.</small></label>
-        <label id="renewalFamilyMembersField" class="full hidden" for="renewalFamilyMemberCount">Total people on this Family plan (including the Family Head)<input id="renewalFamilyMemberCount" type="number" min="4" max="100" step="1" value="4" /><small id="renewalFamilyMembersHelp">The Household plan includes 4 people in total. Add more people here if needed.</small></label>
+        <label id="renewalFamilyNameField" class="full hidden" for="renewalFamilyName">Family name<input id="renewalFamilyName" maxlength="100" /><small>This family will be created only after the payment is approved.</small></label>
+        <label id="renewalFamilyMembersField" class="full hidden" for="renewalFamilyMemberCount">Total people on this Family plan<input id="renewalFamilyMemberCount" type="number" min="4" max="100" step="1" value="4" /><small id="renewalFamilyMembersHelp">The Household plan includes 4 people in total. Add more people here if needed.</small></label>
         <label for="renewalCurrency">Currency<select id="renewalCurrency" required></select></label>
         <label for="renewalAmount">Amount due<input id="renewalAmount" type="number" readonly required /></label>
         <label for="renewalMethod">Payment method<select id="renewalMethod" required><option value="EFT">EFT</option><option value="Bank deposit">Bank deposit</option><option value="Cash">Cash</option><option value="Card">Card</option><option value="Other">Other</option></select></label>
