@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Mushavo Budget keeps personal, family, and business payments organised in one secure workspace." />
-    <meta name="theme-color" content="#f4f7f8" />
+    <meta name="description" content="Mushavo Budget helps families track personal and shared recurring payments." />
+    <meta name="theme-color" content="#ecfeff" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Mushavo Budget" />
@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=40" />
+    <link rel="stylesheet" href="styles.css?v=38" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=46"></script>
+    <script type="module" src="app.js?v=44"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -54,7 +54,7 @@
         <div class="panel-heading">
           <p class="eyebrow">Mushavo Budget</p>
           <h1 id="authTitle">Sign in to manage your payments</h1>
-          <p class="muted-copy">Track personal, family, and business payments, see what is due, and keep responsibilities clear.</p>
+          <p class="muted-copy">Track personal and family payments, see what is due, and keep everyone clear on responsibility.</p>
         </div>
 
         <form id="authForm" class="form-grid">
@@ -75,14 +75,14 @@
 
       <section id="setupView" class="setup-panel hidden" aria-labelledby="setupTitle">
         <div class="panel-heading">
-          <p class="eyebrow">Family workspace</p>
+          <p class="eyebrow">First household</p>
           <h1 id="setupTitle">Create your payment workspace</h1>
-          <p class="muted-copy">Keep recurring family payments, member responsibilities, and payment records together.</p>
+          <p class="muted-copy">This becomes the place where recurring family obligations, members, and payment records live.</p>
         </div>
         <form id="familyForm" class="form-grid">
           <label for="familyName">
-            Family name
-            <input id="familyName" required placeholder="Family name" />
+            Household name
+            <input id="familyName" required placeholder="The Parekh family" />
           </label>
           <label for="familyBudget">
             Monthly expected payments
@@ -99,16 +99,16 @@
               <option value="AUD">AUD</option>
             </select>
           </label>
-          <button class="primary" type="submit">Create family workspace</button>
+          <button class="primary" type="submit">Create household</button>
         </form>
       </section>
 
       <section id="suspendedView" class="setup-panel hidden" aria-labelledby="suspendedTitle">
         <div class="panel-heading">
           <p class="eyebrow">Account suspended</p>
-          <h1 id="suspendedTitle">Your workspace access is currently paused</h1>
+          <h1 id="suspendedTitle">Your household access is currently paused</h1>
         </div>
-        <p class="muted-copy">Contact your Mushavo Budget administrator to reactivate this workspace.</p>
+        <p class="muted-copy">Contact the app admin to reactivate your household account.</p>
         <button id="suspendedSignOutButton" type="button">Sign out</button>
       </section>
 
@@ -132,7 +132,8 @@
             </div>
             <div class="sidebar-account">
               <p class="eyebrow">Admin console</p>
-              <h1>Administration</h1>
+              <h1>Platform control</h1>
+              <span class="mini-badge">Operations</span>
             </div>
             <nav class="tabs" aria-label="Admin sections">
               <button class="tab-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
@@ -143,8 +144,9 @@
               <button class="tab-button" type="button" data-admin-tab="support">Support</button>
             </nav>
             <div class="sidebar-footer">
+              <button type="button">Contact support</button>
               <button id="adminSignOutButton" type="button">Sign out</button>
-              <small>&copy; <span data-current-year>2026</span> Mushavo Budget</small>
+              <small>2026 Mushavo Budget</small>
             </div>
           </header>
           <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
@@ -153,19 +155,19 @@
             <header class="topbar">
               <div>
                 <p class="eyebrow">Overview</p>
-                <h2>Platform activity</h2>
+                <h2>Workspace health</h2>
               </div>
               <span id="adminEmail" class="admin-account">-</span>
             </header>
             <section class="stats-grid" aria-label="Admin summary">
-              <article class="stat-card"><span class="stat-label">Workspaces</span><strong id="adminFamilyCount">0</strong><small>Personal, Family, and Business</small></article>
-              <article class="stat-card"><span class="stat-label">Overdue payments</span><strong id="adminOverdueCount">0</strong><small>Across all workspaces</small></article>
+              <article class="stat-card"><span class="stat-label">Workspaces</span><strong id="adminFamilyCount">0</strong><small>Personal, Household, and Business</small></article>
+              <article class="stat-card"><span class="stat-label">Overdue dues</span><strong id="adminOverdueCount">0</strong><small>Across all households</small></article>
               <article class="stat-card"><span class="stat-label">Due this month</span><strong id="adminDueTotal">$0.00</strong><small>Expected obligations</small></article>
               <article class="stat-card"><span class="stat-label">Platform revenue</span><strong id="adminRevenueTotal">$0.00</strong><small id="adminPaymentCount">0 payments</small></article>
             </section>
             <section class="content-grid">
               <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Attention</p><h3>Payments needing follow-up</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Attention</p><h3>Households needing follow-up</h3></div>
                 <div id="adminAttentionList" class="record-list"></div>
               </section>
               <section class="ledger-panel">
@@ -183,11 +185,11 @@
               <section class="tool-panel" aria-labelledby="planPriceTitle">
                 <div class="panel-heading"><p class="eyebrow">Price editor</p><h3 id="planPriceTitle">Publish a plan price</h3></div>
                 <form id="planPriceForm" class="form-grid">
-                  <label for="planPricePlan">Plan<select id="planPricePlan" required><option value="personal">Personal</option><option value="household">Family</option><option value="business">Business</option></select></label>
+                  <label for="planPricePlan">Plan<select id="planPricePlan" required><option value="personal">Personal</option><option value="household">Household</option><option value="business">Business</option></select></label>
                   <label for="planPricePeriod">Billing period<select id="planPricePeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
                   <label for="planPriceCurrency">Currency<input id="planPriceCurrency" maxlength="3" value="USD" required /></label>
                   <label for="planPriceAmount">Base price<input id="planPriceAmount" type="number" min="0.01" step="0.01" required /></label>
-                  <label class="full" for="planPriceExtra">Additional member price per month<input id="planPriceExtra" type="number" min="0" step="0.01" value="0" required /><small>Annual billing multiplies this amount by 12. Family charges begin with the fifth person; Business charges begin after the owner and five team members.</small></label>
+                  <label class="full" for="planPriceExtra">Additional member price per month<input id="planPriceExtra" type="number" min="0" step="0.01" value="0" required /><small>For annual plans, this monthly amount is multiplied by 12. Household charges from the 5th total person; Business charges after the owner plus five team members.</small></label>
                   <button class="primary full" type="submit">Save active price</button>
                 </form>
               </section>
@@ -207,12 +209,12 @@
               </div>
             </header>
 
-            <section class="admin-workspace-summary" aria-label="Filter workspaces by category">
-              <button class="workspace-summary-card active" type="button" data-admin-workspace-quick-filter="all" aria-pressed="true"><span>Total workspaces</span><strong id="adminWorkspaceTotal">0</strong><small>Show every workspace</small></button>
-              <button class="workspace-summary-card personal" type="button" data-admin-workspace-quick-filter="personal" aria-pressed="false"><span>Personal</span><strong id="adminWorkspacePersonal">0</strong><small>Filter individual budgets</small></button>
-              <button class="workspace-summary-card household" type="button" data-admin-workspace-quick-filter="household" aria-pressed="false"><span>Family</span><strong id="adminWorkspaceFamily">0</strong><small>Filter shared budgets</small></button>
-              <button class="workspace-summary-card business" type="button" data-admin-workspace-quick-filter="business" aria-pressed="false"><span>Business</span><strong id="adminWorkspaceBusiness">0</strong><small>Filter team workspaces</small></button>
-              <button class="workspace-summary-card paid" type="button" data-admin-workspace-quick-filter="paid" aria-pressed="false"><span>Paid and active</span><strong id="adminWorkspacePaid">0</strong><small>Filter current paid plans</small></button>
+            <section class="admin-workspace-summary" aria-label="Workspace summary">
+              <article><span>Total workspaces</span><strong id="adminWorkspaceTotal">0</strong><small>Across all accounts</small></article>
+              <article class="personal"><span>Personal</span><strong id="adminWorkspacePersonal">0</strong><small>Individual budgets</small></article>
+              <article class="household"><span>Family</span><strong id="adminWorkspaceFamily">0</strong><small>Shared households</small></article>
+              <article class="business"><span>Business</span><strong id="adminWorkspaceBusiness">0</strong><small>Team workspaces</small></article>
+              <article class="paid"><span>Paid and active</span><strong id="adminWorkspacePaid">0</strong><small>Current paid plans</small></article>
             </section>
 
             <section class="admin-workspace-directory ledger-panel" aria-labelledby="adminWorkspaceDirectoryTitle">
@@ -347,9 +349,9 @@
             <header class="topbar"><div><p class="eyebrow">Support</p><h2>Admin notes and actions</h2></div></header>
             <section class="content-grid">
               <section class="tool-panel">
-                <div class="panel-heading"><p class="eyebrow">Internal note</p><h3>Add workspace support note</h3></div>
+                <div class="panel-heading"><p class="eyebrow">Note</p><h3>Add household support note</h3></div>
                 <form id="adminNoteForm" class="form-grid">
-                  <label class="full" for="adminNoteFamily">Workspace<select id="adminNoteFamily" required></select></label>
+                  <label class="full" for="adminNoteFamily">Household<select id="adminNoteFamily" required></select></label>
                   <label class="full" for="adminNoteText">Note<textarea id="adminNoteText" required placeholder="Payment discussion, access request, reminder issue..."></textarea></label>
                   <button class="primary full" type="submit">Save support note</button>
                 </form>
@@ -414,14 +416,15 @@
               <button id="signOutButton" type="button">Sign out</button>
             </div>
             <div class="sidebar-footer">
-              <small>&copy; <span data-current-year>2026</span> Mushavo Budget</small>
+              <button type="button">Contact support</button>
+              <small>2026 Mushavo Budget</small>
             </div>
           </header>
           <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
 
           <section class="screen-panel" data-family-panel="dashboard">
             <header class="topbar">
-              <div><p class="eyebrow">Monthly overview</p><h2 id="dashboardMonthTitle">This month</h2></div>
+              <div><p class="eyebrow">Command center</p><h2 id="dashboardMonthTitle">This month</h2></div>
               <div class="filters">
                 <input id="monthFilter" type="month" />
                 <select id="statusFilter">
@@ -436,7 +439,7 @@
             </header>
             <section class="stats-grid dashboard-stats-grid" aria-label="Monthly payment summary">
               <article class="stat-card dashboard-stat dashboard-stat-due meter-card"><span class="stat-label">Due this month</span><strong id="dueAmount" data-fit-text data-fit-min="12">$0.00</strong><div class="meter"><span id="paidMeter"></span></div><small id="paidProgressText">No dues yet</small></article>
-              <article class="stat-card dashboard-stat dashboard-stat-outstanding"><span class="stat-label">Outstanding</span><strong id="outstandingAmount" data-fit-text data-fit-min="12">$0.00</strong><small id="outstandingText">Still unpaid</small></article>
+              <article class="stat-card dashboard-stat dashboard-stat-outstanding"><span class="stat-label">Outstanding</span><strong id="outstandingAmount" data-fit-text data-fit-min="12">$0.00</strong><small id="outstandingText">Balance to collect</small></article>
               <article class="stat-card dashboard-stat dashboard-stat-overdue"><span class="stat-label">Overdue</span><strong id="overdueCount" data-fit-text data-fit-min="12">0</strong><small id="overdueText">Needs attention</small></article>
               <article class="stat-card dashboard-stat dashboard-stat-assigned"><span class="stat-label">Assigned to me</span><strong id="myDueCount" data-fit-text data-fit-min="12">0</strong><small>This month</small></article>
             </section>
@@ -483,7 +486,7 @@
                 <section class="tool-panel" aria-labelledby="createFamilyTitle">
                   <div class="panel-heading"><p class="eyebrow">New family</p><h3 id="createFamilyTitle">Create another family</h3><p class="muted-copy">Your admin controls how many families your account may own.</p></div>
                   <form id="memberFamilyForm" class="form-grid compact-form-grid">
-                    <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="Family name" /></label>
+                    <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
                     <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
                     <label for="memberFamilyCurrency">Currency<select id="memberFamilyCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
                     <button class="primary full" type="submit">Create family</button>
@@ -530,7 +533,7 @@
               </section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Six-month view</p><h3>Reliability trend</h3><p class="muted-copy">The percentage of payment occurrences completed each month.</p></div><div id="reportTrendList" class="trend-list"></div></section>
               <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due and outstanding</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
-              <section class="ledger-panel report-context-panel"><div class="panel-heading"><p class="eyebrow">Payment totals</p><h3>Current commitments</h3></div><dl class="report-context-list"><div><dt>Partial payments</dt><dd id="partialCount">0</dd></div><div><dt>Active payment items</dt><dd id="activeObligationCount">0</dd></div><div><dt>Estimated annual total</dt><dd id="yearExpected">$0.00</dd></div></dl></section>
+              <section class="ledger-panel report-context-panel"><div class="panel-heading"><p class="eyebrow">Portfolio context</p><h3>Payment commitments</h3></div><dl class="report-context-list"><div><dt>Partial payments</dt><dd id="partialCount">0</dd></div><div><dt>Active payment items</dt><dd id="activeObligationCount">0</dd></div><div><dt>Estimated annual total</dt><dd id="yearExpected">$0.00</dd></div></dl></section>
               <section class="ledger-panel report-history-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Recent payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
             </section>
           </section>
@@ -550,7 +553,7 @@
             </section>
             <section id="subscriptionAccessNotice" class="notice hidden"></section>
             <section class="ledger-panel">
-              <div class="panel-heading"><p class="eyebrow">Compare plans</p><h3>Personal, Family, and Business plans</h3><p class="muted-copy">Prices and features apply to the selected workspace. Starting a Family plan creates its workspace after payment approval.</p></div>
+              <div class="panel-heading"><p class="eyebrow">Compare plans</p><h3>Personal and family plans</h3><p class="muted-copy">Compare every available Personal and Household plan. A plan can only be selected for a matching workspace.</p></div>
               <div id="workspacePlanList" class="plan-card-grid"></div>
             </section>
             <section class="content-grid subscription-history-grid">
@@ -632,7 +635,7 @@
         <label for="renewalPlan">Plan<select id="renewalPlan" required></select></label>
         <label for="renewalPeriod">Billing period<select id="renewalPeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
         <label id="renewalFamilyNameField" class="full hidden" for="renewalFamilyName">Family name<input id="renewalFamilyName" maxlength="100" /><small>This family will be created only after the payment is approved.</small></label>
-        <label id="renewalFamilyMembersField" class="full hidden" for="renewalFamilyMemberCount">Total people on this Family plan<input id="renewalFamilyMemberCount" type="number" min="4" max="100" step="1" value="4" /><small id="renewalFamilyMembersHelp">The Family plan includes 4 people. Add more places here if needed.</small></label>
+        <label id="renewalFamilyMembersField" class="full hidden" for="renewalFamilyMemberCount">Total people on this Family plan<input id="renewalFamilyMemberCount" type="number" min="4" max="100" step="1" value="4" /><small id="renewalFamilyMembersHelp">The Household plan includes 4 people in total. Add more people here if needed.</small></label>
         <label for="renewalCurrency">Currency<select id="renewalCurrency" required></select></label>
         <label for="renewalAmount">Amount due<input id="renewalAmount" type="number" readonly required /></label>
         <label for="renewalMethod">Payment method<select id="renewalMethod" required><option value="EFT">EFT</option><option value="Bank deposit">Bank deposit</option><option value="Cash">Cash</option><option value="Card">Card</option><option value="Other">Other</option></select></label>
@@ -645,7 +648,7 @@
       </form>
     </dialog>
 
-    <dialog id="recordPaymentDialog" class="payment-dialog" aria-labelledby="recordPaymentTitle">
+    <dialog id="recordPaymentDialog" class="payment-dialog">
       <form id="recordPaymentForm" method="dialog" class="form-grid">
         <div class="panel-heading full"><p class="eyebrow">Payment record</p><h3 id="recordPaymentTitle">Record payment</h3><p id="recordPaymentMeta" class="muted-copy"></p></div>
         <input id="recordItemId" type="hidden" />
@@ -683,7 +686,7 @@
       </div>
     </dialog>
 
-    <dialog id="confirmDialog" class="payment-dialog confirm-dialog" aria-labelledby="confirmDialogTitle" aria-describedby="confirmDialogMessage">
+    <dialog id="confirmDialog" class="payment-dialog confirm-dialog">
       <form id="confirmDialogForm" method="dialog" class="form-grid">
         <div class="panel-heading full">
           <p class="eyebrow">Confirm action</p>

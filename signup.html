@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Create a Mushavo Budget account." />
-    <meta name="theme-color" content="#f4f7f8" />
+    <meta name="theme-color" content="#ecfeff" />
     <title>Create account | Mushavo Budget</title>
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link rel="preconnect" href="https://kttkospkblwvguuwnhjj.supabase.co" crossorigin />
@@ -13,7 +13,7 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=40" />
+    <link rel="stylesheet" href="styles.css?v=31" />
     <script src="config.js?v=24"></script>
   </head>
   <body>
@@ -77,20 +77,6 @@
         window.setTimeout(() => toast.classList.add("hidden"), 4200);
       }
 
-      function signupErrorMessage(error) {
-        const message = `${error?.message || ""}`.toLowerCase();
-        if (message.includes("already registered") || message.includes("already exists")) {
-          return "An account already exists for this email. Return to sign in or reset the password.";
-        }
-        if (message.includes("invalid email")) return "Enter a valid email address.";
-        if (message.includes("password")) return "Use a password with at least 6 characters.";
-        if (message.includes("rate limit")) return "Too many attempts were made. Wait a few minutes and try again.";
-        if (message.includes("failed to fetch") || message.includes("network")) {
-          return "The connection failed. Check your internet connection and try again.";
-        }
-        return "The account could not be created. Please try again.";
-      }
-
       if (!isConfigured) {
         document.querySelector("#configWarning").classList.remove("hidden");
         form.querySelectorAll("input, button").forEach((field) => {
@@ -112,7 +98,6 @@
           }
 
           submitButton.disabled = true;
-          form.setAttribute("aria-busy", "true");
           submitButton.textContent = "Creating account...";
 
           try {
@@ -125,9 +110,8 @@
             if (data.session) await supabase.auth.signOut();
             window.location.replace("./index.html?signup=success");
           } catch (error) {
-            showMessage(signupErrorMessage(error));
+            showMessage(error.message || "The account could not be created. Please try again.");
             submitButton.disabled = false;
-            form.removeAttribute("aria-busy");
             submitButton.textContent = "Sign up";
           }
         });
