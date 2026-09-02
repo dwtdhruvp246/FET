@@ -67,6 +67,7 @@ const state = {
   adminPaymentConversions: [],
   adminRateStatus: null,
   adminTab: "dashboard",
+  adminWorkspaceQuickFilter: "all",
   familyTab: "dashboard",
   editingObligationId: null,
   filterMonth: toMonthValue(new Date()),
@@ -3395,6 +3396,20 @@ function renderAdminWorkspaceSummary(rows) {
   $("#adminWorkspacePaid").textContent = rows.filter((row) =>
     row.statusKey === "active" && !["free", "unconfigured", "legacy"].includes(row.planCode)
   ).length;
+  document.querySelectorAll("[data-admin-workspace-quick-filter]").forEach((button) => {
+    const selected = button.dataset.adminWorkspaceQuickFilter === state.adminWorkspaceQuickFilter;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", `${selected}`);
+  });
+}
+
+function selectAdminWorkspaceQuickFilter(filter) {
+  const validFilters = new Set(["all", "personal", "household", "business", "paid"]);
+  state.adminWorkspaceQuickFilter = validFilters.has(filter) ? filter : "all";
+  $("#adminWorkspaceTypeFilter").value = ["personal", "household", "business"].includes(filter) ? filter : "all";
+  $("#adminWorkspaceStatusFilter").value = filter === "paid" ? "active" : "all";
+  $("#adminWorkspacePlanFilter").value = "all";
+  renderAdminFamilies();
 }
 
 function syncAdminWorkspacePlanFilter(rows) {
@@ -3418,13 +3433,15 @@ function renderAdminFamilies() {
   const typeFilter = $("#adminWorkspaceTypeFilter").value;
   const statusFilter = $("#adminWorkspaceStatusFilter").value;
   const planFilter = $("#adminWorkspacePlanFilter").value;
+  const quickFilter = state.adminWorkspaceQuickFilter;
   const sort = $("#adminWorkspaceSort").value;
   const rows = allRows.filter((row) => {
     const searchText = `${row.name} ${row.typeLabel} ${row.ownerName} ${row.ownerEmail} ${row.planName} ${row.planCode}`.toLowerCase();
     return (!search || searchText.includes(search))
       && (typeFilter === "all" || row.type === typeFilter)
       && (statusFilter === "all" || row.statusKey === statusFilter)
-      && (planFilter === "all" || row.planCode === planFilter);
+      && (planFilter === "all" || row.planCode === planFilter)
+      && (quickFilter !== "paid" || row.statusKey === "active" && !["free", "unconfigured", "legacy"].includes(row.planCode));
   });
 
   rows.sort((left, right) => {
@@ -3435,6 +3452,8 @@ function renderAdminFamilies() {
     return new Date(right.createdAt || 0) - new Date(left.createdAt || 0);
   });
 
+  const quickFilterLabel = quickFilter === "household" ? "Family" : titleCase(quickFilter);
+  $("#adminWorkspaceDirectoryTitle").textContent = quickFilter === "all" ? "All workspaces" : `${quickFilterLabel} workspaces`;
   $("#adminWorkspaceDirectoryMeta").textContent = rows.length === allRows.length
     ? `${allRows.length} ${allRows.length === 1 ? "workspace" : "workspaces"}`
     : `${rows.length} of ${allRows.length} workspaces`;
@@ -4840,10 +4859,18 @@ $("#statusFilter").addEventListener("change", (event) => {
   renderFamilyApp();
 });
 $("#adminHouseholdSearch").addEventListener("input", renderAdminFamilies);
-document.querySelectorAll("#adminWorkspaceTypeFilter, #adminWorkspaceStatusFilter, #adminWorkspacePlanFilter, #adminWorkspaceSort").forEach((field) => {
-  field.addEventListener("change", renderAdminFamilies);
+document.querySelectorAll("#adminWorkspaceTypeFilter, #adminWorkspaceStatusFilter, #adminWorkspacePlanFilter").forEach((field) => {
+  field.addEventListener("change", () => {
+    state.adminWorkspaceQuickFilter = "all";
+    renderAdminFamilies();
+  });
+});
+$("#adminWorkspaceSort").addEventListener("change", renderAdminFamilies);
+document.querySelectorAll("[data-admin-workspace-quick-filter]").forEach((button) => {
+  button.addEventListener("click", () => selectAdminWorkspaceQuickFilter(button.dataset.adminWorkspaceQuickFilter));
 });
 $("#adminWorkspaceReset").addEventListener("click", () => {
+  state.adminWorkspaceQuickFilter = "all";
   $("#adminHouseholdSearch").value = "";
   $("#adminWorkspaceTypeFilter").value = "all";
   $("#adminWorkspaceStatusFilter").value = "all";

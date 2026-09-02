@@ -51,7 +51,7 @@ button,
 .button-link {
   min-height: 44px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 0 16px;
   background: #ffffff;
   color: #334155;
@@ -124,7 +124,7 @@ textarea {
   min-width: 0;
   min-height: 46px;
   border: 1px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 0 13px;
   background: #ffffff;
   color: var(--ink);
@@ -965,10 +965,10 @@ code {
   margin-bottom: 20px;
 }
 
-.admin-workspace-summary article {
+.workspace-summary-card {
   --workspace-summary-accent: #0f766e;
-  position: relative;
   display: grid;
+  justify-items: start;
   min-width: 0;
   gap: 4px;
   overflow: hidden;
@@ -976,44 +976,49 @@ code {
   border-radius: 18px;
   padding: 16px;
   background: rgba(255, 255, 255, 0.76);
+  color: var(--ink);
+  text-align: left;
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.045);
 }
 
-.admin-workspace-summary article::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: var(--workspace-summary-accent);
-  content: "";
+.workspace-summary-card:hover {
+  border-color: #b7c8d3;
+  background: #ffffff;
 }
 
-.admin-workspace-summary article.personal {
+.workspace-summary-card.active {
+  border-color: #7dc9b1;
+  background: #f0faf6;
+  box-shadow: 0 0 0 3px rgba(8, 122, 98, 0.1);
+}
+
+.workspace-summary-card.personal {
   --workspace-summary-accent: #2563eb;
 }
 
-.admin-workspace-summary article.household {
+.workspace-summary-card.household {
   --workspace-summary-accent: #0f9f84;
 }
 
-.admin-workspace-summary article.business {
+.workspace-summary-card.business {
   --workspace-summary-accent: var(--navy);
 }
 
-.admin-workspace-summary article.paid {
+.workspace-summary-card.paid {
   --workspace-summary-accent: #d97706;
 }
 
-.admin-workspace-summary span,
-.admin-workspace-summary small {
+.workspace-summary-card span,
+.workspace-summary-card small {
   color: var(--muted);
 }
 
-.admin-workspace-summary span {
+.workspace-summary-card span {
   font-size: 0.76rem;
   font-weight: 800;
 }
 
-.admin-workspace-summary strong {
+.workspace-summary-card strong {
   overflow: hidden;
   font-size: clamp(1.45rem, 2.4vw, 2rem);
   font-variant-numeric: tabular-nums;
@@ -1021,7 +1026,7 @@ code {
   white-space: nowrap;
 }
 
-.admin-workspace-summary small {
+.workspace-summary-card small {
   overflow: hidden;
   font-size: 0.68rem;
   text-overflow: ellipsis;
@@ -1101,14 +1106,6 @@ code {
   padding: 15px 15px 15px 18px;
   background: rgba(255, 255, 255, 0.72);
   box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
-}
-
-.admin-workspace-row::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 4px;
-  background: var(--workspace-type-accent);
-  content: "";
 }
 
 .admin-workspace-row.workspace-type-household {
@@ -2346,11 +2343,11 @@ input[type="file"] {
     gap: 8px;
   }
 
-  .admin-workspace-summary article {
+  .workspace-summary-card {
     padding: 13px;
   }
 
-  .admin-workspace-summary article.paid {
+  .workspace-summary-card.paid {
     grid-column: 1 / -1;
   }
 
@@ -3168,7 +3165,7 @@ input[type="file"] {
 .loading-card,
 .auth-panel,
 .setup-panel {
-  border-radius: 12px;
+  border-radius: 20px;
 }
 
 .loading-card {
@@ -3188,7 +3185,7 @@ input[type="file"] {
 }
 
 .notice {
-  border-radius: 8px;
+  border-radius: 14px;
   padding: 14px 16px;
 }
 
@@ -3219,8 +3216,9 @@ input[type="file"] {
 .app-nav {
   top: 20px;
   min-height: calc(100dvh - 40px);
-  border-radius: 12px;
+  border-radius: 20px;
   padding: 18px;
+  box-shadow: 0 10px 28px rgba(20, 32, 51, 0.06);
 }
 
 .sidebar-logo {
@@ -3245,7 +3243,7 @@ input[type="file"] {
 .tab-button {
   min-height: 42px;
   border-color: transparent;
-  border-radius: 6px;
+  border-radius: 12px;
   padding-inline: 12px;
   background: transparent;
 }
@@ -3259,7 +3257,7 @@ input[type="file"] {
   border-color: #b8ddcf;
   background: var(--primary-soft);
   color: #075e4c;
-  box-shadow: inset 3px 0 0 var(--primary);
+  box-shadow: none;
 }
 
 .sidebar-footer {
@@ -3276,8 +3274,9 @@ input[type="file"] {
 
 .tool-panel,
 .ledger-panel {
-  border-radius: 10px;
+  border-radius: 18px;
   padding: 20px;
+  box-shadow: 0 8px 24px rgba(20, 32, 51, 0.055);
 }
 
 .topbar {
@@ -3324,10 +3323,10 @@ input[type="file"] {
 .report-kpi {
   min-height: 104px;
   border-color: var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   padding: 15px;
   background: #fff;
-  box-shadow: none;
+  box-shadow: 0 6px 18px rgba(20, 32, 51, 0.05);
 }
 
 .stat-card strong {
@@ -3345,8 +3344,7 @@ input[type="file"] {
 }
 
 .dashboard-stat::before {
-  height: 3px;
-  opacity: 1;
+  display: none;
 }
 
 .dashboard-stat-assigned {
@@ -3375,19 +3373,18 @@ input[type="file"] {
 
 .record-list,
 .breakdown-list {
-  gap: 0;
+  gap: 10px;
 }
 
 .record-card,
 .breakdown-item,
 .workload-card,
 .admin-workspace-row {
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  padding: 14px 4px;
-  background: transparent;
-  box-shadow: none;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(20, 32, 51, 0.04);
 }
 
 .record-card:first-child,
@@ -3399,7 +3396,9 @@ input[type="file"] {
 
 .record-card:hover,
 .admin-workspace-row:hover {
-  background: var(--surface-subtle);
+  border-color: #c3d0d8;
+  background: #ffffff;
+  box-shadow: 0 7px 20px rgba(20, 32, 51, 0.065);
 }
 
 .date-chip,
@@ -3407,7 +3406,7 @@ input[type="file"] {
 .avatar {
   width: 44px;
   height: 44px;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #edf4f5;
   color: var(--teal);
 }
@@ -3421,9 +3420,10 @@ input[type="file"] {
 .due-month-group {
   gap: 10px;
   border-width: 1px;
-  border-radius: 9px;
+  border-radius: 16px;
   padding: 12px;
-  background: #fff;
+  background: #fbfdfd;
+  box-shadow: 0 5px 16px rgba(20, 32, 51, 0.035);
 }
 
 .due-month-group.month-accent-0 {
@@ -3447,7 +3447,7 @@ input[type="file"] {
 }
 
 .due-month-header {
-  border-radius: 6px;
+  border-radius: 12px;
 }
 
 .due-month-header:hover,
@@ -3477,6 +3477,7 @@ input[type="file"] {
 
 .workload-card {
   gap: 11px;
+  border-radius: 16px;
 }
 
 .workload-metrics {
@@ -3504,7 +3505,7 @@ input[type="file"] {
 
 .empty-ledger {
   border-color: var(--line-strong);
-  border-radius: 8px;
+  border-radius: 14px;
   background: #fafcfc;
 }
 
@@ -3512,10 +3513,10 @@ input[type="file"] {
   gap: 18px;
   margin: 18px 0;
   border-color: #b8ddcf;
-  border-radius: 10px;
+  border-radius: 18px;
   padding: 18px;
   background: #f5fbf8;
-  box-shadow: none;
+  box-shadow: 0 6px 18px rgba(20, 32, 51, 0.045);
 }
 
 .family-overview-stats > div {
@@ -3523,19 +3524,30 @@ input[type="file"] {
 }
 
 .admin-workspace-summary {
-  gap: 8px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-.admin-workspace-summary article {
+.workspace-summary-card {
   border-color: var(--line);
-  border-radius: 8px;
-  padding: 14px;
+  border-radius: 16px;
+  padding: 16px;
   background: #fff;
-  box-shadow: none;
+  box-shadow: 0 6px 18px rgba(20, 32, 51, 0.045);
 }
 
-.admin-workspace-summary article.business,
+.workspace-summary-card:hover {
+  border-color: #b7c8d3;
+  box-shadow: 0 8px 22px rgba(20, 32, 51, 0.07);
+}
+
+.workspace-summary-card.active {
+  border-color: #75c4ac;
+  background: #f2faf7;
+  box-shadow: 0 0 0 3px rgba(8, 122, 98, 0.1), 0 7px 20px rgba(20, 32, 51, 0.05);
+}
+
+.workspace-summary-card.business,
 .admin-workspace-row.workspace-type-business {
   --workspace-summary-accent: var(--navy);
   --workspace-type-accent: var(--navy);
@@ -3547,18 +3559,13 @@ input[type="file"] {
 
 .admin-workspace-row {
   overflow: visible;
-  padding-left: 12px;
-}
-
-.admin-workspace-row::before {
-  inset: 12px auto 12px 0;
-  width: 3px;
+  padding: 16px;
 }
 
 .admin-workspace-type-mark {
-  width: 38px;
-  height: 38px;
-  border-radius: 7px;
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
 }
 
 .admin-workspace-field-label {
@@ -3571,8 +3578,7 @@ input[type="file"] {
 }
 
 .report-kpi::before {
-  width: 3px;
-  background: var(--primary);
+  display: none;
 }
 
 .report-analysis-grid {
@@ -3605,9 +3611,9 @@ input[type="file"] {
 .finance-currency-summary,
 .report-rate-panel {
   border-color: var(--line);
-  border-radius: 8px;
+  border-radius: 16px;
   background: #fff;
-  box-shadow: none;
+  box-shadow: 0 6px 18px rgba(20, 32, 51, 0.045);
 }
 
 .plan-card.current,
@@ -3626,10 +3632,10 @@ input[type="file"] {
   max-width: none;
   margin: 18px 0;
   border-color: #cbd5dd;
-  border-radius: 8px;
+  border-radius: 16px;
   padding: 20px;
   background: #fff;
-  box-shadow: none;
+  box-shadow: 0 6px 18px rgba(20, 32, 51, 0.045);
   text-align: left;
 }
 
@@ -3643,7 +3649,7 @@ input[type="file"] {
 }
 
 .payment-dialog {
-  border-radius: 10px;
+  border-radius: 20px;
   padding: 22px;
 }
 
@@ -3654,7 +3660,7 @@ input[type="file"] {
 
 .toast {
   border-color: #25334a;
-  border-radius: 8px;
+  border-radius: 14px;
   background: #172238;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
   backdrop-filter: none;
@@ -3662,7 +3668,7 @@ input[type="file"] {
 
 .currency-picker {
   border-color: var(--line);
-  border-radius: 8px;
+  border-radius: 14px;
 }
 
 .notification-deep-link-target {
@@ -3673,12 +3679,13 @@ input[type="file"] {
 @media (max-width: 1180px) {
   .mobile-bar {
     top: 10px;
-    border-radius: 10px;
+    border-radius: 16px;
     padding: 10px 12px;
+    box-shadow: 0 7px 20px rgba(20, 32, 51, 0.06);
   }
 
   .app-nav {
-    border-radius: 10px;
+    border-radius: 18px;
   }
 
   .drawer-open .drawer-backdrop {
@@ -3695,7 +3702,7 @@ input[type="file"] {
   .setup-panel,
   .tool-panel,
   .ledger-panel {
-    border-radius: 9px;
+    border-radius: 16px;
     padding: 16px;
   }
 
@@ -3710,8 +3717,8 @@ input[type="file"] {
 
   .dashboard-stats-grid .dashboard-stat,
   .report-kpi,
-  .admin-workspace-summary article {
-    border-radius: 7px;
+  .workspace-summary-card {
+    border-radius: 14px;
   }
 
   .dashboard-stats-grid .dashboard-stat {
@@ -3720,16 +3727,16 @@ input[type="file"] {
   }
 
   .due-month-group {
-    border-radius: 8px;
+    border-radius: 14px;
   }
 
   .due-month-items .record-card,
   .due-month-items .date-chip {
-    border-radius: 6px;
+    border-radius: 12px;
   }
 
   .family-overview {
-    border-radius: 8px;
+    border-radius: 16px;
     padding: 15px;
   }
 

@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=39" />
+    <link rel="stylesheet" href="styles.css?v=40" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=45"></script>
+    <script type="module" src="app.js?v=46"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -207,12 +207,12 @@
               </div>
             </header>
 
-            <section class="admin-workspace-summary" aria-label="Workspace summary">
-              <article><span>Total workspaces</span><strong id="adminWorkspaceTotal">0</strong><small>Across all accounts</small></article>
-              <article class="personal"><span>Personal</span><strong id="adminWorkspacePersonal">0</strong><small>Individual budgets</small></article>
-              <article class="household"><span>Family</span><strong id="adminWorkspaceFamily">0</strong><small>Shared family budgets</small></article>
-              <article class="business"><span>Business</span><strong id="adminWorkspaceBusiness">0</strong><small>Team workspaces</small></article>
-              <article class="paid"><span>Paid and active</span><strong id="adminWorkspacePaid">0</strong><small>Current paid plans</small></article>
+            <section class="admin-workspace-summary" aria-label="Filter workspaces by category">
+              <button class="workspace-summary-card active" type="button" data-admin-workspace-quick-filter="all" aria-pressed="true"><span>Total workspaces</span><strong id="adminWorkspaceTotal">0</strong><small>Show every workspace</small></button>
+              <button class="workspace-summary-card personal" type="button" data-admin-workspace-quick-filter="personal" aria-pressed="false"><span>Personal</span><strong id="adminWorkspacePersonal">0</strong><small>Filter individual budgets</small></button>
+              <button class="workspace-summary-card household" type="button" data-admin-workspace-quick-filter="household" aria-pressed="false"><span>Family</span><strong id="adminWorkspaceFamily">0</strong><small>Filter shared budgets</small></button>
+              <button class="workspace-summary-card business" type="button" data-admin-workspace-quick-filter="business" aria-pressed="false"><span>Business</span><strong id="adminWorkspaceBusiness">0</strong><small>Filter team workspaces</small></button>
+              <button class="workspace-summary-card paid" type="button" data-admin-workspace-quick-filter="paid" aria-pressed="false"><span>Paid and active</span><strong id="adminWorkspacePaid">0</strong><small>Filter current paid plans</small></button>
             </section>
 
             <section class="admin-workspace-directory ledger-panel" aria-labelledby="adminWorkspaceDirectoryTitle">

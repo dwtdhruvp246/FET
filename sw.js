@@ -1,11 +1,11 @@
-const CACHE_NAME = "mushavo-budget-v37";
+const CACHE_NAME = "mushavo-budget-v38";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./signup.html",
   "./offline.html",
-  "./styles.css?v=39",
-  "./app.js?v=45",
+  "./styles.css?v=40",
+  "./app.js?v=46",
   "./config.js?v=24",
   "./manifest.webmanifest",
   "./assets/mushavo-budget-logo.png",
