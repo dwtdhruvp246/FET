@@ -1093,6 +1093,7 @@ async function loadAdminData(tab = state.adminTab) {
     add("adminProfiles", "workspace owner profiles load", supabase.from("profiles").select("*").order("created_at", { ascending: false }));
     add("adminMembers", "admin members load", supabase.from("family_members").select("*").order("created_at", { ascending: true }));
     add("adminWorkspaces", "workspace directory load", supabase.from("budget_workspaces").select("*").order("created_at", { ascending: false }));
+    add("adminWorkspaceMembers", "workspace member directory load", supabase.from("workspace_members").select("*").order("created_at", { ascending: true }));
     add("adminSubscriptions", "workspace subscription directory load", supabase.from("workspace_subscriptions").select("*").order("updated_at", { ascending: false }));
     add("adminPlans", "workspace plan directory load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
   }
@@ -3042,29 +3043,79 @@ function openAdminWorkspaceDetails(workspaceId) {
   const monitor = adminMonitorForWorkspace(workspaceId);
   if (!workspace && !monitor) return;
   const familyId = workspace?.legacy_family_id || monitor?.family_id;
-  const familyMembers = state.adminMembers.filter((member) => member.family_id === familyId && member.status === "active");
+  const workspaceType = monitor?.workspace_type || workspace?.workspace_type || "personal";
+  const owner = state.adminProfiles.find((profile) => profile.id === (workspace?.owner_id || monitor?.owner_id));
+  const workspaceMembers = state.adminWorkspaceMembers.filter((member) => member.workspace_id === workspaceId);
+  const familyMembers = state.adminMembers.filter((member) => member.family_id === familyId);
   const payments = state.adminSubscriptionPayments.filter((payment) => payment.workspace_id === workspaceId);
-  const membersHtml = familyMembers.length
-    ? familyMembers.map((member) => `<article class="admin-detail-card"><div><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.email || "No email")} &middot; ${escapeHtml(member.role)}</span></div><div class="row-actions">${statusBadge(member.status)}<button type="button" data-view-admin-user="${member.user_id || ""}" data-view-admin-user-email="${escapeHtml(member.email || "")}">View member</button></div></article>`).join("")
-    : emptyState("No member directory", "Member names are shown when this workspace is opened from the Workspaces page.");
+  const itemCount = state.adminPaymentItems.filter((item) =>
+    item.status !== "inactive" && (item.workspace_id === workspaceId || (familyId && item.family_id === familyId))
+  ).length;
+  const membersHtml = workspaceMembers.length
+    ? workspaceMembers.map((member) => {
+      const profile = state.adminProfiles.find((item) => item.id === member.user_id);
+      const name = profile?.full_name || profile?.email?.split("@")[0] || "Workspace member";
+      const email = profile?.email || "Email unavailable";
+      return `<article class="admin-detail-card"><div><strong>${escapeHtml(name)}</strong><span>${escapeHtml(email)} &middot; ${escapeHtml(titleCase(member.role))}</span><small>Joined ${formatAdminDate(member.joined_at || member.created_at)}</small></div><div class="row-actions">${statusBadge(member.status)}<button type="button" data-view-admin-user="${member.user_id}" data-view-admin-user-email="${escapeHtml(email)}">View member</button></div></article>`;
+    }).join("")
+    : familyMembers.length
+      ? familyMembers.map((member) => `<article class="admin-detail-card"><div><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.email || "No email")} &middot; ${escapeHtml(member.role)}</span></div><div class="row-actions">${statusBadge(member.status)}<button type="button" data-view-admin-user="${member.user_id || ""}" data-view-admin-user-email="${escapeHtml(member.email || "")}">View member</button></div></article>`).join("")
+      : owner
+        ? `<article class="admin-detail-card"><div><strong>${escapeHtml(owner.full_name || owner.email?.split("@")[0] || "Account owner")}</strong><span>${escapeHtml(owner.email || "Email unavailable")} &middot; Owner</span></div><div class="row-actions">${statusBadge("active")}<button type="button" data-view-admin-user="${owner.id}" data-view-admin-user-email="${escapeHtml(owner.email || "")}">View owner</button></div></article>`
+        : emptyState("No member directory", "No account members are connected to this workspace.");
   const paymentsHtml = payments.length
     ? payments.map((payment) => `<article class="admin-detail-card"><div><strong>${money(payment.amount, payment.currency)}</strong><span>${titleCase(payment.status)} &middot; ${escapeHtml(payment.reference_number || "No reference")}</span></div><button type="button" data-view-subscription-payment="${payment.id}">View payment</button></article>`).join("")
     : emptyState("No subscription payments", "No subscription payments are connected to this workspace.");
-  showAdminDetails({
-    eyebrow: "Workspace monitoring",
-    title: monitor?.workspace_name || workspace?.name || "Workspace",
-    subtitle: monitor?.owner_email || "Owner email unavailable",
-    body: `<section class="admin-detail-section"><h4>Subscription and capacity</h4>${adminDetailRows([
-      ["Workspace type", escapeHtml(titleCase(monitor?.workspace_type || workspace?.workspace_type))],
-      ["Plan", escapeHtml(monitor?.plan_name || "Not set")],
-      ["Status", statusBadge(monitor?.subscription_status || "not set")],
-      ["Billing period", escapeHtml(titleCase(monitor?.billing_period || "not set"))],
-      ["Paid through", escapeHtml(formatAdminDate(monitor?.paid_through_at))],
+  const subscriptionRows = [
+    ["Plan", escapeHtml(monitor?.plan_name || "Not set")],
+    ["Subscription status", statusBadge(monitor?.subscription_status || "not set")],
+    ["Billing period", escapeHtml(titleCase(monitor?.billing_period || "not set"))],
+    ["Paid through", escapeHtml(formatAdminDate(monitor?.paid_through_at))]
+  ];
+  if (workspaceType !== "personal") {
+    subscriptionRows.push(
       ["Paid places", `<strong>${Number(monitor?.member_limit || 1)}</strong>`],
       ["Active members", `<strong>${Number(monitor?.active_member_count || 0)}</strong>`],
       ["Pending invitations", `<strong>${Number(monitor?.pending_invitation_count || 0)}</strong>`],
       ["Available places", `<strong>${Number(monitor?.available_member_count || 0)}</strong>`]
-    ])}</section><section class="admin-detail-section"><h4>Members</h4><div class="admin-detail-stack">${membersHtml}</div></section><section class="admin-detail-section"><h4>Payment history</h4><div class="admin-detail-stack">${paymentsHtml}</div></section>`
+    );
+  }
+  showAdminDetails({
+    eyebrow: "Workspace monitoring",
+    title: monitor?.workspace_name || workspace?.name || "Workspace",
+    subtitle: owner?.email || monitor?.owner_email || "Owner email unavailable",
+    body: `<section class="admin-detail-section"><h4>Workspace account</h4>${adminDetailRows([
+      ["Workspace type", escapeHtml(adminWorkspaceTypeLabel(workspaceType))],
+      ["Workspace status", statusBadge(workspace?.status || "active")],
+      ["Owner", escapeHtml(owner?.full_name || owner?.email || monitor?.owner_email || "Unavailable")],
+      ["Active payment items", `<strong>${itemCount}</strong>`],
+      ["Created", escapeHtml(formatAdminDate(workspace?.created_at))],
+      ["Last updated", escapeHtml(formatAdminDate(workspace?.updated_at))]
+    ])}</section><section class="admin-detail-section"><h4>Subscription${workspaceType === "personal" ? "" : " and capacity"}</h4>${adminDetailRows(subscriptionRows)}</section><section class="admin-detail-section"><h4>${workspaceType === "personal" ? "Account member" : "Members"}</h4><div class="admin-detail-stack">${membersHtml}</div></section><section class="admin-detail-section"><h4>Subscription payment history</h4><div class="admin-detail-stack">${paymentsHtml}</div></section>`
+  });
+}
+
+function openAdminLegacyFamilyDetails(familyId) {
+  const family = state.adminFamilies.find((item) => item.id === familyId);
+  if (!family) return;
+  const head = findHeadForFamily(family);
+  const members = state.adminMembers.filter((member) => member.family_id === familyId);
+  const itemCount = state.adminPaymentItems.filter((item) => item.family_id === familyId && item.status !== "inactive").length;
+  const membersHtml = members.length
+    ? members.map((member) => `<article class="admin-detail-card"><div><strong>${escapeHtml(member.name)}</strong><span>${escapeHtml(member.email || "No email")} &middot; ${escapeHtml(member.role)}</span></div><div class="row-actions">${statusBadge(member.status)}<button type="button" data-view-admin-user="${member.user_id || ""}" data-view-admin-user-email="${escapeHtml(member.email || "")}">View member</button></div></article>`).join("")
+    : emptyState("No members", "No members are connected to this legacy family record.");
+  showAdminDetails({
+    eyebrow: "Legacy family record",
+    title: family.name,
+    subtitle: family.owner_email || "Owner email unavailable",
+    body: `<section class="admin-detail-section"><h4>Workspace status</h4>${adminDetailRows([
+      ["Record type", "Family awaiting workspace migration"],
+      ["Owner", escapeHtml(head?.full_name || family.owner_email || "Unavailable")],
+      ["Account status", statusBadge(head?.status || "not set")],
+      ["Billing status", statusBadge(head?.billing_status || "not set")],
+      ["Active payment items", `<strong>${itemCount}</strong>`],
+      ["Created", escapeHtml(formatAdminDate(family.created_at))]
+    ])}</section><section class="admin-detail-section"><h4>Members</h4><div class="admin-detail-stack">${membersHtml}</div></section>`
   });
 }
 
@@ -3220,76 +3271,204 @@ function renderAdminAttention(occurrences) {
   });
 }
 
-function renderAdminFamilies() {
-  const list = $("#adminFamiliesList");
-  const search = ($("#adminHouseholdSearch").value || "").toLowerCase();
-  const families = state.adminFamilies.filter((family) =>
-    `${family.name} ${family.owner_email || ""}`.toLowerCase().includes(search)
-  );
-  const generalizedWorkspaces = state.adminWorkspaces.filter((workspace) =>
-    !workspace.legacy_family_id && `${workspace.name} ${workspace.workspace_type}`.toLowerCase().includes(search)
-  );
-  if (!families.length && !generalizedWorkspaces.length) {
-    list.innerHTML = emptyState("No workspaces found", "Every registered user receives a Personal workspace automatically.");
-    return;
-  }
-  list.innerHTML = "";
-  families.forEach((family) => {
-    const head = findHeadForFamily(family);
-    const ownerFamilyCount = state.adminFamilies.filter((item) =>
-      (item.owner_email || "").toLowerCase() === (family.owner_email || "").toLowerCase()
-    ).length;
-    const itemCount = state.adminPaymentItems.filter((item) => item.family_id === family.id && item.status !== "inactive").length;
-    const familyMembers = state.adminMembers.filter((member) => member.family_id === family.id);
-    const memberCount = familyMembers.filter((member) => member.status !== "inactive").length;
-    const removedMemberCount = familyMembers.filter((member) => member.status === "inactive").length;
-    const occurrences = generateOccurrences(
-      state.adminPaymentItems.filter((item) => item.family_id === family.id),
-      state.adminPaymentRecords.filter((record) => record.family_id === family.id),
-      state.filterMonth
-    );
-    const overdue = occurrences.filter((item) => item.status === "overdue").length;
-    const workspace = state.adminWorkspaces.find((item) => item.legacy_family_id === family.id);
-    const monitor = adminMonitorForWorkspace(workspace?.id);
-    const article = document.createElement("article");
-    article.className = "record-card admin-household-card";
-    article.innerHTML = `
-      <div class="record-main">
-        <strong>${escapeHtml(family.name)}</strong>
-        <span>${escapeHtml(family.owner_email || "Owner email not stored")} &middot; ${memberCount} active members${removedMemberCount ? ` &middot; ${removedMemberCount} removed` : ""} &middot; ${itemCount} obligations</span>
-        <div class="badge-row">
-          ${statusBadge(head?.can_add_members ? "members unlocked" : "member access locked")}
-          ${statusBadge(head?.status || "free signup")}
-          ${statusBadge(head?.billing_status || "payment not set")}
-          <span class="mini-badge">${ownerFamilyCount}/${Number(head?.family_limit ?? 0)} family limit</span>
-          <span class="mini-badge">${Number(monitor?.used_member_count ?? memberCount)}/${Number(monitor?.member_limit ?? Math.max(memberCount, 1))} paid places</span>
-          ${Number(monitor?.pending_invitation_count || 0) ? `<span class="mini-badge">${Number(monitor.pending_invitation_count)} pending</span>` : ""}
-          ${overdue ? statusBadge(`${overdue} overdue`) : '<span class="mini-badge active">clear</span>'}
-        </div>
-      </div>
-      <div class="record-side">
-        <strong>${formatOccurrenceCurrencyTotals(occurrences)}</strong>
-        <div class="row-actions">
-          ${workspace ? `<button type="button" data-view-admin-workspace="${workspace.id}">View details</button>` : ""}
-          <button type="button" data-toggle-family-member-access="${family.id}" data-next-member-access="${head?.can_add_members ? "false" : "true"}">${head?.can_add_members ? "Lock members" : "Unlock members"}</button>
-          ${head ? `<button type="button" data-toggle-family-status="${family.id}" data-next-status="${head.status === "active" ? "suspended" : "active"}">${head.status === "active" ? "Suspend" : "Reactivate"}</button>` : ""}
-        </div>
-      </div>
-    `;
-    list.append(article);
+function adminWorkspaceTypeLabel(type) {
+  if (type === "household") return "Family";
+  return titleCase(type || "workspace");
+}
+
+function adminWorkspaceStatusKey(workspace, monitor, planCode) {
+  if (workspace.status === "closed") return "closed";
+  if (workspace.status === "suspended") return "suspended";
+  if (monitor?.subscription_status === "suspended") return "suspended";
+  if (monitor?.subscription_status === "expired") return "expired";
+  if (planCode === "free") return "free";
+  if (monitor?.subscription_status === "active") return "active";
+  return "unconfigured";
+}
+
+function adminWorkspaceDirectoryRows() {
+  const ownerWorkspaceCounts = new Map();
+  state.adminWorkspaces.forEach((workspace) => {
+    ownerWorkspaceCounts.set(workspace.owner_id, (ownerWorkspaceCounts.get(workspace.owner_id) || 0) + 1);
   });
-  generalizedWorkspaces.forEach((workspace) => {
+
+  const rows = state.adminWorkspaces.map((workspace) => {
+    const monitor = adminMonitorForWorkspace(workspace.id);
     const subscription = state.adminSubscriptions.find((item) => item.workspace_id === workspace.id);
     const plan = state.adminPlans.find((item) => item.id === subscription?.plan_id);
     const owner = state.adminProfiles.find((profile) => profile.id === workspace.owner_id);
-    const article = document.createElement("article");
-    article.className = "record-card admin-household-card";
-    article.innerHTML = `
-      <div class="record-main"><strong>${escapeHtml(workspace.name)}</strong><span>${escapeHtml(owner?.email || workspace.owner_id)} &middot; ${titleCase(workspace.workspace_type)} workspace</span><div class="badge-row">${statusBadge(workspace.status)}${statusBadge(plan?.display_name || "Plan not set")}</div></div>
-      <div class="record-side"><small>Created ${new Date(workspace.created_at).toLocaleDateString()}</small><button type="button" data-view-admin-workspace="${workspace.id}">View details</button></div>
-    `;
-    list.append(article);
+    const family = state.adminFamilies.find((item) => item.id === workspace.legacy_family_id);
+    const type = workspace.workspace_type || monitor?.workspace_type || "personal";
+    const planCode = monitor?.plan_code || plan?.code || (type === "personal" ? "free" : "unconfigured");
+    const planName = monitor?.plan_name || plan?.display_name || (type === "personal" ? "Free" : "Plan not set");
+    const memberLimit = Math.max(1, Number(monitor?.member_limit || 1));
+    const activeMembers = Number(monitor?.active_member_count || 0);
+    const pendingInvitations = Number(monitor?.pending_invitation_count || 0);
+    const usedMembers = Number(monitor?.used_member_count ?? activeMembers + pendingInvitations);
+    const itemCount = state.adminPaymentItems.filter((item) =>
+      item.status !== "inactive" && (item.workspace_id === workspace.id || (family && item.family_id === family.id))
+    ).length;
+    const ownerName = owner?.full_name || family?.owner_name || owner?.email?.split("@")[0] || "Account owner";
+    const ownerEmail = owner?.email || family?.owner_email || monitor?.owner_email || "Email unavailable";
+    return {
+      workspace,
+      monitor,
+      family,
+      id: workspace.id,
+      type,
+      typeLabel: adminWorkspaceTypeLabel(type),
+      name: workspace.name,
+      ownerId: workspace.owner_id,
+      ownerName,
+      ownerEmail,
+      ownerWorkspaceCount: ownerWorkspaceCounts.get(workspace.owner_id) || 1,
+      planCode,
+      planName,
+      subscriptionStatus: monitor?.subscription_status || subscription?.status || "not set",
+      statusKey: adminWorkspaceStatusKey(workspace, monitor, planCode),
+      billingPeriod: monitor?.billing_period || subscription?.billing_period,
+      paidThroughAt: monitor?.paid_through_at || subscription?.paid_through_at,
+      memberLimit,
+      activeMembers,
+      pendingInvitations,
+      usedMembers,
+      itemCount,
+      createdAt: workspace.created_at
+    };
   });
+
+  const mappedFamilyIds = new Set(state.adminWorkspaces.map((workspace) => workspace.legacy_family_id).filter(Boolean));
+  state.adminFamilies.filter((family) => !mappedFamilyIds.has(family.id)).forEach((family) => {
+    const head = findHeadForFamily(family);
+    const memberCount = state.adminMembers.filter((member) => member.family_id === family.id && member.status !== "inactive").length;
+    rows.push({
+      workspace: { status: head?.status === "suspended" ? "suspended" : "active" },
+      monitor: null,
+      family,
+      id: null,
+      type: "household",
+      typeLabel: "Family",
+      name: family.name,
+      ownerId: family.owner_id,
+      ownerName: head?.full_name || family.owner_email?.split("@")[0] || "Account owner",
+      ownerEmail: family.owner_email || head?.email || "Email unavailable",
+      ownerWorkspaceCount: state.adminFamilies.filter((item) => item.owner_id === family.owner_id).length || 1,
+      planCode: "legacy",
+      planName: head?.billing_status || "Legacy family",
+      subscriptionStatus: head?.status || "not set",
+      statusKey: head?.status === "suspended" ? "suspended" : "unconfigured",
+      billingPeriod: null,
+      paidThroughAt: null,
+      memberLimit: Math.max(1, memberCount),
+      activeMembers: memberCount,
+      pendingInvitations: 0,
+      usedMembers: memberCount,
+      itemCount: state.adminPaymentItems.filter((item) => item.family_id === family.id && item.status !== "inactive").length,
+      createdAt: family.created_at
+    });
+  });
+  return rows;
+}
+
+function renderAdminWorkspaceSummary(rows) {
+  $("#adminWorkspaceTotal").textContent = rows.length;
+  $("#adminWorkspacePersonal").textContent = rows.filter((row) => row.type === "personal").length;
+  $("#adminWorkspaceFamily").textContent = rows.filter((row) => row.type === "household").length;
+  $("#adminWorkspaceBusiness").textContent = rows.filter((row) => row.type === "business").length;
+  $("#adminWorkspacePaid").textContent = rows.filter((row) =>
+    row.statusKey === "active" && !["free", "unconfigured", "legacy"].includes(row.planCode)
+  ).length;
+}
+
+function syncAdminWorkspacePlanFilter(rows) {
+  const select = $("#adminWorkspacePlanFilter");
+  const previousValue = select.value || "all";
+  const plans = [...new Map(rows.map((row) => [row.planCode, row.planName])).entries()]
+    .filter(([code]) => code && code !== "unconfigured")
+    .sort((left, right) => left[1].localeCompare(right[1]));
+  select.innerHTML = '<option value="all">All plans</option>';
+  plans.forEach(([code, name]) => select.append(new Option(name, code)));
+  select.value = plans.some(([code]) => code === previousValue) ? previousValue : "all";
+}
+
+function renderAdminFamilies() {
+  const list = $("#adminFamiliesList");
+  const allRows = adminWorkspaceDirectoryRows();
+  renderAdminWorkspaceSummary(allRows);
+  syncAdminWorkspacePlanFilter(allRows);
+
+  const search = ($("#adminHouseholdSearch").value || "").trim().toLowerCase();
+  const typeFilter = $("#adminWorkspaceTypeFilter").value;
+  const statusFilter = $("#adminWorkspaceStatusFilter").value;
+  const planFilter = $("#adminWorkspacePlanFilter").value;
+  const sort = $("#adminWorkspaceSort").value;
+  const rows = allRows.filter((row) => {
+    const searchText = `${row.name} ${row.typeLabel} ${row.ownerName} ${row.ownerEmail} ${row.planName} ${row.planCode}`.toLowerCase();
+    return (!search || searchText.includes(search))
+      && (typeFilter === "all" || row.type === typeFilter)
+      && (statusFilter === "all" || row.statusKey === statusFilter)
+      && (planFilter === "all" || row.planCode === planFilter);
+  });
+
+  rows.sort((left, right) => {
+    if (sort === "oldest") return new Date(left.createdAt || 0) - new Date(right.createdAt || 0);
+    if (sort === "name") return left.name.localeCompare(right.name);
+    if (sort === "owner") return left.ownerName.localeCompare(right.ownerName);
+    if (sort === "type") return left.typeLabel.localeCompare(right.typeLabel) || left.name.localeCompare(right.name);
+    return new Date(right.createdAt || 0) - new Date(left.createdAt || 0);
+  });
+
+  $("#adminWorkspaceDirectoryMeta").textContent = rows.length === allRows.length
+    ? `${allRows.length} ${allRows.length === 1 ? "workspace" : "workspaces"}`
+    : `${rows.length} of ${allRows.length} workspaces`;
+
+  if (!rows.length) {
+    list.innerHTML = emptyState("No matching workspaces", "Change or reset the directory filters to see more results.");
+    return;
+  }
+
+  list.innerHTML = rows.map((row) => {
+    const isShared = row.type !== "personal";
+    const usagePercent = isShared ? Math.min(100, Math.round((row.usedMembers / row.memberLimit) * 100)) : 0;
+    const workspaceStatus = row.workspace.status || "active";
+    const planStatus = row.statusKey === "free" ? "free" : row.subscriptionStatus;
+    const billingCopy = row.billingPeriod
+      ? `${titleCase(row.billingPeriod)} billing${row.paidThroughAt ? ` &middot; Paid through ${new Date(row.paidThroughAt).toLocaleDateString()}` : ""}`
+      : row.statusKey === "free" ? "No paid subscription required" : "Billing not configured";
+    const typeInitial = row.type === "personal" ? "P" : row.type === "household" ? "F" : "B";
+    const ownerWorkspaceCopy = `${row.ownerWorkspaceCount} ${row.ownerWorkspaceCount === 1 ? "workspace" : "workspaces"} on this account`;
+    const usageHtml = isShared
+      ? `<strong>${row.usedMembers} of ${row.memberLimit} places used</strong><small>${row.activeMembers} active${row.pendingInvitations ? ` &middot; ${row.pendingInvitations} pending` : ""}</small><div class="admin-workspace-meter" aria-label="${usagePercent}% of paid places used"><span style="width:${usagePercent}%"></span></div>`
+      : `<strong>${row.itemCount} active ${row.itemCount === 1 ? "payment" : "payments"}</strong><small>Personal workspace usage</small>`;
+    const action = row.id
+      ? `<button type="button" data-view-admin-workspace="${row.id}">View details</button>`
+      : `<button type="button" data-view-admin-legacy-family="${row.family.id}">View details</button>`;
+    return `<article class="admin-workspace-row workspace-type-${row.type}">
+      <div class="admin-workspace-identity">
+        <span class="admin-workspace-type-mark" aria-hidden="true">${typeInitial}</span>
+        <div><span class="admin-workspace-field-label">${escapeHtml(row.typeLabel)} workspace</span><strong>${escapeHtml(row.name)}</strong><div class="badge-row">${statusBadge(workspaceStatus)}${statusBadge(planStatus)}</div></div>
+      </div>
+      <div class="admin-workspace-owner">
+        <span class="admin-workspace-field-label">Owner</span>
+        <strong>${escapeHtml(row.ownerName)}</strong>
+        <small>${escapeHtml(row.ownerEmail)}</small>
+        <small>${escapeHtml(ownerWorkspaceCopy)}</small>
+      </div>
+      <div class="admin-workspace-plan">
+        <span class="admin-workspace-field-label">Plan</span>
+        <strong>${escapeHtml(row.planName)}</strong>
+        <small>${billingCopy}</small>
+      </div>
+      <div class="admin-workspace-usage">
+        <span class="admin-workspace-field-label">Usage</span>
+        ${usageHtml}
+      </div>
+      <div class="admin-workspace-row-action">
+        <small>Created ${row.createdAt ? new Date(row.createdAt).toLocaleDateString() : "date unavailable"}</small>
+        ${action}
+      </div>
+    </article>`;
+  }).join("");
 }
 
 function renderHeads() {
@@ -4332,6 +4511,9 @@ document.addEventListener("click", async (event) => {
   const adminWorkspaceDetails = event.target.closest("[data-view-admin-workspace]");
   if (adminWorkspaceDetails) openAdminWorkspaceDetails(adminWorkspaceDetails.dataset.viewAdminWorkspace);
 
+  const adminLegacyFamilyDetails = event.target.closest("[data-view-admin-legacy-family]");
+  if (adminLegacyFamilyDetails) openAdminLegacyFamilyDetails(adminLegacyFamilyDetails.dataset.viewAdminLegacyFamily);
+
   const subscriptionPaymentDetails = event.target.closest("[data-view-subscription-payment]");
   if (subscriptionPaymentDetails) openSubscriptionPaymentDetails(subscriptionPaymentDetails.dataset.viewSubscriptionPayment);
 
@@ -4641,6 +4823,17 @@ $("#statusFilter").addEventListener("change", (event) => {
   renderFamilyApp();
 });
 $("#adminHouseholdSearch").addEventListener("input", renderAdminFamilies);
+document.querySelectorAll("#adminWorkspaceTypeFilter, #adminWorkspaceStatusFilter, #adminWorkspacePlanFilter, #adminWorkspaceSort").forEach((field) => {
+  field.addEventListener("change", renderAdminFamilies);
+});
+$("#adminWorkspaceReset").addEventListener("click", () => {
+  $("#adminHouseholdSearch").value = "";
+  $("#adminWorkspaceTypeFilter").value = "all";
+  $("#adminWorkspaceStatusFilter").value = "all";
+  $("#adminWorkspacePlanFilter").value = "all";
+  $("#adminWorkspaceSort").value = "newest";
+  renderAdminFamilies();
+});
 document.querySelectorAll("[data-family-selector]").forEach((select) => {
   select.addEventListener("change", (event) => {
     selectFamily(event.target.value).catch((error) => showToast(error.message));

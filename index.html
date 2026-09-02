@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=37" />
+    <link rel="stylesheet" href="styles.css?v=38" />
     <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=43"></script>
+    <script type="module" src="app.js?v=44"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -201,11 +201,69 @@
           </section>
 
           <section class="screen-panel hidden" data-admin-panel="households">
-            <header class="topbar">
-              <div><p class="eyebrow">Workspaces</p><h2>Personal, Household, and Business</h2></div>
-              <input id="adminHouseholdSearch" class="compact-input" placeholder="Search workspaces" />
+            <header class="topbar admin-workspace-heading">
+              <div>
+                <p class="eyebrow">Workspace directory</p>
+                <h2>Personal, Family, and Business</h2>
+                <p class="muted-copy">Monitor every workspace, its owner, subscription, usage, and available member places from one directory.</p>
+              </div>
             </header>
-            <div id="adminFamiliesList" class="record-list"></div>
+
+            <section class="admin-workspace-summary" aria-label="Workspace summary">
+              <article><span>Total workspaces</span><strong id="adminWorkspaceTotal">0</strong><small>Across all accounts</small></article>
+              <article class="personal"><span>Personal</span><strong id="adminWorkspacePersonal">0</strong><small>Individual budgets</small></article>
+              <article class="household"><span>Family</span><strong id="adminWorkspaceFamily">0</strong><small>Shared households</small></article>
+              <article class="business"><span>Business</span><strong id="adminWorkspaceBusiness">0</strong><small>Team workspaces</small></article>
+              <article class="paid"><span>Paid and active</span><strong id="adminWorkspacePaid">0</strong><small>Current paid plans</small></article>
+            </section>
+
+            <section class="admin-workspace-directory ledger-panel" aria-labelledby="adminWorkspaceDirectoryTitle">
+              <div class="admin-workspace-tools">
+                <label class="admin-workspace-search" for="adminHouseholdSearch">
+                  <span>Search directory</span>
+                  <input id="adminHouseholdSearch" type="search" placeholder="Workspace, owner, email, or plan" autocomplete="off" />
+                </label>
+                <div class="admin-workspace-filters">
+                  <label for="adminWorkspaceTypeFilter">Type
+                    <select id="adminWorkspaceTypeFilter">
+                      <option value="all">All types</option>
+                      <option value="personal">Personal</option>
+                      <option value="household">Family</option>
+                      <option value="business">Business</option>
+                    </select>
+                  </label>
+                  <label for="adminWorkspaceStatusFilter">Status
+                    <select id="adminWorkspaceStatusFilter">
+                      <option value="all">All statuses</option>
+                      <option value="active">Active</option>
+                      <option value="free">Free</option>
+                      <option value="suspended">Suspended</option>
+                      <option value="expired">Expired</option>
+                      <option value="closed">Closed</option>
+                      <option value="unconfigured">Not configured</option>
+                    </select>
+                  </label>
+                  <label for="adminWorkspacePlanFilter">Plan
+                    <select id="adminWorkspacePlanFilter"><option value="all">All plans</option></select>
+                  </label>
+                  <label for="adminWorkspaceSort">Sort
+                    <select id="adminWorkspaceSort">
+                      <option value="newest">Newest first</option>
+                      <option value="oldest">Oldest first</option>
+                      <option value="name">Workspace name</option>
+                      <option value="owner">Owner name</option>
+                      <option value="type">Workspace type</option>
+                    </select>
+                  </label>
+                  <button id="adminWorkspaceReset" type="button">Reset filters</button>
+                </div>
+              </div>
+              <div class="admin-workspace-directory-heading">
+                <div><p class="eyebrow">Directory</p><h3 id="adminWorkspaceDirectoryTitle">All workspaces</h3></div>
+                <p id="adminWorkspaceDirectoryMeta" class="muted-copy" aria-live="polite">0 workspaces</p>
+              </div>
+              <div id="adminFamiliesList" class="admin-workspace-list"></div>
+            </section>
           </section>
 
           <section class="screen-panel hidden" data-admin-panel="users">
