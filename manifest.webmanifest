@@ -1,12 +1,12 @@
 {
   "name": "Mushavo Budget",
   "short_name": "Mushavo Budget",
-  "description": "Track personal and family recurring payments, budgets, reminders, and members.",
+  "description": "Track personal, family, and business payments, budgets, reminders, and responsibilities.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#ECFEFF",
-  "theme_color": "#10B981",
+  "background_color": "#F4F7F8",
+  "theme_color": "#087A62",
   "orientation": "portrait-primary",
   "icons": [
     {

@@ -304,6 +304,16 @@ function showAppError(error) {
 
 function friendlyMessage(message = "") {
   const text = `${message}`;
+  const lowerText = text.toLowerCase();
+  if (lowerText.includes("invalid login credentials")) {
+    return "The email or password is incorrect.";
+  }
+  if (lowerText.includes("email not confirmed")) {
+    return "Confirm your email address before signing in.";
+  }
+  if (lowerText.includes("invalid api key")) {
+    return "Mushavo Budget is temporarily unavailable because its service connection is not configured correctly.";
+  }
   if (text.includes("ACTIVE_FAMILY_MEMBERSHIP_REQUIRED")) {
     return "An active Mushavo Budget membership is required for this action.";
   }
@@ -374,7 +384,7 @@ function friendlyMessage(message = "") {
     return "A subscription payment for this workspace is already waiting for review.";
   }
   if (text.includes("ADDITIONAL_SEAT_PAYMENT_REQUIRED")) {
-    return "This member would use an additional paid seat. The Family Head must submit and receive approval for a Household payment covering the new seat first.";
+    return "This member needs an additional paid place. The Family Head must submit and receive approval for a Family plan payment covering that place first.";
   }
   if (text.includes("WORKSPACE_OWNER_REQUIRED")) {
     return "Only the workspace owner can complete this subscription action.";
@@ -432,6 +442,10 @@ function friendlyMessage(message = "") {
       return "That user already has a pending invite for this family.";
     }
     return "That record already exists. Update the existing one instead.";
+  }
+  if (!text) return "The action could not be completed. Please try again.";
+  if (/\b(PGRST|JWT|SQLSTATE|relation |column |schema |row-level|constraint|function public\.|rpc\b)/i.test(text)) {
+    return "The action could not be completed because the service returned an unexpected response. Please try again or contact your administrator.";
   }
   return text;
 }
@@ -635,6 +649,9 @@ async function query(label, promise) {
 }
 
 async function init() {
+  document.querySelectorAll("[data-current-year]").forEach((element) => {
+    element.textContent = `${new Date().getFullYear()}`;
+  });
   showLoading("Opening your workspace", "Checking your secure session...");
   if (!isConfigured) {
     setView("configWarning");
@@ -1184,7 +1201,7 @@ function renderFamilyHeader() {
   $("#mobileHouseholdTitle").textContent = title;
   const billing = state.workspaceEntitlement
     ? `${state.workspaceEntitlement.plan_name} - ${titleCase(state.workspaceEntitlement.effective_status)}`
-    : hasActiveMembership() ? "Household - Active" : "Free - Active";
+    : hasActiveMembership() ? "Family - Active" : "Free - Active";
   $("#headBillingBadge").textContent = billing;
   $("#headBillingBadge").className = `mini-badge ${badgeClass(billing)}`;
   renderFamilySelectors();
@@ -1538,7 +1555,7 @@ function renderMemberResponsibility(occurrences) {
     rows.push({
       member: null,
       key: "household",
-      name: "Household account",
+      name: "Family payments",
       role: "Unassigned family payments",
       assigned: householdAssigned,
       total: householdAssigned.reduce((sum, item) => sum + item.amount, 0),
@@ -1732,7 +1749,7 @@ function renderOccurrenceCard(occurrence, withAction = false, collapsible = fals
       </button>
       <div id="${detailsId}" class="occurrence-card-details" hidden>
         <dl class="occurrence-facts">
-          <div><dt>Responsible</dt><dd>${escapeHtml(member?.name || "Household account")}</dd></div>
+          <div><dt>Responsible</dt><dd>${escapeHtml(member?.name || "Family payments")}</dd></div>
           <div><dt>Category</dt><dd>${escapeHtml(occurrence.item.category)}</dd></div>
           <div><dt>Paid</dt><dd>${money(occurrence.paid, occurrence.item.currency)}</dd></div>
           <div><dt>Outstanding</dt><dd>${money(occurrence.outstanding, occurrence.item.currency)}</dd></div>
@@ -1753,7 +1770,7 @@ function renderOccurrenceCard(occurrence, withAction = false, collapsible = fals
     </div>
     <div class="record-main">
       <strong class="occurrence-name" title="${escapeHtml(occurrence.item.name)}">${escapeHtml(occurrence.item.name)}</strong>
-      <span class="occurrence-meta" title="${escapeHtml(member?.name || "Household account")} · ${escapeHtml(occurrence.item.category)} · ${money(occurrence.outstanding, occurrence.item.currency)} outstanding">${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
+      <span class="occurrence-meta" title="${escapeHtml(member?.name || "Family payments")} · ${escapeHtml(occurrence.item.category)} · ${money(occurrence.outstanding, occurrence.item.currency)} outstanding">${escapeHtml(member?.name || "Family payments")} &middot; ${escapeHtml(occurrence.item.category)} &middot; ${money(occurrence.outstanding, occurrence.item.currency)} outstanding</span>
       <div class="badge-row">
         ${statusBadge(occurrence.status)}
         <span class="mini-badge">${money(occurrence.paid, occurrence.item.currency)} paid</span>
@@ -2265,7 +2282,7 @@ function updateRenewalQuote() {
   memberCountInput.required = managesMemberLimit;
   $("#renewalDialogTitle").textContent = startsNewFamily ? "Start a Family plan" : "Submit payment for review";
   $("#renewalDialogDescription").textContent = startsNewFamily
-    ? `Enter the family name and the total number of people. The base plan includes ${includedSeats} people, including the Family Head.`
+    ? `Enter the family name and choose the total number of people. The base plan includes ${includedSeats} people.`
     : managesMemberLimit
       ? "Choose the total number of paid places for this workspace. Active members and pending invitations cannot be removed from the calculation."
       : "Submitting payment does not activate access automatically. Authorized finance staff will review it.";
@@ -2277,9 +2294,9 @@ function updateRenewalQuote() {
   const extraMemberPeriodPrice = Number(price?.extra_member_amount || 0) * extraMemberBillingMonths(price);
   $("#renewalFamilyMembersHelp").textContent = price
     ? period === "annual"
-      ? `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month, which is ${money(extraMemberPeriodPrice, price.currency)} for one year.`
-      : `The base price includes ${includedSeats} people: 1 Family Head and ${Math.max(0, includedSeats - 1)} other members. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month.`
-    : `The base price includes ${includedSeats} people in total, including the Family Head.`;
+      ? `The base price includes ${includedSeats} people. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month, or ${money(extraMemberPeriodPrice, price.currency)} for one year.`
+      : `The base price includes ${includedSeats} people. Each additional person costs ${money(price.extra_member_amount, price.currency)} per month.`
+    : `The base price includes ${includedSeats} people.`;
   const totalPeopleOnPlan = managesMemberLimit
     ? requestedMemberCount
     : Math.max(includedSeats, Number(state.billableMemberCount || 1));
@@ -2681,7 +2698,7 @@ function renderFamilyPaymentRecord(record) {
     <div class="date-chip"><strong>${parseDate(record.payment_date).getDate()}</strong><span>${parseDate(record.payment_date).toLocaleString("en", { month: "short" })}</span></div>
     <div class="record-main">
       <strong>${escapeHtml(item?.name || "Payment")}</strong>
-      <span>${escapeHtml(member?.name || "Household account")} &middot; ${escapeHtml(record.payment_method || "Method not set")} &middot; ${escapeHtml(record.reference_number || "No reference")}</span>
+      <span>${escapeHtml(member?.name || "Family payments")} &middot; ${escapeHtml(record.payment_method || "Method not set")} &middot; ${escapeHtml(record.reference_number || "No reference")}</span>
       ${record.notes ? `<small>${escapeHtml(record.notes)}</small>` : ""}
       ${record.proof_name ? `<small>Proof: ${escapeHtml(record.proof_name)}${record.proof_size_bytes ? ` &middot; ${formatFileSize(record.proof_size_bytes)}` : ""}</small>` : ""}
     </div>
@@ -3256,7 +3273,7 @@ function renderAdminAttention(occurrences) {
   }).filter((row) => row.overdue || row.partial);
 
   if (!rows.length) {
-    list.innerHTML = emptyState("No urgent household issues", "Overdue and partially paid dues will appear here.");
+    list.innerHTML = emptyState("No payments need attention", "Overdue and partially paid items will appear here.");
     return;
   }
   list.innerHTML = "";
@@ -3611,7 +3628,7 @@ function renderPlatformPayment(payment, withActions = false) {
 
 function renderAdminNoteOptions() {
   const select = $("#adminNoteFamily");
-  select.innerHTML = `<option value="">Choose household</option>`;
+  select.innerHTML = `<option value="">Choose workspace</option>`;
   state.adminFamilies.forEach((family) => {
     const option = document.createElement("option");
     option.value = family.id;
@@ -3632,7 +3649,7 @@ function renderAdminNotes() {
     const article = document.createElement("article");
     article.className = "record-card";
     article.innerHTML = `
-      <div class="record-main"><strong>${escapeHtml(family?.name || "Household")}</strong><span>${new Date(note.created_at).toLocaleString()}</span><small>${escapeHtml(note.note)}</small></div>
+      <div class="record-main"><strong>${escapeHtml(family?.name || "Family")}</strong><span>${new Date(note.created_at).toLocaleString()}</span><small>${escapeHtml(note.note)}</small></div>
       <div class="record-side"><button type="button" data-delete-admin-note="${note.id}">Delete</button></div>
     `;
     list.append(article);
@@ -3683,7 +3700,7 @@ async function createFamily(event) {
     );
     if (!created) return;
     await loadApp();
-    showToast("Household created.");
+    showToast("Family workspace created.");
   } catch (error) {
     showToast(error.message);
   }
