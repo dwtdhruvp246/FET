@@ -1,3 +1,4 @@
+// Mushavo Budget authenticated application — release 47
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -60,7 +61,6 @@ const state = {
   adminPlanFeatures: [],
   adminPlanLimits: [],
   adminEnquiries: [],
-  adminEnquiryEvents: [],
   adminRenewalRequests: [],
   adminSubscriptionInvoices: [],
   adminSubscriptionPayments: [],
@@ -548,7 +548,7 @@ function realtimeTablesForCurrentView() {
     "subscription_invoices", "subscription_payments", "subscription_entitlement_history"
   ];
   if (!state.isAdmin) return sharedTables;
-  return [...sharedTables, "plans", "plan_prices", "plan_features", "plan_limits", "payments", "public_enquiries", "admin_support_notes"];
+  return [...sharedTables, "plans", "plan_prices", "plan_features", "plan_limits", "payments", "enquiries", "admin_support_notes"];
 }
 
 function stopRealtime() {
@@ -682,8 +682,38 @@ function handleSignedOut() {
   setView("auth");
 }
 
-function handleLoadFailure(error) {
+function isInvalidStoredSessionError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("jwt issued at future")
+    || message.includes("jwt expired")
+    || message.includes("invalid jwt")
+    || message.includes("invalid refresh token")
+    || message.includes("refresh token not found");
+}
+
+function removeStoredSupabaseSession() {
+  try {
+    const projectRef = new URL(config.supabaseUrl).hostname.split(".")[0];
+    if (projectRef) window.localStorage.removeItem(`sb-${projectRef}-auth-token`);
+  } catch (_error) {
+    // The normal sign-out path remains available if storage is unavailable.
+  }
+}
+
+async function handleLoadFailure(error) {
   console.error(error);
+  if (state.session && isInvalidStoredSessionError(error)) {
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch (_signOutError) {
+      // Remove only this project's stored session when the invalid JWT also
+      // prevents Supabase from completing its normal local sign-out flow.
+    }
+    removeStoredSupabaseSession();
+    handleSignedOut();
+    showToast("Your saved session was no longer valid. Please sign in again.");
+    return;
+  }
   showToast(error.message);
   if (state.session) showAppError(error);
   else setView("auth");
@@ -766,7 +796,6 @@ function resetState() {
   state.adminPlanFeatures = [];
   state.adminPlanLimits = [];
   state.adminEnquiries = [];
-  state.adminEnquiryEvents = [];
   state.adminRenewalRequests = [];
   state.adminSubscriptionInvoices = [];
   state.adminSubscriptionPayments = [];
@@ -1135,10 +1164,7 @@ async function loadAdminData(tab = state.adminTab) {
     add("adminNotes", "admin notes load", supabase.from("admin_support_notes").select("*").order("created_at", { ascending: false }));
   }
   if (["dashboard", "enquiries"].includes(tab)) {
-    add("adminEnquiries", "public enquiries load", supabase.from("public_enquiries").select("*").order("created_at", { ascending: false }));
-  }
-  if (tab === "enquiries") {
-    add("adminEnquiryEvents", "public enquiry activity load", supabase.from("public_enquiry_events").select("*").order("created_at", { ascending: false }));
+    add("adminEnquiries", "public enquiries load", supabase.from("enquiries").select("*").order("created_at", { ascending: false }));
   }
   if (["plans", "finance"].includes(tab)) {
     add("adminPlans", "admin plans load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
@@ -3357,7 +3383,7 @@ function renderAdminTabs() {
 function renderAdminEnquiryBadge() {
   const badge = $("#adminEnquiryBadge");
   if (!badge) return;
-  const count = state.adminEnquiries.filter((enquiry) => enquiry.status === "new").length;
+  const count = state.adminEnquiries.filter((enquiry) => ["new", "in_progress"].includes(enquiry.status)).length;
   badge.textContent = String(count);
   badge.classList.toggle("hidden", count === 0);
 }
@@ -3773,32 +3799,42 @@ function renderAdminNotes() {
 
 function enquiryLabel(value) {
   const labels = {
-    personal_plan: "Personal plan", family_plan: "Family plan", business_plan: "Business plan",
-    in_progress: "In progress", waiting_for_customer: "Waiting for customer"
+    subscription_renewal: "Subscription renewal", setup_help: "Setup help",
+    country_availability: "Country availability", in_progress: "In progress"
   };
   return labels[value] || titleCase(value);
+}
+
+function syncAdminEnquiryCountryFilter() {
+  const field = $("#adminEnquiryCountry");
+  if (!field) return;
+  const selected = field.value || "all";
+  const countries = [...new Set(state.adminEnquiries.map((item) => item.country_name).filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+  field.innerHTML = '<option value="all">All countries</option>' + countries
+    .map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`).join("");
+  field.value = countries.includes(selected) ? selected : "all";
 }
 
 function filteredAdminEnquiries() {
   const search = ($("#adminEnquirySearch")?.value || "").trim().toLowerCase();
   const status = $("#adminEnquiryStatus")?.value || "all";
-  const category = $("#adminEnquiryCategory")?.value || "all";
-  const priority = $("#adminEnquiryPriority")?.value || "all";
+  const country = $("#adminEnquiryCountry")?.value || "all";
   return state.adminEnquiries.filter((enquiry) => {
-    const haystack = `${enquiry.reference_number} ${enquiry.full_name} ${enquiry.email} ${enquiry.subject}`.toLowerCase();
+    const haystack = `${enquiry.full_name} ${enquiry.email} ${enquiry.message}`.toLowerCase();
     return (!search || haystack.includes(search))
       && (status === "all" || enquiry.status === status)
-      && (category === "all" || enquiry.category === category)
-      && (priority === "all" || enquiry.priority === priority);
+      && (country === "all" || enquiry.country_name === country);
   });
 }
 
 function renderAdminEnquiries() {
   $("#adminEnquiryNew").textContent = String(state.adminEnquiries.filter((item) => item.status === "new").length);
   $("#adminEnquiryProgress").textContent = String(state.adminEnquiries.filter((item) => item.status === "in_progress").length);
-  $("#adminEnquiryWaiting").textContent = String(state.adminEnquiries.filter((item) => item.status === "waiting_for_customer").length);
   $("#adminEnquiryResolved").textContent = String(state.adminEnquiries.filter((item) => item.status === "resolved").length);
+  $("#adminEnquiryArchived").textContent = String(state.adminEnquiries.filter((item) => item.status === "archived").length);
   renderAdminEnquiryBadge();
+  syncAdminEnquiryCountryFilter();
   const rows = filteredAdminEnquiries();
   $("#adminEnquiryMeta").textContent = `${rows.length} of ${state.adminEnquiries.length} enquiries`;
   const list = $("#adminEnquiryList");
@@ -3809,63 +3845,38 @@ function renderAdminEnquiries() {
   list.innerHTML = "";
   rows.forEach((enquiry) => {
     const article = document.createElement("article");
-    article.className = `record-card enquiry-card priority-${enquiry.priority}`;
+    article.className = "record-card enquiry-card";
+    const replySubject = encodeURIComponent(`Mushavo Budget ${enquiryLabel(enquiry.enquiry_type)} enquiry`);
+    const safeMessage = escapeHtml(enquiry.message).replace(/\n/g, "<br />");
     article.innerHTML = `
       <div class="record-main">
-        <div class="badge-row"><span class="mini-badge">${escapeHtml(enquiry.reference_number)}</span><span class="mini-badge ${badgeClass(enquiry.status)}">${escapeHtml(enquiryLabel(enquiry.status))}</span><span class="mini-badge">${escapeHtml(enquiryLabel(enquiry.category))}</span><span class="mini-badge">${escapeHtml(enquiryLabel(enquiry.priority))}</span></div>
-        <strong>${escapeHtml(enquiry.subject)}</strong>
-        <span>${escapeHtml(enquiry.full_name)} &middot; ${escapeHtml(enquiry.email)}</span>
-        <small>Received ${escapeHtml(formatAdminDate(enquiry.created_at))}</small>
+        <div class="badge-row"><span class="mini-badge ${badgeClass(enquiry.status)}">${escapeHtml(enquiryLabel(enquiry.status))}</span><span class="mini-badge">${escapeHtml(enquiryLabel(enquiry.enquiry_type))}</span></div>
+        <strong>${escapeHtml(enquiry.full_name)}</strong>
+        <a class="enquiry-email" href="mailto:${encodeURIComponent(enquiry.email)}?subject=${replySubject}">${escapeHtml(enquiry.email)}</a>
+        <span>${escapeHtml(enquiry.country_name || "Country not provided")}</span>
+        <p class="enquiry-message">${safeMessage}</p>
+        <small>Submitted ${escapeHtml(formatAdminDate(enquiry.created_at))}</small>
       </div>
       <div class="record-side enquiry-actions">
-        <label>Status<select data-enquiry-status="${enquiry.id}">${["new", "in_progress", "waiting_for_customer", "resolved", "spam", "archived"].map((value) => `<option value="${value}"${enquiry.status === value ? " selected" : ""}>${escapeHtml(enquiryLabel(value))}</option>`).join("")}</select></label>
-        <label>Priority<select data-enquiry-priority="${enquiry.id}">${["low", "normal", "high", "urgent"].map((value) => `<option value="${value}"${enquiry.priority === value ? " selected" : ""}>${escapeHtml(enquiryLabel(value))}</option>`).join("")}</select></label>
-        <button type="button" data-view-enquiry="${enquiry.id}">View enquiry</button>
+        <div class="enquiry-status-actions" aria-label="Update enquiry status">
+          ${[["new", "Mark New"], ["in_progress", "In Progress"], ["resolved", "Resolved"], ["archived", "Archive"]].map(([value, label]) => `<button type="button" data-enquiry-status="${enquiry.id}" data-status="${value}"${enquiry.status === value ? ' class="active" disabled aria-current="true"' : ""}>${label}</button>`).join("")}
+        </div>
+        <a class="button-link" href="mailto:${encodeURIComponent(enquiry.email)}?subject=${replySubject}">Reply by email</a>
       </div>`;
-    article.querySelector("[data-enquiry-status]").addEventListener("change", (event) => updateEnquiry(enquiry.id, { status: event.target.value }));
-    article.querySelector("[data-enquiry-priority]").addEventListener("change", (event) => updateEnquiry(enquiry.id, { priority: event.target.value }));
+    article.querySelectorAll("[data-enquiry-status]").forEach((button) => button.addEventListener("click", () => updateEnquiry(enquiry.id, { status: button.dataset.status })));
     list.append(article);
   });
 }
 
-function openEnquiryDetails(enquiryId) {
-  const enquiry = state.adminEnquiries.find((item) => item.id === enquiryId);
-  if (!enquiry) return;
-  const replySubject = encodeURIComponent(`Re: ${enquiry.subject} [${enquiry.reference_number}]`);
-  const safeMessage = escapeHtml(enquiry.message).replace(/\n/g, "<br />");
-  const events = state.adminEnquiryEvents.filter((event) => event.enquiry_id === enquiry.id);
-  const assignmentLabel = enquiry.assigned_to === state.session.user.id ? "Assigned to you" : enquiry.assigned_to ? "Assigned to another administrator" : "Unassigned";
-  showAdminDetails({
-    eyebrow: "Public enquiry",
-    title: enquiry.subject,
-    subtitle: `${enquiry.reference_number} · received ${formatAdminDate(enquiry.created_at)}`,
-    body: `<section class="admin-detail-section"><h4>Contact</h4>${adminDetailRows([
-      ["Name", escapeHtml(enquiry.full_name)], ["Email", escapeHtml(enquiry.email)],
-      ["Phone", escapeHtml(enquiry.phone || "Not provided")], ["Organisation", escapeHtml(enquiry.organisation || "Not provided")],
-      ["Type", escapeHtml(enquiryLabel(enquiry.category))], ["Status", `<span class="mini-badge ${badgeClass(enquiry.status)}">${escapeHtml(enquiryLabel(enquiry.status))}</span>`],
-      ["Priority", escapeHtml(enquiryLabel(enquiry.priority))], ["Assignment", escapeHtml(assignmentLabel)]
-    ])}<div class="admin-detail-actions"><a class="button-link" href="mailto:${encodeURIComponent(enquiry.email)}?subject=${replySubject}">Reply by email</a><button type="button" data-assign-enquiry="${enquiry.id}" data-assignee="${enquiry.assigned_to === state.session.user.id ? "" : state.session.user.id}">${enquiry.assigned_to === state.session.user.id ? "Unassign" : "Assign to me"}</button></div></section>
-    <section class="admin-detail-section"><h4>Message</h4><p class="admin-detail-note enquiry-message"><span>${safeMessage}</span></p></section>
-    <section class="admin-detail-section"><h4>Internal notes</h4><label class="full" for="enquiryInternalNotes">Only administrators can see these notes<textarea id="enquiryInternalNotes" maxlength="5000" rows="6">${escapeHtml(enquiry.internal_notes || "")}</textarea></label><div class="admin-detail-actions"><button class="primary" type="button" data-save-enquiry-notes="${enquiry.id}">Save internal notes</button></div></section>
-    <section class="admin-detail-section"><h4>Activity</h4>${events.length ? `<ol class="enquiry-activity">${events.map((event) => `<li><strong>${escapeHtml(enquiryLabel(event.event_type))}</strong><span>${escapeHtml(formatAdminDate(event.created_at))}</span></li>`).join("")}</ol>` : '<p class="muted-copy">No activity has been recorded yet.</p>'}</section>`
-  });
-}
-
-async function updateEnquiry(enquiryId, changes, { closeDialog = false } = {}) {
+async function updateEnquiry(enquiryId, changes) {
   try {
-    await query("enquiry update", supabase.from("public_enquiries").update(changes).eq("id", enquiryId));
+    await query("enquiry update", supabase.from("enquiries").update(changes).eq("id", enquiryId));
     await loadAdminData("enquiries");
     renderAdminEnquiries();
-    if (closeDialog) $("#adminDetailsDialog").close();
     showToast("Enquiry updated.");
   } catch (error) {
     showToast(friendlyMessage(error.message));
   }
-}
-
-async function saveEnquiryNotes(enquiryId) {
-  const notes = $("#enquiryInternalNotes")?.value.trim() || null;
-  await updateEnquiry(enquiryId, { internal_notes: notes }, { closeDialog: true });
 }
 
 async function signIn(event) {
@@ -4737,14 +4748,6 @@ document.addEventListener("click", async (event) => {
   const planDefinitionEdit = event.target.closest("[data-edit-plan-definition]");
   if (planDefinitionEdit) editPlanDefinition(planDefinitionEdit.dataset.editPlanDefinition);
 
-  const enquiryDetails = event.target.closest("[data-view-enquiry]");
-  if (enquiryDetails) openEnquiryDetails(enquiryDetails.dataset.viewEnquiry);
-
-  const enquiryNotes = event.target.closest("[data-save-enquiry-notes]");
-  if (enquiryNotes) await saveEnquiryNotes(enquiryNotes.dataset.saveEnquiryNotes);
-
-  const enquiryAssignment = event.target.closest("[data-assign-enquiry]");
-  if (enquiryAssignment) await updateEnquiry(enquiryAssignment.dataset.assignEnquiry, { assigned_to: enquiryAssignment.dataset.assignee || null }, { closeDialog: true });
 
   const adminUserDetails = event.target.closest("[data-view-admin-user]");
   if (adminUserDetails) openAdminUserDetails(adminUserDetails.dataset.viewAdminUser, adminUserDetails.dataset.viewAdminUserEmail);
@@ -5004,7 +5007,7 @@ document.querySelectorAll("#adminFinanceCurrencyFilter, #adminFinanceStatusFilte
     renderSubscriptionPaymentHistory();
   });
 });
-document.querySelectorAll("#adminEnquirySearch, #adminEnquiryStatus, #adminEnquiryCategory, #adminEnquiryPriority").forEach((field) => {
+document.querySelectorAll("#adminEnquirySearch, #adminEnquiryStatus, #adminEnquiryCountry").forEach((field) => {
   field.addEventListener(field.type === "search" ? "input" : "change", renderAdminEnquiries);
 });
 $("#syncExchangeRatesButton").addEventListener("click", syncExchangeRates);

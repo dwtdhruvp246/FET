@@ -1,3 +1,4 @@
+/* Mushavo Budget authenticated application stylesheet — release 41 */
 :root {
   --ink: #0f172a;
   --muted: #64748b;
@@ -3233,10 +3234,10 @@ input[type="file"] {
 .admin-enquiry-filters {
   margin-bottom: 22px;
   display: grid;
-  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(145px, 0.75fr));
+  grid-template-columns: minmax(240px, 1.5fr) repeat(2, minmax(160px, 0.75fr));
   gap: 12px;
 }
-.admin-enquiry-filters label, .enquiry-actions label {
+.admin-enquiry-filters label {
   min-width: 0;
   display: grid;
   gap: 6px;
@@ -3244,7 +3245,7 @@ input[type="file"] {
   font-size: 0.82rem;
   font-weight: 800;
 }
-.admin-enquiry-filters input, .admin-enquiry-filters select, .enquiry-actions select {
+.admin-enquiry-filters input, .admin-enquiry-filters select {
   width: 100%;
   min-height: 44px;
   padding: 9px 12px;
@@ -3253,35 +3254,31 @@ input[type="file"] {
   color: #172033;
   background: white;
 }
-.enquiry-card { border-left: 4px solid #cbd5e1; }
-.enquiry-card.priority-high { border-left-color: #f59e0b; }
-.enquiry-card.priority-urgent { border-left-color: #dc2626; }
+.enquiry-card { align-items: start; border-left: 4px solid #0f9f84; }
 .mini-badge.new { color: #075985; background: #e0f2fe; }
-.mini-badge.in_progress, .mini-badge.waiting_for_customer { color: #92400e; background: #fef3c7; }
+.mini-badge.in_progress { color: #92400e; background: #fef3c7; }
 .mini-badge.resolved { color: #047857; background: #d1fae5; }
-.mini-badge.spam, .mini-badge.archived { color: #64748b; background: #eef2f6; }
+.mini-badge.archived { color: #64748b; background: #eef2f6; }
 .enquiry-card .record-main { gap: 6px; }
+.enquiry-card .record-main > span,
+.enquiry-card .record-main > small { color: #64748b; }
+.enquiry-email { width: fit-content; color: #075985; font-weight: 700; text-decoration: none; }
+.enquiry-email:hover { text-decoration: underline; }
 .enquiry-actions {
-  min-width: min(360px, 40%);
+  min-width: min(430px, 44%);
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  justify-items: stretch;
+}
+.enquiry-status-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  align-items: end;
 }
-.enquiry-actions > button { grid-column: 1 / -1; }
-.enquiry-message { line-height: 1.65; }
-.admin-detail-section textarea {
-  width: 100%;
-  margin-top: 8px;
-  padding: 12px;
-  border: 1px solid #d8e2e7;
-  border-radius: 14px;
-  resize: vertical;
-}
-.enquiry-activity { margin: 0; padding: 0; display: grid; list-style: none; }
-.enquiry-activity li { padding: 11px 0; display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e4ebee; }
-.enquiry-activity li:last-child { border-bottom: 0; }
-.enquiry-activity span { color: #64748b; font-size: 0.86rem; }
+.enquiry-status-actions button { width: 100%; min-width: 0; }
+.enquiry-status-actions button.active { color: #047857; border-color: #86d9c5; background: #e6f8f1; opacity: 1; }
+.enquiry-actions .button-link { width: 100%; justify-content: center; }
+.enquiry-message { max-width: 76ch; margin: 8px 0 4px; color: #334155; line-height: 1.65; overflow-wrap: anywhere; }
 
 @media (max-width: 980px) {
   .plan-feature-options, .plan-publication-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -3291,5 +3288,6 @@ input[type="file"] {
 @media (max-width: 680px) {
   .plan-feature-options, .plan-publication-options, .admin-enquiry-filters { grid-template-columns: 1fr; }
   .enquiry-card { align-items: stretch; }
-  .enquiry-actions { width: 100%; min-width: 0; grid-template-columns: 1fr 1fr; }
+  .enquiry-actions { width: 100%; min-width: 0; }
+  .enquiry-status-actions { grid-template-columns: 1fr 1fr; }
 }
