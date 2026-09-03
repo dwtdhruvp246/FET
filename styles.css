@@ -1,4 +1,4 @@
-/* Mushavo Budget authenticated application stylesheet — release 41 */
+/* Mushavo Budget authenticated application stylesheet — release 42 */
 :root {
   --ink: #0f172a;
   --muted: #64748b;
@@ -351,9 +351,36 @@ code {
   grid-column: 1;
   grid-row: 1 / span 20;
   display: grid;
-  min-height: calc(100dvh - 48px);
+  height: calc(100dvh - 48px);
+  max-height: calc(100dvh - 48px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(15, 118, 110, 0.34) transparent;
   border-radius: 30px;
   padding: 20px;
+}
+
+.app-nav::-webkit-scrollbar {
+  width: 8px;
+}
+
+.app-nav::-webkit-scrollbar-track {
+  margin-block: 22px;
+  background: transparent;
+}
+
+.app-nav::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: rgba(15, 118, 110, 0.34);
+  background-clip: padding-box;
+}
+
+.app-nav::-webkit-scrollbar-thumb:hover {
+  background: rgba(15, 118, 110, 0.56);
+  background-clip: padding-box;
 }
 
 .screen-panel {
@@ -2259,6 +2286,7 @@ input[type="file"] {
     inset: 12px auto 12px 12px;
     z-index: 30;
     width: min(330px, calc(100vw - 24px));
+    height: auto;
     min-height: auto;
     max-height: calc(100dvh - 24px);
     overflow-y: auto;
