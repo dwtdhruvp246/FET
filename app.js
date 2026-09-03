@@ -57,6 +57,10 @@ const state = {
   adminSubscriptions: [],
   adminPlans: [],
   adminPlanPrices: [],
+  adminPlanFeatures: [],
+  adminPlanLimits: [],
+  adminEnquiries: [],
+  adminEnquiryEvents: [],
   adminRenewalRequests: [],
   adminSubscriptionInvoices: [],
   adminSubscriptionPayments: [],
@@ -105,7 +109,7 @@ const views = {
   app: $("#appView")
 };
 
-const adminTabs = new Set(["dashboard", "households", "users", "plans", "finance", "support"]);
+const adminTabs = new Set(["dashboard", "households", "users", "plans", "finance", "enquiries", "support"]);
 const familyTabs = new Set(["dashboard", "payments", "reports", "members", "subscription", "settings"]);
 const currencyNames = {
   USD: "en-US",
@@ -544,7 +548,7 @@ function realtimeTablesForCurrentView() {
     "subscription_invoices", "subscription_payments", "subscription_entitlement_history"
   ];
   if (!state.isAdmin) return sharedTables;
-  return [...sharedTables, "plans", "plan_prices", "payments", "admin_support_notes"];
+  return [...sharedTables, "plans", "plan_prices", "plan_features", "plan_limits", "payments", "public_enquiries", "admin_support_notes"];
 }
 
 function stopRealtime() {
@@ -694,7 +698,18 @@ function openAuthenticatedSession(session) {
   state.session = session;
   appLoadUserId = userId;
   showLoading("Opening your workspace", "Loading your latest budget...");
-  appLoadPromise = loadApp().finally(() => {
+  appLoadPromise = loadApp().then(() => {
+    const url = new URL(window.location.href);
+    const requestedPlan = url.searchParams.get("plan");
+    if (!state.isAdmin && requestedPlan && state.plans.some((plan) => plan.code === requestedPlan)) {
+      state.familyTab = "subscription";
+      setRoute("family", "subscription", true);
+      renderFamilyApp();
+      openRenewalDialog(requestedPlan);
+      url.searchParams.delete("plan");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }).finally(() => {
     if (appLoadUserId === userId) {
       appLoadPromise = null;
       appLoadUserId = null;
@@ -748,6 +763,10 @@ function resetState() {
   state.adminSubscriptions = [];
   state.adminPlans = [];
   state.adminPlanPrices = [];
+  state.adminPlanFeatures = [];
+  state.adminPlanLimits = [];
+  state.adminEnquiries = [];
+  state.adminEnquiryEvents = [];
   state.adminRenewalRequests = [];
   state.adminSubscriptionInvoices = [];
   state.adminSubscriptionPayments = [];
@@ -1115,9 +1134,19 @@ async function loadAdminData(tab = state.adminTab) {
   if (tab === "support") {
     add("adminNotes", "admin notes load", supabase.from("admin_support_notes").select("*").order("created_at", { ascending: false }));
   }
+  if (["dashboard", "enquiries"].includes(tab)) {
+    add("adminEnquiries", "public enquiries load", supabase.from("public_enquiries").select("*").order("created_at", { ascending: false }));
+  }
+  if (tab === "enquiries") {
+    add("adminEnquiryEvents", "public enquiry activity load", supabase.from("public_enquiry_events").select("*").order("created_at", { ascending: false }));
+  }
   if (["plans", "finance"].includes(tab)) {
     add("adminPlans", "admin plans load", supabase.from("plans").select("*").order("sort_order", { ascending: true }));
     add("adminPlanPrices", "admin plan prices load", supabase.from("plan_prices").select("*").order("effective_from", { ascending: false }));
+  }
+  if (tab === "plans") {
+    add("adminPlanFeatures", "admin plan features load", supabase.from("plan_features").select("*").order("feature_code"));
+    add("adminPlanLimits", "admin plan limits load", supabase.from("plan_limits").select("*").order("limit_code"));
   }
   if (["dashboard", "households", "users", "finance"].includes(tab)) {
     add("adminSubscriptionPayments", "admin subscription payments load", supabase.from("subscription_payments").select("*").order("created_at", { ascending: false }));
@@ -2188,7 +2217,7 @@ function openNotificationDialog() {
 function eligibleRenewalPlans() {
   const workspace = currentBudgetWorkspace();
   return state.plans.filter((plan) => {
-    if (plan.code === "free") return false;
+    if (plan.code === "free" || plan.available_for_purchase === false) return false;
     if (plan.workspace_type === workspace?.workspace_type) return true;
     return workspace?.workspace_type === "personal" && plan.workspace_type === "household";
   });
@@ -2215,7 +2244,7 @@ function openRenewalDialog(planCode = null) {
   const selectedPlan = plans.find((plan) => plan.code === select.value);
   const selectedWorkspace = currentBudgetWorkspace();
   const startsNewFamily = selectedWorkspace?.workspace_type === "personal" && selectedPlan?.workspace_type === "household";
-  const managesMemberLimit = startsNewFamily || selectedWorkspace?.workspace_type === selectedPlan?.workspace_type && ["household", "business"].includes(selectedPlan?.code);
+  const managesMemberLimit = startsNewFamily || selectedWorkspace?.workspace_type === selectedPlan?.workspace_type && ["household", "business"].includes(selectedPlan?.workspace_type);
   if (managesMemberLimit) {
     $("#renewalFamilyMemberCount").value = `${startsNewFamily
       ? includedMemberSeats(selectedPlan)
@@ -2235,7 +2264,7 @@ function updateRenewalQuote() {
   const workspace = currentBudgetWorkspace();
   const startsNewFamily = workspace?.workspace_type === "personal" && plan?.workspace_type === "household";
   const managesMemberLimit = startsNewFamily || (
-    workspace?.workspace_type === plan?.workspace_type && ["household", "business"].includes(plan?.code)
+    workspace?.workspace_type === plan?.workspace_type && ["household", "business"].includes(plan?.workspace_type)
   );
   const period = $("#renewalPeriod").value;
   const availablePrices = state.planPrices.filter((price) => price.plan_id === plan?.id && price.billing_period === period && price.is_active);
@@ -2334,6 +2363,7 @@ async function submitSubscriptionRenewal(event) {
         p_personal_workspace_id: workspace.id,
         p_family_name: familyName,
         p_total_member_count: requestedMemberCount,
+        p_plan_code: plan.code,
         p_billing_period: period,
         p_currency: currency,
         p_amount: amount,
@@ -2699,6 +2729,7 @@ function renderFamilyPaymentRecord(record) {
 
 function renderAdmin() {
   renderAdminTabs();
+  renderAdminEnquiryBadge();
   if (state.adminTab === "dashboard") renderAdminSummary();
   if (state.adminTab === "households") renderAdminFamilies();
   if (state.adminTab === "users") renderHeads();
@@ -2710,6 +2741,7 @@ function renderAdmin() {
     renderSubscriptionReviews();
     renderSubscriptionPaymentHistory();
   }
+  if (state.adminTab === "enquiries") renderAdminEnquiries();
   if (state.adminTab === "support") {
     renderAdminNoteOptions();
     renderAdminNotes();
@@ -2875,20 +2907,109 @@ async function syncExchangeRates() {
 
 function renderAdminPlans() {
   const list = $("#adminPlanList");
+  const priceSelect = $("#planPricePlan");
+  const selectedPricePlan = priceSelect.value;
+  priceSelect.innerHTML = state.adminPlans
+    .filter((plan) => plan.code !== "free")
+    .map((plan) => `<option value="${escapeHtml(plan.code)}">${escapeHtml(plan.display_name)} (${titleCase(plan.workspace_type)})</option>`)
+    .join("");
+  if ([...priceSelect.options].some((option) => option.value === selectedPricePlan)) priceSelect.value = selectedPricePlan;
   list.innerHTML = "";
   state.adminPlans.forEach((plan) => {
     const activePrices = state.adminPlanPrices.filter((price) => price.plan_id === plan.id && price.is_active);
+    const includedSeats = state.adminPlanLimits.find((limit) => limit.plan_id === plan.id && limit.limit_code === "included_member_seats")?.limit_value || 1;
+    const enabledFeatures = state.adminPlanFeatures.filter((feature) => feature.plan_id === plan.id && feature.enabled).length;
     const card = document.createElement("article");
     card.className = "plan-card";
     card.innerHTML = `
-      <div class="plan-card-heading"><span class="mini-badge">${titleCase(plan.workspace_type)}</span><h4>${escapeHtml(plan.display_name)}</h4></div>
-      <p>${escapeHtml(plan.description)}</p>
+      <div class="plan-card-heading"><div><span class="mini-badge">${titleCase(plan.workspace_type)}</span>${plan.is_public ? '<span class="mini-badge active">Public</span>' : '<span class="mini-badge">Hidden</span>'}${plan.is_featured ? '<span class="mini-badge active">Recommended</span>' : ""}</div><h4>${escapeHtml(plan.display_name)}</h4></div>
+      <p>${escapeHtml(plan.marketing_summary || plan.description)}</p>
+      <small>${Number(includedSeats)} ${Number(includedSeats) === 1 ? "person" : "people"} included &middot; ${enabledFeatures} enabled features &middot; ${plan.is_active ? "Active" : "Archived"}</small>
       <div class="plan-price-list">
         ${activePrices.length ? activePrices.map((price) => `<div><strong>${titleCase(price.billing_period)}</strong><span>${money(price.amount, price.currency)} base${Number(price.extra_member_amount) ? ` &middot; ${money(price.extra_member_amount, price.currency)} per extra member/month` : ""}</span></div>`).join("") : "<span>No active prices configured.</span>"}
       </div>
+      <button type="button" data-edit-plan-definition="${plan.id}">Edit plan</button>
     `;
     list.append(card);
   });
+}
+
+function resetPlanDefinitionForm() {
+  const form = $("#planDefinitionForm");
+  form.reset();
+  $("#planDefinitionId").value = "";
+  $("#planDefinitionCode").readOnly = false;
+  $("#planDefinitionSeats").value = "1";
+  $("#planDefinitionSort").value = "0";
+  $("#planDefinitionCta").value = "Choose plan";
+  $("#planDefinitionActive").checked = true;
+  $("#planDefinitionPurchasable").checked = true;
+  $("#planDefinitionTitle").textContent = "Add a plan";
+  $("#planDefinitionSubmit").textContent = "Save plan";
+  $("#cancelPlanEditButton").classList.add("hidden");
+}
+
+function editPlanDefinition(planId) {
+  const plan = state.adminPlans.find((item) => item.id === planId);
+  if (!plan) return;
+  const includedSeats = state.adminPlanLimits.find((limit) => limit.plan_id === plan.id && limit.limit_code === "included_member_seats")?.limit_value || 1;
+  const paymentLimit = state.adminPlanLimits.find((limit) => limit.plan_id === plan.id && limit.limit_code === "active_planned_payments")?.limit_value;
+  const features = new Set(state.adminPlanFeatures.filter((feature) => feature.plan_id === plan.id && feature.enabled).map((feature) => feature.feature_code));
+  $("#planDefinitionId").value = plan.id;
+  $("#planDefinitionName").value = plan.display_name || "";
+  $("#planDefinitionCode").value = plan.code || "";
+  $("#planDefinitionCode").readOnly = true;
+  $("#planDefinitionType").value = plan.workspace_type;
+  $("#planDefinitionSeats").value = String(includedSeats);
+  $("#planDefinitionPaymentLimit").value = paymentLimit == null ? "" : String(paymentLimit);
+  $("#planDefinitionSort").value = String(plan.sort_order || 0);
+  $("#planDefinitionDescription").value = plan.description || "";
+  $("#planDefinitionMarketing").value = plan.marketing_summary || plan.description || "";
+  $("#planDefinitionCta").value = plan.cta_label || "Choose plan";
+  $("#planDefinitionActive").checked = Boolean(plan.is_active);
+  $("#planDefinitionPublic").checked = Boolean(plan.is_public);
+  $("#planDefinitionFeatured").checked = Boolean(plan.is_featured);
+  $("#planDefinitionPurchasable").checked = plan.available_for_purchase !== false;
+  document.querySelectorAll('[name="planFeature"]').forEach((input) => { input.checked = features.has(input.value); });
+  $("#planDefinitionTitle").textContent = `Edit ${plan.display_name}`;
+  $("#planDefinitionSubmit").textContent = "Save plan changes";
+  $("#cancelPlanEditButton").classList.remove("hidden");
+  $("#planDefinitionForm").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function savePlanDefinition(event) {
+  event.preventDefault();
+  const button = event.submitter || $("#planDefinitionSubmit");
+  const paymentLimitValue = $("#planDefinitionPaymentLimit").value.trim();
+  const featureCodes = [...document.querySelectorAll('[name="planFeature"]:checked')].map((input) => input.value);
+  try {
+    setSubmitting(button, true, "Saving...");
+    await query("plan definition save", supabase.rpc("save_plan_definition", {
+      p_plan_id: $("#planDefinitionId").value || null,
+      p_code: $("#planDefinitionCode").value.trim().toLowerCase(),
+      p_display_name: $("#planDefinitionName").value.trim(),
+      p_description: $("#planDefinitionDescription").value.trim(),
+      p_marketing_summary: $("#planDefinitionMarketing").value.trim(),
+      p_workspace_type: $("#planDefinitionType").value,
+      p_included_member_seats: Number($("#planDefinitionSeats").value),
+      p_active_payment_limit: paymentLimitValue ? Number(paymentLimitValue) : null,
+      p_is_active: $("#planDefinitionActive").checked,
+      p_is_public: $("#planDefinitionPublic").checked,
+      p_is_featured: $("#planDefinitionFeatured").checked,
+      p_available_for_purchase: $("#planDefinitionPurchasable").checked,
+      p_cta_label: $("#planDefinitionCta").value.trim(),
+      p_sort_order: Number($("#planDefinitionSort").value || 0),
+      p_feature_codes: featureCodes
+    }));
+    resetPlanDefinitionForm();
+    await loadAdminData("plans");
+    renderAdminPlans();
+    showToast("Plan saved. Published changes now appear on the public Pricing page.");
+  } catch (error) {
+    showToast(friendlyMessage(error.message));
+  } finally {
+    setSubmitting(button, false, $("#planDefinitionId").value ? "Save plan changes" : "Save plan");
+  }
 }
 
 function renderSubscriptionReviews() {
@@ -3223,11 +3344,22 @@ function renderAdminTabs() {
     if (button.dataset.adminTab === "plans") {
       button.classList.toggle("hidden", !["super_admin", "admin_staff"].includes(state.adminRole));
     }
+    if (button.dataset.adminTab === "enquiries") {
+      button.classList.toggle("hidden", !["super_admin", "admin_staff", "support_staff"].includes(state.adminRole));
+    }
     button.classList.toggle("active", button.dataset.adminTab === state.adminTab);
   });
   document.querySelectorAll("[data-admin-panel]").forEach((panel) => {
     panel.classList.toggle("hidden", panel.dataset.adminPanel !== state.adminTab);
   });
+}
+
+function renderAdminEnquiryBadge() {
+  const badge = $("#adminEnquiryBadge");
+  if (!badge) return;
+  const count = state.adminEnquiries.filter((enquiry) => enquiry.status === "new").length;
+  badge.textContent = String(count);
+  badge.classList.toggle("hidden", count === 0);
 }
 
 function renderAdminSummary() {
@@ -3637,6 +3769,103 @@ function renderAdminNotes() {
     `;
     list.append(article);
   });
+}
+
+function enquiryLabel(value) {
+  const labels = {
+    personal_plan: "Personal plan", family_plan: "Family plan", business_plan: "Business plan",
+    in_progress: "In progress", waiting_for_customer: "Waiting for customer"
+  };
+  return labels[value] || titleCase(value);
+}
+
+function filteredAdminEnquiries() {
+  const search = ($("#adminEnquirySearch")?.value || "").trim().toLowerCase();
+  const status = $("#adminEnquiryStatus")?.value || "all";
+  const category = $("#adminEnquiryCategory")?.value || "all";
+  const priority = $("#adminEnquiryPriority")?.value || "all";
+  return state.adminEnquiries.filter((enquiry) => {
+    const haystack = `${enquiry.reference_number} ${enquiry.full_name} ${enquiry.email} ${enquiry.subject}`.toLowerCase();
+    return (!search || haystack.includes(search))
+      && (status === "all" || enquiry.status === status)
+      && (category === "all" || enquiry.category === category)
+      && (priority === "all" || enquiry.priority === priority);
+  });
+}
+
+function renderAdminEnquiries() {
+  $("#adminEnquiryNew").textContent = String(state.adminEnquiries.filter((item) => item.status === "new").length);
+  $("#adminEnquiryProgress").textContent = String(state.adminEnquiries.filter((item) => item.status === "in_progress").length);
+  $("#adminEnquiryWaiting").textContent = String(state.adminEnquiries.filter((item) => item.status === "waiting_for_customer").length);
+  $("#adminEnquiryResolved").textContent = String(state.adminEnquiries.filter((item) => item.status === "resolved").length);
+  renderAdminEnquiryBadge();
+  const rows = filteredAdminEnquiries();
+  $("#adminEnquiryMeta").textContent = `${rows.length} of ${state.adminEnquiries.length} enquiries`;
+  const list = $("#adminEnquiryList");
+  if (!rows.length) {
+    list.innerHTML = emptyState("No matching enquiries", "New messages from the public Contact page will appear here.");
+    return;
+  }
+  list.innerHTML = "";
+  rows.forEach((enquiry) => {
+    const article = document.createElement("article");
+    article.className = `record-card enquiry-card priority-${enquiry.priority}`;
+    article.innerHTML = `
+      <div class="record-main">
+        <div class="badge-row"><span class="mini-badge">${escapeHtml(enquiry.reference_number)}</span><span class="mini-badge ${badgeClass(enquiry.status)}">${escapeHtml(enquiryLabel(enquiry.status))}</span><span class="mini-badge">${escapeHtml(enquiryLabel(enquiry.category))}</span><span class="mini-badge">${escapeHtml(enquiryLabel(enquiry.priority))}</span></div>
+        <strong>${escapeHtml(enquiry.subject)}</strong>
+        <span>${escapeHtml(enquiry.full_name)} &middot; ${escapeHtml(enquiry.email)}</span>
+        <small>Received ${escapeHtml(formatAdminDate(enquiry.created_at))}</small>
+      </div>
+      <div class="record-side enquiry-actions">
+        <label>Status<select data-enquiry-status="${enquiry.id}">${["new", "in_progress", "waiting_for_customer", "resolved", "spam", "archived"].map((value) => `<option value="${value}"${enquiry.status === value ? " selected" : ""}>${escapeHtml(enquiryLabel(value))}</option>`).join("")}</select></label>
+        <label>Priority<select data-enquiry-priority="${enquiry.id}">${["low", "normal", "high", "urgent"].map((value) => `<option value="${value}"${enquiry.priority === value ? " selected" : ""}>${escapeHtml(enquiryLabel(value))}</option>`).join("")}</select></label>
+        <button type="button" data-view-enquiry="${enquiry.id}">View enquiry</button>
+      </div>`;
+    article.querySelector("[data-enquiry-status]").addEventListener("change", (event) => updateEnquiry(enquiry.id, { status: event.target.value }));
+    article.querySelector("[data-enquiry-priority]").addEventListener("change", (event) => updateEnquiry(enquiry.id, { priority: event.target.value }));
+    list.append(article);
+  });
+}
+
+function openEnquiryDetails(enquiryId) {
+  const enquiry = state.adminEnquiries.find((item) => item.id === enquiryId);
+  if (!enquiry) return;
+  const replySubject = encodeURIComponent(`Re: ${enquiry.subject} [${enquiry.reference_number}]`);
+  const safeMessage = escapeHtml(enquiry.message).replace(/\n/g, "<br />");
+  const events = state.adminEnquiryEvents.filter((event) => event.enquiry_id === enquiry.id);
+  const assignmentLabel = enquiry.assigned_to === state.session.user.id ? "Assigned to you" : enquiry.assigned_to ? "Assigned to another administrator" : "Unassigned";
+  showAdminDetails({
+    eyebrow: "Public enquiry",
+    title: enquiry.subject,
+    subtitle: `${enquiry.reference_number} · received ${formatAdminDate(enquiry.created_at)}`,
+    body: `<section class="admin-detail-section"><h4>Contact</h4>${adminDetailRows([
+      ["Name", escapeHtml(enquiry.full_name)], ["Email", escapeHtml(enquiry.email)],
+      ["Phone", escapeHtml(enquiry.phone || "Not provided")], ["Organisation", escapeHtml(enquiry.organisation || "Not provided")],
+      ["Type", escapeHtml(enquiryLabel(enquiry.category))], ["Status", `<span class="mini-badge ${badgeClass(enquiry.status)}">${escapeHtml(enquiryLabel(enquiry.status))}</span>`],
+      ["Priority", escapeHtml(enquiryLabel(enquiry.priority))], ["Assignment", escapeHtml(assignmentLabel)]
+    ])}<div class="admin-detail-actions"><a class="button-link" href="mailto:${encodeURIComponent(enquiry.email)}?subject=${replySubject}">Reply by email</a><button type="button" data-assign-enquiry="${enquiry.id}" data-assignee="${enquiry.assigned_to === state.session.user.id ? "" : state.session.user.id}">${enquiry.assigned_to === state.session.user.id ? "Unassign" : "Assign to me"}</button></div></section>
+    <section class="admin-detail-section"><h4>Message</h4><p class="admin-detail-note enquiry-message"><span>${safeMessage}</span></p></section>
+    <section class="admin-detail-section"><h4>Internal notes</h4><label class="full" for="enquiryInternalNotes">Only administrators can see these notes<textarea id="enquiryInternalNotes" maxlength="5000" rows="6">${escapeHtml(enquiry.internal_notes || "")}</textarea></label><div class="admin-detail-actions"><button class="primary" type="button" data-save-enquiry-notes="${enquiry.id}">Save internal notes</button></div></section>
+    <section class="admin-detail-section"><h4>Activity</h4>${events.length ? `<ol class="enquiry-activity">${events.map((event) => `<li><strong>${escapeHtml(enquiryLabel(event.event_type))}</strong><span>${escapeHtml(formatAdminDate(event.created_at))}</span></li>`).join("")}</ol>` : '<p class="muted-copy">No activity has been recorded yet.</p>'}</section>`
+  });
+}
+
+async function updateEnquiry(enquiryId, changes, { closeDialog = false } = {}) {
+  try {
+    await query("enquiry update", supabase.from("public_enquiries").update(changes).eq("id", enquiryId));
+    await loadAdminData("enquiries");
+    renderAdminEnquiries();
+    if (closeDialog) $("#adminDetailsDialog").close();
+    showToast("Enquiry updated.");
+  } catch (error) {
+    showToast(friendlyMessage(error.message));
+  }
+}
+
+async function saveEnquiryNotes(enquiryId) {
+  const notes = $("#enquiryInternalNotes")?.value.trim() || null;
+  await updateEnquiry(enquiryId, { internal_notes: notes }, { closeDialog: true });
 }
 
 async function signIn(event) {
@@ -4505,6 +4734,18 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-close-family-name-dialog]")) $("#familyNameDialog").close();
   if (event.target.closest("[data-close-admin-details]")) $("#adminDetailsDialog").close();
 
+  const planDefinitionEdit = event.target.closest("[data-edit-plan-definition]");
+  if (planDefinitionEdit) editPlanDefinition(planDefinitionEdit.dataset.editPlanDefinition);
+
+  const enquiryDetails = event.target.closest("[data-view-enquiry]");
+  if (enquiryDetails) openEnquiryDetails(enquiryDetails.dataset.viewEnquiry);
+
+  const enquiryNotes = event.target.closest("[data-save-enquiry-notes]");
+  if (enquiryNotes) await saveEnquiryNotes(enquiryNotes.dataset.saveEnquiryNotes);
+
+  const enquiryAssignment = event.target.closest("[data-assign-enquiry]");
+  if (enquiryAssignment) await updateEnquiry(enquiryAssignment.dataset.assignEnquiry, { assigned_to: enquiryAssignment.dataset.assignee || null }, { closeDialog: true });
+
   const adminUserDetails = event.target.closest("[data-view-admin-user]");
   if (adminUserDetails) openAdminUserDetails(adminUserDetails.dataset.viewAdminUser, adminUserDetails.dataset.viewAdminUserEmail);
 
@@ -4748,6 +4989,8 @@ $("#recordPaymentType").addEventListener("change", (event) => {
 $("#headForm").addEventListener("submit", addHead);
 $("#paymentForm").addEventListener("submit", addPlatformPayment);
 $("#adminNoteForm").addEventListener("submit", saveAdminNote);
+$("#planDefinitionForm").addEventListener("submit", savePlanDefinition);
+$("#cancelPlanEditButton").addEventListener("click", resetPlanDefinitionForm);
 $("#planPriceForm").addEventListener("submit", savePlanPrice);
 $("#workspaceCurrencySettingsForm").addEventListener("submit", saveWorkspaceCurrencySettings);
 $("#workspaceEnabledCurrencies").addEventListener("change", refreshWorkspaceCurrencyDependentOptions);
@@ -4760,6 +5003,9 @@ document.querySelectorAll("#adminFinanceCurrencyFilter, #adminFinanceStatusFilte
     renderSubscriptionReviews();
     renderSubscriptionPaymentHistory();
   });
+});
+document.querySelectorAll("#adminEnquirySearch, #adminEnquiryStatus, #adminEnquiryCategory, #adminEnquiryPriority").forEach((field) => {
+  field.addEventListener(field.type === "search" ? "input" : "change", renderAdminEnquiries);
 });
 $("#syncExchangeRatesButton").addEventListener("click", syncExchangeRates);
 $("#exportReportCsvButton").addEventListener("click", exportReportCsv);

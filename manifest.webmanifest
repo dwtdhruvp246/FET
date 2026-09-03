@@ -1,8 +1,9 @@
 {
   "name": "Mushavo Budget",
   "short_name": "Mushavo Budget",
-  "description": "Track personal and family recurring payments, budgets, reminders, and members.",
-  "start_url": "./index.html",
+  "description": "Track personal, family, and business payments, responsibilities, reminders, and records.",
+  "id": "./app.html",
+  "start_url": "./app.html",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ECFEFF",
@@ -28,5 +29,10 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["finance", "productivity", "utilities"]
+  "categories": ["finance", "productivity", "utilities"],
+  "shortcuts": [
+    { "name": "Open workspace", "url": "./app.html" },
+    { "name": "View pricing", "url": "./pricing.html" },
+    { "name": "Contact Mushavo Budget", "url": "./contact.html" }
+  ]
 }

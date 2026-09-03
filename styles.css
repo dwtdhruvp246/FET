@@ -3175,3 +3175,121 @@ input[type="file"] {
     display: none !important;
   }
 }
+
+/* Public-site routing and expanded administration */
+.auth-home-link {
+  width: fit-content;
+  margin-top: 4px;
+  color: var(--muted, #64748b);
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.nav-count {
+  min-width: 23px;
+  height: 23px;
+  margin-left: auto;
+  padding: 0 7px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #dc2626;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.plan-definition-panel { margin-bottom: 24px; }
+.plan-price-section { align-items: start; }
+.plan-feature-fieldset {
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--line, #dbe4e8);
+  border-radius: 18px;
+}
+.plan-feature-fieldset legend { padding: 0 8px; color: #334155; font-weight: 800; }
+.plan-feature-options, .plan-publication-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 18px;
+}
+.plan-feature-options label, .plan-publication-options label {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 650;
+}
+.plan-feature-options input, .plan-publication-options input { width: 18px; height: 18px; flex: 0 0 auto; }
+.plan-publication-options {
+  padding: 17px;
+  border-radius: 18px;
+  background: #f5faf9;
+}
+.plan-card-heading > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.plan-card > small { color: #64748b; }
+.plan-card > button { margin-top: 16px; }
+
+.admin-enquiry-filters {
+  margin-bottom: 22px;
+  display: grid;
+  grid-template-columns: minmax(240px, 1.5fr) repeat(3, minmax(145px, 0.75fr));
+  gap: 12px;
+}
+.admin-enquiry-filters label, .enquiry-actions label {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+  color: #475569;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+.admin-enquiry-filters input, .admin-enquiry-filters select, .enquiry-actions select {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid #d8e2e7;
+  border-radius: 13px;
+  color: #172033;
+  background: white;
+}
+.enquiry-card { border-left: 4px solid #cbd5e1; }
+.enquiry-card.priority-high { border-left-color: #f59e0b; }
+.enquiry-card.priority-urgent { border-left-color: #dc2626; }
+.mini-badge.new { color: #075985; background: #e0f2fe; }
+.mini-badge.in_progress, .mini-badge.waiting_for_customer { color: #92400e; background: #fef3c7; }
+.mini-badge.resolved { color: #047857; background: #d1fae5; }
+.mini-badge.spam, .mini-badge.archived { color: #64748b; background: #eef2f6; }
+.enquiry-card .record-main { gap: 6px; }
+.enquiry-actions {
+  min-width: min(360px, 40%);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: end;
+}
+.enquiry-actions > button { grid-column: 1 / -1; }
+.enquiry-message { line-height: 1.65; }
+.admin-detail-section textarea {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #d8e2e7;
+  border-radius: 14px;
+  resize: vertical;
+}
+.enquiry-activity { margin: 0; padding: 0; display: grid; list-style: none; }
+.enquiry-activity li { padding: 11px 0; display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid #e4ebee; }
+.enquiry-activity li:last-child { border-bottom: 0; }
+.enquiry-activity span { color: #64748b; font-size: 0.86rem; }
+
+@media (max-width: 980px) {
+  .plan-feature-options, .plan-publication-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-enquiry-filters { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 680px) {
+  .plan-feature-options, .plan-publication-options, .admin-enquiry-filters { grid-template-columns: 1fr; }
+  .enquiry-card { align-items: stretch; }
+  .enquiry-actions { width: 100%; min-width: 0; grid-template-columns: 1fr 1fr; }
+}
