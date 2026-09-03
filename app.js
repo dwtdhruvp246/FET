@@ -1,4 +1,4 @@
-// Mushavo Budget authenticated application — release 48
+// Mushavo Budget authenticated application — release 49
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -1367,7 +1367,7 @@ function renderMemberAccess() {
 function renderMemberOptions() {
   const obligationMember = $("#obligationMember");
   const recordPaidBy = $("#recordPaidBy");
-  obligationMember.innerHTML = `<option value="">No family member</option>`;
+  obligationMember.innerHTML = `<option value="">Select responsible member</option>`;
   recordPaidBy.innerHTML = `<option value="">Personal account</option>`;
 
   activeMembers().forEach((member) => {
@@ -1389,6 +1389,13 @@ function renderPaymentScope() {
   const familyOption = scope.querySelector('option[value="family"]');
   familyOption.disabled = !state.family;
   if (!state.family && scope.value === "family") scope.value = "personal";
+  const responsibleMember = $("#obligationMember");
+  const isFamilyPayment = Boolean(state.family && scope.value === "family");
+  responsibleMember.disabled = !isFamilyPayment;
+  responsibleMember.required = isFamilyPayment;
+  if (isFamilyPayment && !responsibleMember.value && !state.editingObligationId) {
+    responsibleMember.value = currentFamilyMember()?.id || familyOwnerMember()?.id || activeMembers()[0]?.id || "";
+  }
 }
 
 function activeMembers() {
@@ -1570,7 +1577,7 @@ function renderPriorityDueList(occurrences) {
 function renderMemberResponsibility(occurrences) {
   const list = $("#memberResponsibilityList");
   const rows = activeMembers().map((member) => {
-    const assigned = occurrences.filter((occurrence) => occurrence.item.responsible_member_id === member.id);
+    const assigned = occurrences.filter((occurrence) => effectiveResponsibleMember(occurrence.item)?.id === member.id);
     return {
       member,
       key: member.id,
@@ -1584,7 +1591,7 @@ function renderMemberResponsibility(occurrences) {
   }).filter((row) => row.assigned.length > 0);
 
   const householdAssigned = occurrences.filter((occurrence) =>
-    occurrence.item.visibility === "family" && !occurrence.item.responsible_member_id
+    occurrence.item.visibility === "family" && !effectiveResponsibleMember(occurrence.item)
   );
   if (householdAssigned.length) {
     rows.push({
@@ -1704,7 +1711,7 @@ function renderObligations() {
 }
 
 function renderObligationCard(item) {
-  const member = memberById(item.responsible_member_id);
+  const member = effectiveResponsibleMember(item);
   const article = document.createElement("article");
   article.className = "record-card";
   article.dataset.paymentItemId = item.id;
@@ -1769,16 +1776,16 @@ function renderMyPayments() {
 }
 
 function myOccurrences(occurrences) {
-  const email = state.session.user.email?.toLowerCase();
-  const matchingMember = state.members.find((member) => member.email?.toLowerCase() === email);
+  const userId = state.session.user.id;
+  const matchingMember = currentFamilyMember();
   return occurrences.filter((occurrence) =>
-    occurrence.item.visibility === "personal" ||
-    (matchingMember && occurrence.item.responsible_member_id === matchingMember.id)
+    (occurrence.item.visibility === "personal" && occurrence.item.owner_id === userId) ||
+    (matchingMember && effectiveResponsibleMember(occurrence.item)?.id === matchingMember.id)
   );
 }
 
 function renderOccurrenceCard(occurrence, withAction = false, collapsible = false) {
-  const member = memberById(occurrence.item.responsible_member_id);
+  const member = effectiveResponsibleMember(occurrence.item);
   const article = document.createElement("article");
   if (collapsible) {
     const detailsId = `occurrence-details-${occurrence.key.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
@@ -4011,6 +4018,11 @@ async function saveObligation(event) {
     showToast("Create or join a family before saving a family payment.");
     return;
   }
+  if (scope === "family" && !$("#obligationMember").value) {
+    showToast("Choose the family member responsible for this payment.");
+    $("#obligationMember").focus();
+    return;
+  }
   const editingItem = state.paymentItems.find((item) => item.id === state.editingObligationId);
   const usesNewPersonalSlot = scope === "personal" && (
     !editingItem || editingItem.visibility !== "personal" || editingItem.status === "inactive"
@@ -4544,6 +4556,32 @@ function memberById(id) {
   return state.members.find((member) => member.id === id);
 }
 
+function currentFamilyMember() {
+  const userId = state.session?.user?.id;
+  const email = state.session?.user?.email?.toLowerCase();
+  const members = activeMembers();
+  return members.find((member) => member.user_id === userId)
+    || members.find((member) => email && member.email?.toLowerCase() === email)
+    || (state.family?.owner_id === userId ? familyOwnerMember() : null)
+    || null;
+}
+
+function familyOwnerMember() {
+  if (!state.family) return null;
+  const ownerEmail = state.family.owner_email?.toLowerCase();
+  const members = activeMembers();
+  return members.find((member) => member.user_id === state.family.owner_id)
+    || members.find((member) => member.role === "Owner")
+    || members.find((member) => ownerEmail && member.email?.toLowerCase() === ownerEmail)
+    || null;
+}
+
+function effectiveResponsibleMember(item) {
+  if (item?.responsible_member_id) return memberById(item.responsible_member_id) || null;
+  if (item?.visibility === "family" && item.family_id === state.family?.id) return familyOwnerMember();
+  return null;
+}
+
 function findFamilyForHead(head) {
   return state.adminFamilies.find((family) => (family.owner_email || "").toLowerCase() === head.email.toLowerCase());
 }
@@ -5071,6 +5109,7 @@ $("#renewalFamilyMemberCount").addEventListener("input", (event) => {
 });
 $("#cancelEditObligationButton").addEventListener("click", () => $("#paymentItemDialog").close());
 $("#paymentItemDialog").addEventListener("close", resetObligationForm);
+$("#paymentScope").addEventListener("change", renderPaymentScope);
 $("#inviteMemberDialog").addEventListener("close", () => {
   $("#inviteEmail").value = "";
   $("#inviteRole").value = "Adult";
