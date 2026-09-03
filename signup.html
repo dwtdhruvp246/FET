@@ -13,8 +13,8 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=31" />
-    <script src="config.js?v=24"></script>
+    <link rel="stylesheet" href="styles.css?v=40" />
+    <script src="config.js?v=26"></script>
   </head>
   <body>
     <main class="workspace">
@@ -50,7 +50,7 @@
           </label>
           <div class="button-row">
             <button id="signupSubmitButton" class="primary" type="submit">Sign up</button>
-            <a class="button-link" href="index.html">Back to sign in</a>
+            <a class="button-link" href="app.html">Back to sign in</a>
           </div>
         </form>
       </section>
@@ -108,7 +108,11 @@
             });
             if (error) throw error;
             if (data.session) await supabase.auth.signOut();
-            window.location.replace("./index.html?signup=success");
+            const selectedPlan = new URLSearchParams(window.location.search).get("plan");
+            const next = new URL("./app.html", window.location.href);
+            next.searchParams.set("signup", "success");
+            if (selectedPlan) next.searchParams.set("plan", selectedPlan);
+            window.location.replace(next.href);
           } catch (error) {
             showMessage(error.message || "The account could not be created. Please try again.");
             submitButton.disabled = false;

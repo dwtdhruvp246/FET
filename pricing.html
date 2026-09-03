@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Compare current Mushavo Budget Personal, Family, and Business plans." />
+    <meta name="theme-color" content="#f5fbfa" />
+    <title>Pricing | Mushavo Budget</title>
+    <link rel="preconnect" href="https://kttkospkblwvguuwnhjj.supabase.co" crossorigin />
+    <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="site.css?v=2" />
+    <script src="config.js?v=26"></script>
+    <script type="module" src="site.js?v=3"></script>
+  </head>
+  <body data-page="pricing">
+    <a class="site-skip" href="#mainContent">Skip to main content</a>
+    <header class="site-header">
+      <a class="site-brand" href="index.html" aria-label="Mushavo Budget home"><img src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" /></a>
+      <button class="site-menu-button" type="button" aria-expanded="false" aria-controls="siteNavigation">Menu</button>
+      <nav id="siteNavigation" class="site-nav" aria-label="Main navigation"><a href="index.html">Home</a><a href="about.html">About</a><a class="active" href="pricing.html" aria-current="page">Pricing</a><a href="contact.html">Contact</a></nav>
+      <div class="site-actions"><a class="text-link" href="app.html">Sign in</a><a class="site-button compact" href="signup.html">Create free account</a></div>
+    </header>
+
+    <main id="mainContent">
+      <section class="page-hero pricing-hero">
+        <p class="site-eyebrow">CURRENT PLANS</p>
+        <h1>Choose access for the workspace you want to use.</h1>
+        <p>Personal, Family, and Business plans are separate. Invited members use the paid access of the shared workspace and do not need to buy the same plan themselves.</p>
+      </section>
+
+      <section class="pricing-controls page-section" aria-label="Pricing options">
+        <div class="billing-toggle" role="group" aria-label="Billing period"><button class="active" type="button" data-billing-period="monthly">Monthly</button><button type="button" data-billing-period="annual">Annual</button></div>
+        <label for="publicPricingCurrency">Currency<select id="publicPricingCurrency"><option value="USD">USD</option></select></label>
+        <p id="pricingUpdated" class="pricing-note">Prices are loaded from the live Mushavo Budget catalogue.</p>
+      </section>
+
+      <section class="public-pricing-section page-section">
+        <div id="publicPlanCatalogue" class="public-plan-catalogue" aria-live="polite"><div class="site-loading">Loading current plans…</div></div>
+      </section>
+
+      <section class="pricing-explainer page-section">
+        <div><p class="site-eyebrow">SHARED PLAN PRICING</p><h2>Included people and additional places stay transparent.</h2></div>
+        <div><p>Family and Business plans include a fixed number of people. If the owner needs more places, the additional-person price is charged for every extra person, every month.</p><p>For annual billing, the additional monthly price is multiplied by 12. For example, an additional place priced at $5 per month adds $60 to the annual total.</p></div>
+      </section>
+
+      <section class="faq-section page-section">
+        <div class="section-intro compact-intro"><p class="site-eyebrow">PRICING QUESTIONS</p><h2>Before you choose.</h2></div>
+        <div class="faq-list">
+          <details><summary>Can a Free user join a paid family?</summary><p>Yes. Their personal workspace can remain Free while the Family workspace gives them shared access.</p></details>
+          <details><summary>When does a paid plan become active?</summary><p>After the workspace owner submits payment details and any proof, Mushavo Budget finance staff review the request. Access begins when it is approved.</p></details>
+          <details><summary>Will a price change alter an old invoice?</summary><p>No. Every submitted subscription invoice stores the plan price and member calculation that applied at the time.</p></details>
+        </div>
+      </section>
+
+      <section class="closing-section page-section"><div><p class="site-eyebrow">NEED HELP CHOOSING?</p><h2>Tell us what the workspace needs.</h2></div><div><p>Send an enquiry for help with Personal, Family, Business, or additional-member pricing.</p><a class="site-button" href="contact.html?category=pricing">Ask about a plan</a></div></section>
+    </main>
+
+    <footer class="site-footer"><div class="footer-brand"><img src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="148" height="100" /><p>Clear payment planning for personal, family, and business life.</p></div><div><strong>Explore</strong><a href="about.html">About</a><a href="pricing.html">Pricing</a><a href="contact.html">Contact</a></div><div><strong>Account</strong><a href="app.html">Sign in</a><a href="signup.html">Create account</a></div><div class="footer-bottom"><span>© 2026 Mushavo Budget</span><span>Built for organised financial responsibility.</span></div></footer>
+  </body>
+</html>

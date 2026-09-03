@@ -1,12 +1,18 @@
-const CACHE_NAME = "mushavo-budget-v36";
+const CACHE_NAME = "mushavo-budget-v39";
 const APP_SHELL = [
   "./",
   "./index.html",
+  "./about.html",
+  "./pricing.html",
+  "./contact.html",
+  "./app.html",
   "./signup.html",
   "./offline.html",
-  "./styles.css?v=38",
-  "./app.js?v=44",
-  "./config.js?v=24",
+  "./site.css?v=2",
+  "./site.js?v=3",
+  "./styles.css?v=40",
+  "./app.js?v=46",
+  "./config.js?v=26",
   "./manifest.webmanifest",
   "./assets/mushavo-budget-logo.png",
   "./assets/pwa-icon-192.png",
@@ -16,10 +22,16 @@ const APP_SHELL = [
 
 const NETWORK_FIRST_FILES = new Set([
   "index.html",
+  "about.html",
+  "pricing.html",
+  "contact.html",
+  "app.html",
   "signup.html",
   "config.js",
   "app.js",
   "styles.css",
+  "site.js",
+  "site.css",
   "manifest.webmanifest"
 ]);
 

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Learn how Mushavo Budget organises personal, family, and business payments." />
+    <meta name="theme-color" content="#f5fbfa" />
+    <title>About | Mushavo Budget</title>
+    <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="stylesheet" href="site.css?v=2" />
+    <script src="config.js?v=26"></script>
+    <script type="module" src="site.js?v=3"></script>
+  </head>
+  <body data-page="about">
+    <a class="site-skip" href="#mainContent">Skip to main content</a>
+    <header class="site-header">
+      <a class="site-brand" href="index.html" aria-label="Mushavo Budget home"><img src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" /></a>
+      <button class="site-menu-button" type="button" aria-expanded="false" aria-controls="siteNavigation">Menu</button>
+      <nav id="siteNavigation" class="site-nav" aria-label="Main navigation"><a href="index.html">Home</a><a class="active" href="about.html" aria-current="page">About</a><a href="pricing.html">Pricing</a><a href="contact.html">Contact</a></nav>
+      <div class="site-actions"><a class="text-link" href="app.html">Sign in</a><a class="site-button compact" href="signup.html">Create free account</a></div>
+    </header>
+
+    <main id="mainContent">
+      <section class="page-hero about-hero">
+        <p class="site-eyebrow">ABOUT MUSHAVO BUDGET</p>
+        <h1>Financial responsibility is easier when everyone can see what happens next.</h1>
+        <p>Mushavo Budget is designed to make recurring payments, shared responsibilities, and payment records easier to organise—whether the workspace belongs to one person, a family, or a business team.</p>
+      </section>
+
+      <section class="story-section page-section">
+        <div><p class="site-eyebrow">WHY IT EXISTS</p><h2>A budget needs more than totals.</h2></div>
+        <div class="story-copy"><p>Many important payments repeat every month, involve more than one person, or need proof after they have been paid. A simple spreadsheet can record an amount, but it rarely makes responsibility, reminders, partial payments, or supporting documents easy to follow.</p><p>Mushavo Budget connects those details. Each payment has a schedule, status, responsible member, history, and supporting information. Each workspace applies its own plan, limits, currency settings, and reporting access.</p></div>
+      </section>
+
+      <section class="about-workspaces page-section">
+        <div class="section-intro"><p class="site-eyebrow">THREE TYPES OF WORKSPACE</p><h2>One account can support different parts of life.</h2></div>
+        <div class="workspace-detail-list">
+          <article><span>PERSONAL</span><div><h3>Your own payment plan</h3><p>A personal workspace gives every registered user a private place to track payments. The Free plan supports up to five active personal payment items. A paid Personal plan removes that limit and opens full reports.</p></div></article>
+          <article><span>FAMILY</span><div><h3>Shared household responsibility</h3><p>A paid Family plan creates a shared workspace for the family head and included members. The head can invite registered users, allocate responsibilities, edit the family name, and add paid member places when needed.</p></div></article>
+          <article><span>BUSINESS</span><div><h3>Team payment oversight</h3><p>A Business workspace extends shared payment planning to teams, with member places, approvals, stronger history, and business-level reporting features controlled by the selected plan.</p></div></article>
+        </div>
+      </section>
+
+      <section class="capabilities-section page-section">
+        <div class="section-intro"><p class="site-eyebrow">FEATURES</p><h2>What Mushavo Budget keeps connected.</h2></div>
+        <div class="capability-groups">
+          <article><h3>Plan and remind</h3><ul><li>One-time and recurring payment items</li><li>Monthly, annual, and custom schedules</li><li>Due-date and upcoming-payment views</li><li>Reminder days before the due date</li><li>In-app notification centre</li></ul></article>
+          <article><h3>Record and verify</h3><ul><li>Full and partial payment records</li><li>Payment method and reference</li><li>Notes for important context</li><li>Receipt or proof attachment</li><li>Original-currency history</li></ul></article>
+          <article><h3>Share responsibility</h3><ul><li>Registered-user invitations</li><li>Accept or reject invitation workflow</li><li>Family head and member roles</li><li>Assignment by payment item</li><li>Member workload monitoring</li></ul></article>
+          <article><h3>Review and report</h3><ul><li>Monthly payment overview</li><li>Outstanding and overdue analysis</li><li>Member responsibility reporting</li><li>Multi-currency consolidated views</li><li>CSV and print/PDF options by plan</li></ul></article>
+          <article><h3>Control each workspace</h3><ul><li>Separate Personal, Family, and Business data</li><li>Workspace-specific subscription</li><li>Plan-based feature access</li><li>Included and additional member places</li><li>Administrative payment approval</li></ul></article>
+          <article><h3>Keep the history clear</h3><ul><li>Payment and entitlement history</li><li>Subscription invoice snapshots</li><li>Approval and rejection records</li><li>Finance review and receipt records</li><li>Controlled data access through Supabase</li></ul></article>
+        </div>
+      </section>
+
+      <section class="principles-section page-section">
+        <div><p class="site-eyebrow">HOW ACCESS WORKS</p><h2>The plan belongs to the workspace.</h2></div>
+        <div class="principle-list"><p><strong>Invited members do not need a separate paid subscription.</strong> They inherit access from the Family or Business workspace they join.</p><p><strong>Personal and shared access remain independent.</strong> A user may have a Free personal workspace while participating in a paid family workspace.</p><p><strong>Historical prices are preserved.</strong> When administrators publish a new price, earlier invoices keep the price that applied when they were created.</p></div>
+      </section>
+
+      <section class="faq-section page-section" aria-labelledby="faqHeading">
+        <div class="section-intro compact-intro"><p class="site-eyebrow">COMMON QUESTIONS</p><h2 id="faqHeading">A few useful answers.</h2></div>
+        <div class="faq-list">
+          <details><summary>Can I use Mushavo Budget for free?</summary><p>Yes. Every registered user starts with a personal Free workspace that supports up to five active personal payment items.</p></details>
+          <details><summary>Do family members have to pay?</summary><p>No. Invited members use the access provided by the paid Family workspace. The family head pays for the plan and any additional member places.</p></details>
+          <details><summary>Can I belong to more than one workspace?</summary><p>Yes. The workspace switcher keeps Personal, Family, and Business information separate under the same login.</p></details>
+          <details><summary>What happens after a subscription payment is submitted?</summary><p>The payment and proof are reviewed by Mushavo Budget finance staff. Approval activates or extends the plan and preserves an invoice and review record.</p></details>
+        </div>
+      </section>
+
+      <section class="closing-section page-section"><div><p class="site-eyebrow">CHOOSE THE RIGHT START</p><h2>See which workspace plan fits.</h2></div><div><p>Compare the current Personal, Family, and Business options published by Mushavo Budget.</p><a class="site-button" href="pricing.html">View pricing</a></div></section>
+    </main>
+
+    <footer class="site-footer"><div class="footer-brand"><img src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="148" height="100" /><p>Clear payment planning for personal, family, and business life.</p></div><div><strong>Explore</strong><a href="about.html">About</a><a href="pricing.html">Pricing</a><a href="contact.html">Contact</a></div><div><strong>Account</strong><a href="app.html">Sign in</a><a href="signup.html">Create account</a></div><div class="footer-bottom"><span>© 2026 Mushavo Budget</span><span>Built for organised financial responsibility.</span></div></footer>
+  </body>
+</html>

@@ -3,703 +3,150 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Mushavo Budget helps families track personal and shared recurring payments." />
-    <meta name="theme-color" content="#ecfeff" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-title" content="Mushavo Budget" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Mushavo Budget</title>
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <meta name="description" content="Mushavo Budget keeps personal, family, and business payments organised in one clear workspace." />
+    <meta name="theme-color" content="#f5fbfa" />
+    <title>Mushavo Budget | Personal, family and business payment planning</title>
     <link rel="preconnect" href="https://kttkospkblwvguuwnhjj.supabase.co" crossorigin />
-    <link rel="dns-prefetch" href="//cdn.jsdelivr.net" />
-    <link rel="dns-prefetch" href="//kttkospkblwvguuwnhjj.supabase.co" />
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=38" />
-    <script src="config.js?v=24"></script>
-    <script type="module" src="app.js?v=44"></script>
+    <link rel="stylesheet" href="site.css?v=2" />
+    <script src="config.js?v=26"></script>
+    <script type="module" src="site.js?v=3"></script>
   </head>
-  <body>
-    <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
-    <main id="mainWorkspace" class="workspace" tabindex="-1">
-      <section id="loadingView" class="loading-view" aria-live="polite" aria-label="Loading app">
-        <div class="loading-card">
-          <img class="brand-mark" src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" />
-          <div class="spinner" aria-hidden="true"></div>
-          <strong id="loadingTitle">Opening your workspace</strong>
-          <span id="loadingMessage">Checking your secure session...</span>
-        </div>
-      </section>
+  <body data-page="home">
+    <a class="site-skip" href="#mainContent">Skip to main content</a>
+    <header class="site-header">
+      <a class="site-brand" href="index.html" aria-label="Mushavo Budget home">
+        <img src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" />
+      </a>
+      <button class="site-menu-button" type="button" aria-expanded="false" aria-controls="siteNavigation">Menu</button>
+      <nav id="siteNavigation" class="site-nav" aria-label="Main navigation">
+        <a class="active" href="index.html" aria-current="page">Home</a>
+        <a href="about.html">About</a>
+        <a href="pricing.html">Pricing</a>
+        <a href="contact.html">Contact</a>
+      </nav>
+      <div class="site-actions">
+        <a class="text-link" href="app.html">Sign in</a>
+        <a class="site-button compact" href="signup.html">Create free account</a>
+      </div>
+    </header>
 
-      <section id="configWarning" class="notice hidden">
-        <strong>Connect Supabase first.</strong>
-        Update <code>config.js</code> with your Supabase project URL and publishable key, then run the SQL in <code>supabase/schema.sql</code>.
-      </section>
-
-      <section id="appErrorView" class="setup-panel hidden" aria-labelledby="appErrorTitle">
-        <div class="panel-heading">
-          <p class="eyebrow">Loading stopped</p>
-          <h1 id="appErrorTitle">The workspace could not open</h1>
-        </div>
-        <p id="appErrorMessage" class="muted-copy">A database or permission error stopped the app from loading.</p>
-        <div class="button-row">
-          <button class="primary" type="button" data-retry-load>Try again</button>
-          <button type="button" data-sign-out-error>Sign out</button>
-        </div>
-      </section>
-
-      <section id="authView" class="auth-panel hidden" aria-labelledby="authTitle">
-        <div class="panel-heading">
-          <p class="eyebrow">Mushavo Budget</p>
-          <h1 id="authTitle">Sign in to manage your payments</h1>
-          <p class="muted-copy">Track personal and family payments, see what is due, and keep everyone clear on responsibility.</p>
-        </div>
-
-        <form id="authForm" class="form-grid">
-          <label class="full" for="email">
-            Email
-            <input id="email" type="email" autocomplete="email" required placeholder="you@example.com" />
-          </label>
-          <label class="full" for="password">
-            Password
-            <input id="password" type="password" autocomplete="current-password" minlength="6" required placeholder="At least 6 characters" />
-          </label>
-          <div class="button-row">
-            <button class="primary" type="submit">Sign in</button>
-            <a class="button-link" href="signup.html">Create account</a>
+    <main id="mainContent">
+      <section class="hero-section">
+        <div class="hero-copy">
+          <p class="site-eyebrow">PAYMENT PLANNING, MADE CLEAR</p>
+          <h1>Know what is due, who is responsible, and what has been paid.</h1>
+          <p class="hero-lead">Mushavo Budget brings personal expenses, family responsibilities, and business payments into organised workspaces—without losing the details that matter.</p>
+          <div class="hero-actions">
+            <a class="site-button" href="signup.html">Start with a free account</a>
+            <a class="secondary-button" href="pricing.html">Compare plans</a>
           </div>
-        </form>
-      </section>
-
-      <section id="setupView" class="setup-panel hidden" aria-labelledby="setupTitle">
-        <div class="panel-heading">
-          <p class="eyebrow">First household</p>
-          <h1 id="setupTitle">Create your payment workspace</h1>
-          <p class="muted-copy">This becomes the place where recurring family obligations, members, and payment records live.</p>
+          <ul class="trust-list" aria-label="Key benefits">
+            <li>Free personal workspace</li>
+            <li>Shared family responsibilities</li>
+            <li>Payment records and proof</li>
+          </ul>
         </div>
-        <form id="familyForm" class="form-grid">
-          <label for="familyName">
-            Household name
-            <input id="familyName" required placeholder="The Parekh family" />
-          </label>
-          <label for="familyBudget">
-            Monthly expected payments
-            <input id="familyBudget" type="number" min="0" step="0.01" placeholder="2500" />
-          </label>
-          <label for="familyCurrency">
-            Currency
-            <select id="familyCurrency">
-              <option value="USD">USD</option>
-              <option value="ZAR">ZAR</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="CAD">CAD</option>
-              <option value="AUD">AUD</option>
-            </select>
-          </label>
-          <button class="primary" type="submit">Create household</button>
-        </form>
-      </section>
-
-      <section id="suspendedView" class="setup-panel hidden" aria-labelledby="suspendedTitle">
-        <div class="panel-heading">
-          <p class="eyebrow">Account suspended</p>
-          <h1 id="suspendedTitle">Your household access is currently paused</h1>
-        </div>
-        <p class="muted-copy">Contact the app admin to reactivate your household account.</p>
-        <button id="suspendedSignOutButton" type="button">Sign out</button>
-      </section>
-
-      <section id="adminView" class="hidden">
-        <div class="app-shell">
-          <div class="mobile-bar">
-            <div class="mobile-brand">
-              <img class="mobile-logo" src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="89" height="60" />
-              <div>
-                <strong>Mushavo Budget</strong>
-                <span>Admin console</span>
-              </div>
-            </div>
-            <div class="mobile-actions">
-              <button class="icon-button" type="button" aria-label="Open menu" data-open-drawer>Menu</button>
-            </div>
+        <div class="product-preview" aria-label="Example Mushavo Budget payment overview">
+          <div class="preview-heading">
+            <div><span>August overview</span><strong>Payments at a glance</strong></div>
+            <span class="status-pill">On track</span>
           </div>
-          <header class="app-nav">
-            <div class="sidebar-brand">
-              <img class="sidebar-logo" src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" />
-            </div>
-            <div class="sidebar-account">
-              <p class="eyebrow">Admin console</p>
-              <h1>Platform control</h1>
-              <span class="mini-badge">Operations</span>
-            </div>
-            <nav class="tabs" aria-label="Admin sections">
-              <button class="tab-button active" type="button" data-admin-tab="dashboard">Dashboard</button>
-              <button class="tab-button" type="button" data-admin-tab="households">Workspaces</button>
-              <button class="tab-button" type="button" data-admin-tab="users">Users</button>
-              <button class="tab-button" type="button" data-admin-tab="plans">Plans</button>
-              <button class="tab-button" type="button" data-admin-tab="finance">Finance</button>
-              <button class="tab-button" type="button" data-admin-tab="support">Support</button>
-            </nav>
-            <div class="sidebar-footer">
-              <button type="button">Contact support</button>
-              <button id="adminSignOutButton" type="button">Sign out</button>
-              <small>2026 Mushavo Budget</small>
-            </div>
-          </header>
-          <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
-
-          <section class="screen-panel" data-admin-panel="dashboard">
-            <header class="topbar">
-              <div>
-                <p class="eyebrow">Overview</p>
-                <h2>Workspace health</h2>
-              </div>
-              <span id="adminEmail" class="admin-account">-</span>
-            </header>
-            <section class="stats-grid" aria-label="Admin summary">
-              <article class="stat-card"><span class="stat-label">Workspaces</span><strong id="adminFamilyCount">0</strong><small>Personal, Household, and Business</small></article>
-              <article class="stat-card"><span class="stat-label">Overdue dues</span><strong id="adminOverdueCount">0</strong><small>Across all households</small></article>
-              <article class="stat-card"><span class="stat-label">Due this month</span><strong id="adminDueTotal">$0.00</strong><small>Expected obligations</small></article>
-              <article class="stat-card"><span class="stat-label">Platform revenue</span><strong id="adminRevenueTotal">$0.00</strong><small id="adminPaymentCount">0 payments</small></article>
-            </section>
-            <section class="content-grid">
-              <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Attention</p><h3>Households needing follow-up</h3></div>
-                <div id="adminAttentionList" class="record-list"></div>
-              </section>
-              <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Recent</p><h3>Platform finance activity</h3></div>
-                <div id="recentPaymentsList" class="record-list"></div>
-              </section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-admin-panel="plans">
-            <header class="topbar">
-              <div><p class="eyebrow">Plan catalogue</p><h2>Subscription plans and prices</h2><p class="muted-copy">Configure real monthly and annual prices. Saving a new price preserves earlier invoice snapshots.</p></div>
-            </header>
-            <section class="content-grid subscription-admin-grid">
-              <section class="tool-panel" aria-labelledby="planPriceTitle">
-                <div class="panel-heading"><p class="eyebrow">Price editor</p><h3 id="planPriceTitle">Publish a plan price</h3></div>
-                <form id="planPriceForm" class="form-grid">
-                  <label for="planPricePlan">Plan<select id="planPricePlan" required><option value="personal">Personal</option><option value="household">Household</option><option value="business">Business</option></select></label>
-                  <label for="planPricePeriod">Billing period<select id="planPricePeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
-                  <label for="planPriceCurrency">Currency<input id="planPriceCurrency" maxlength="3" value="USD" required /></label>
-                  <label for="planPriceAmount">Base price<input id="planPriceAmount" type="number" min="0.01" step="0.01" required /></label>
-                  <label class="full" for="planPriceExtra">Additional member price per month<input id="planPriceExtra" type="number" min="0" step="0.01" value="0" required /><small>For annual plans, this monthly amount is multiplied by 12. Household charges from the 5th total person; Business charges after the owner plus five team members.</small></label>
-                  <button class="primary full" type="submit">Save active price</button>
-                </form>
-              </section>
-              <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Current catalogue</p><h3>Available plans</h3><p class="muted-copy">Paid plans stay unavailable to users until an active price exists.</p></div>
-                <div id="adminPlanList" class="plan-card-grid"></div>
-              </section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-admin-panel="households">
-            <header class="topbar admin-workspace-heading">
-              <div>
-                <p class="eyebrow">Workspace directory</p>
-                <h2>Personal, Family, and Business</h2>
-                <p class="muted-copy">Monitor every workspace, its owner, subscription, usage, and available member places from one directory.</p>
-              </div>
-            </header>
-
-            <section class="admin-workspace-summary" aria-label="Workspace summary">
-              <article><span>Total workspaces</span><strong id="adminWorkspaceTotal">0</strong><small>Across all accounts</small></article>
-              <article class="personal"><span>Personal</span><strong id="adminWorkspacePersonal">0</strong><small>Individual budgets</small></article>
-              <article class="household"><span>Family</span><strong id="adminWorkspaceFamily">0</strong><small>Shared households</small></article>
-              <article class="business"><span>Business</span><strong id="adminWorkspaceBusiness">0</strong><small>Team workspaces</small></article>
-              <article class="paid"><span>Paid and active</span><strong id="adminWorkspacePaid">0</strong><small>Current paid plans</small></article>
-            </section>
-
-            <section class="admin-workspace-directory ledger-panel" aria-labelledby="adminWorkspaceDirectoryTitle">
-              <div class="admin-workspace-tools">
-                <label class="admin-workspace-search" for="adminHouseholdSearch">
-                  <span>Search directory</span>
-                  <input id="adminHouseholdSearch" type="search" placeholder="Workspace, owner, email, or plan" autocomplete="off" />
-                </label>
-                <div class="admin-workspace-filters">
-                  <label for="adminWorkspaceTypeFilter">Type
-                    <select id="adminWorkspaceTypeFilter">
-                      <option value="all">All types</option>
-                      <option value="personal">Personal</option>
-                      <option value="household">Family</option>
-                      <option value="business">Business</option>
-                    </select>
-                  </label>
-                  <label for="adminWorkspaceStatusFilter">Status
-                    <select id="adminWorkspaceStatusFilter">
-                      <option value="all">All statuses</option>
-                      <option value="active">Active</option>
-                      <option value="free">Free</option>
-                      <option value="suspended">Suspended</option>
-                      <option value="expired">Expired</option>
-                      <option value="closed">Closed</option>
-                      <option value="unconfigured">Not configured</option>
-                    </select>
-                  </label>
-                  <label for="adminWorkspacePlanFilter">Plan
-                    <select id="adminWorkspacePlanFilter"><option value="all">All plans</option></select>
-                  </label>
-                  <label for="adminWorkspaceSort">Sort
-                    <select id="adminWorkspaceSort">
-                      <option value="newest">Newest first</option>
-                      <option value="oldest">Oldest first</option>
-                      <option value="name">Workspace name</option>
-                      <option value="owner">Owner name</option>
-                      <option value="type">Workspace type</option>
-                    </select>
-                  </label>
-                  <button id="adminWorkspaceReset" type="button">Reset filters</button>
-                </div>
-              </div>
-              <div class="admin-workspace-directory-heading">
-                <div><p class="eyebrow">Directory</p><h3 id="adminWorkspaceDirectoryTitle">All workspaces</h3></div>
-                <p id="adminWorkspaceDirectoryMeta" class="muted-copy" aria-live="polite">0 workspaces</p>
-              </div>
-              <div id="adminFamiliesList" class="admin-workspace-list"></div>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-admin-panel="users">
-            <header class="topbar"><div><p class="eyebrow">Access</p><h2>Users and member access</h2></div></header>
-            <section class="content-grid admin-users-layout">
-              <section class="tool-panel" aria-labelledby="headTitle">
-                <div class="panel-heading"><p class="eyebrow">Manual settings</p><h3 id="headTitle">Save user access</h3></div>
-                <form id="headForm" class="form-grid">
-                  <label for="headName">Full name<input id="headName" required placeholder="Jordan Lee" /></label>
-                  <label for="headEmail">Email<input id="headEmail" type="email" required placeholder="head@example.com" /></label>
-                  <label for="headFamilyLimit">Maximum families<input id="headFamilyLimit" type="number" min="0" max="100" step="1" value="1" required /></label>
-                  <label class="checkbox-label full"><input id="headCanAddMembers" type="checkbox" /> Allow this user to add family members</label>
-                  <button class="primary full" type="submit">Save user access</button>
-                </form>
-              </section>
-              <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Directory</p><h3>All users</h3><p id="adminUserDirectoryMeta" class="muted-copy">0 total · 0 registered</p></div>
-                <div id="headsList" class="record-list"></div>
-              </section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-admin-panel="finance">
-            <header class="topbar"><div><p class="eyebrow">Finance</p><h2>Platform subscription payments</h2></div></header>
-            <section class="ledger-panel exchange-rate-panel" aria-labelledby="exchangeRateTitle">
-              <div class="panel-heading inline"><div><p class="eyebrow">Multi-currency</p><h3 id="exchangeRateTitle">Exchange-rate service</h3><p class="muted-copy">CurrencyAPI rates are fetched server-side and cached. Original payment amounts are never overwritten.</p></div><button id="syncExchangeRatesButton" type="button">Sync rates now</button></div>
-              <div id="adminRateAlert" class="notice hidden" role="status"></div>
-              <dl class="exchange-rate-status-grid">
-                <div><dt>Provider</dt><dd id="adminRateProvider">CurrencyAPI</dd></div>
-                <div><dt>Last successful sync</dt><dd id="adminRateLastSuccess">Never</dd></div>
-                <div><dt>Latest provider data</dt><dd id="adminRateEffectiveAt">Unavailable</dd></div>
-                <div><dt>Currencies updated</dt><dd id="adminRateCurrencyCount">0</dd></div>
-                <div><dt>Schedule</dt><dd>00:15 and 12:15 UTC</dd></div>
-                <div><dt>Last attempt</dt><dd id="adminRateLastAttempt">Never</dd></div>
-              </dl>
-              <form id="adminCurrencySettingsForm" class="form-grid currency-settings-form">
-                <label for="adminReportingCurrency">Finance reporting currency<select id="adminReportingCurrency" required></select></label>
-                <label class="full" for="adminEnabledCurrencies">Enabled receipt currencies<select id="adminEnabledCurrencies" multiple size="6" required></select><small>Hold Ctrl or Command to select more than one currency.</small></label>
-                <label class="checkbox-field full"><input id="adminConversionEnabled" type="checkbox" />Create consolidated converted totals</label>
-                <button class="primary" type="submit">Save Finance currencies</button>
-                <div class="button-row"><button id="exportAdminFinanceCsvButton" type="button">Export CSV</button><button id="printAdminFinanceButton" type="button">Print / Save PDF</button></div>
-              </form>
-              <div class="admin-finance-filters" aria-label="Finance filters">
-                <label for="adminFinanceCurrencyFilter">Original currency<select id="adminFinanceCurrencyFilter"><option value="all">All currencies</option></select></label>
-                <label for="adminFinanceStatusFilter">Status<select id="adminFinanceStatusFilter"><option value="all">All statuses</option><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option></select></label>
-                <label for="adminFinanceTypeFilter">Payment type<select id="adminFinanceTypeFilter"><option value="all">All payment types</option><option value="subscription_payment">Subscription payments</option><option value="platform_payment">Legacy notes</option></select></label>
-                <label for="adminFinanceFromDate">From<input id="adminFinanceFromDate" type="date" /></label>
-                <label for="adminFinanceToDate">To<input id="adminFinanceToDate" type="date" /></label>
-                <label for="adminFinanceSearch">Account or reference<input id="adminFinanceSearch" type="search" placeholder="Email, workspace, reference" /></label>
-              </div>
-              <div class="finance-currency-summary"><strong id="adminOriginalCurrencyTotals">No received payments</strong><span id="adminConvertedCurrencyTotal">Converted total unavailable</span></div>
-            </section>
-            <section class="ledger-panel subscription-review-panel">
-              <div class="panel-heading"><p class="eyebrow">Payment review</p><h3>Pending proof submissions</h3><p class="muted-copy">Approvals are applied once and create an entitlement history record and receipt.</p></div>
-              <div id="subscriptionReviewList" class="record-list"></div>
-            </section>
-            <section class="ledger-panel subscription-history-panel">
-              <div class="panel-heading"><p class="eyebrow">Finance history</p><h3>Subscription payments</h3><p class="muted-copy">Approved and rejected subscription payments remain available for monitoring and audit.</p></div>
-              <div id="subscriptionPaymentHistoryList" class="record-list"></div>
-            </section>
-            <section class="content-grid">
-              <section class="tool-panel" aria-labelledby="paymentTitle">
-                <div class="panel-heading"><p class="eyebrow">Legacy records</p><h3 id="paymentTitle">Add a historical payment note</h3><p class="muted-copy">This log is retained for older records and never activates or extends a subscription.</p></div>
-                <form id="paymentForm" class="form-grid">
-                  <label class="full" for="paymentHead">User<select id="paymentHead" required></select></label>
-                  <label for="paymentAmount">Amount<input id="paymentAmount" type="number" min="0.01" step="0.01" required placeholder="49.00" /></label>
-                  <label for="paymentCurrency">Currency<select id="paymentCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
-                  <label for="paymentMethod">Method<select id="paymentMethod"><option value="Cash">Cash</option><option value="EFT">EFT</option><option value="Card">Card</option><option value="Bank deposit">Bank deposit</option><option value="Other">Other</option></select></label>
-                  <label for="paymentDate">Payment date<input id="paymentDate" type="date" required /></label>
-                  <label class="full" for="paymentReference">Reference<input id="paymentReference" placeholder="Receipt or EFT ref" /></label>
-                  <label class="full" for="paymentNotes">Notes<input id="paymentNotes" placeholder="Cash received, bank confirmation, discount..." /></label>
-                  <button class="primary full" type="submit">Save legacy payment note</button>
-                </form>
-              </section>
-              <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Legacy history</p><h3>Historical payment notes</h3></div>
-                <div id="paymentsList" class="record-list"></div>
-              </section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-admin-panel="support">
-            <header class="topbar"><div><p class="eyebrow">Support</p><h2>Admin notes and actions</h2></div></header>
-            <section class="content-grid">
-              <section class="tool-panel">
-                <div class="panel-heading"><p class="eyebrow">Note</p><h3>Add household support note</h3></div>
-                <form id="adminNoteForm" class="form-grid">
-                  <label class="full" for="adminNoteFamily">Household<select id="adminNoteFamily" required></select></label>
-                  <label class="full" for="adminNoteText">Note<textarea id="adminNoteText" required placeholder="Payment discussion, access request, reminder issue..."></textarea></label>
-                  <button class="primary full" type="submit">Save support note</button>
-                </form>
-              </section>
-              <section class="ledger-panel">
-                <div class="panel-heading"><p class="eyebrow">Timeline</p><h3>Support notes</h3></div>
-                <div id="adminNotesList" class="record-list"></div>
-              </section>
-            </section>
-          </section>
+          <div class="preview-totals">
+            <div><span>Due this month</span><strong>$850.00</strong></div>
+            <div><span>Paid</span><strong>$500.00</strong></div>
+            <div><span>Outstanding</span><strong>$350.00</strong></div>
+          </div>
+          <div class="preview-progress"><span style="width: 58%"></span></div>
+          <div class="preview-list">
+            <article><span class="date-box"><strong>01</strong><small>SEP</small></span><div><strong>Vehicle payment</strong><small>Personal · Upcoming</small></div><b>$350.00</b></article>
+            <article><span class="date-box"><strong>06</strong><small>SEP</small></span><div><strong>Internet service</strong><small>Family · Assigned to Priya</small></div><b>$65.00</b></article>
+          </div>
         </div>
       </section>
 
-      <section id="appView" class="hidden">
-        <div class="app-shell">
-          <div class="mobile-bar">
-            <div class="mobile-brand">
-              <img class="mobile-logo" src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="89" height="60" />
-              <div>
-                <strong id="mobileHouseholdTitle">Household</strong>
-                <span>Payment workspace</span>
-              </div>
-            </div>
-            <div class="mobile-actions">
-              <button class="icon-button notification-button" id="mobileNotificationsButton" type="button" aria-label="Open notifications" data-open-notifications>
-                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                <span class="notification-count hidden" data-notification-count aria-hidden="true">0</span>
-              </button>
-              <button class="icon-button" type="button" aria-label="Open menu" data-open-drawer>Menu</button>
-            </div>
-          </div>
-          <header class="app-nav">
-            <div class="sidebar-brand">
-              <img class="sidebar-logo" src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="178" height="120" />
-            </div>
-            <div class="sidebar-account">
-              <p class="eyebrow">Budget workspace</p>
-              <h1 id="householdTitle">Household</h1>
-              <label class="workspace-picker">Switch workspace<select data-family-selector aria-label="Switch workspace"></select></label>
-              <span id="headBillingBadge" class="mini-badge">free</span>
-            </div>
-            <nav class="tabs" aria-label="Family sections">
-              <button class="tab-button active" type="button" data-family-tab="dashboard">Dashboard</button>
-              <button class="tab-button" type="button" data-family-tab="payments">Payments</button>
-              <button class="tab-button" type="button" data-family-tab="members">Family &amp; Members</button>
-              <button class="tab-button" type="button" data-family-tab="reports">Reports</button>
-              <button class="tab-button" type="button" data-family-tab="subscription">Subscription</button>
-              <button class="tab-button" type="button" data-family-tab="settings">Settings</button>
-            </nav>
-            <div class="topbar-actions">
-              <button class="notification-sidebar-button" type="button" data-open-notifications>
-                <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9" />
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-                </svg>
-                <span>Notifications</span>
-                <span class="notification-count hidden" data-notification-count aria-hidden="true">0</span>
-              </button>
-              <button id="signOutButton" type="button">Sign out</button>
-            </div>
-            <div class="sidebar-footer">
-              <button type="button">Contact support</button>
-              <small>2026 Mushavo Budget</small>
-            </div>
-          </header>
-          <button class="drawer-backdrop hidden" type="button" aria-label="Close menu" data-close-drawer></button>
-
-          <section class="screen-panel" data-family-panel="dashboard">
-            <header class="topbar">
-              <div><p class="eyebrow">Command center</p><h2 id="dashboardMonthTitle">This month</h2></div>
-              <div class="filters">
-                <input id="monthFilter" type="month" />
-                <select id="statusFilter">
-                  <option value="all">All statuses</option>
-                  <option value="upcoming">Upcoming</option>
-                  <option value="due-soon">Due soon</option>
-                  <option value="overdue">Overdue</option>
-                  <option value="partial">Partial</option>
-                  <option value="paid">Paid</option>
-                </select>
-              </div>
-            </header>
-            <section class="stats-grid dashboard-stats-grid" aria-label="Monthly payment summary">
-              <article class="stat-card dashboard-stat dashboard-stat-due meter-card"><span class="stat-label">Due this month</span><strong id="dueAmount" data-fit-text data-fit-min="12">$0.00</strong><div class="meter"><span id="paidMeter"></span></div><small id="paidProgressText">No dues yet</small></article>
-              <article class="stat-card dashboard-stat dashboard-stat-outstanding"><span class="stat-label">Outstanding</span><strong id="outstandingAmount" data-fit-text data-fit-min="12">$0.00</strong><small id="outstandingText">Balance to collect</small></article>
-              <article class="stat-card dashboard-stat dashboard-stat-overdue"><span class="stat-label">Overdue</span><strong id="overdueCount" data-fit-text data-fit-min="12">0</strong><small id="overdueText">Needs attention</small></article>
-              <article class="stat-card dashboard-stat dashboard-stat-assigned"><span class="stat-label">Assigned to me</span><strong id="myDueCount" data-fit-text data-fit-min="12">0</strong><small>This month</small></article>
-            </section>
-            <section class="content-grid">
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Next up</p><h3>Due now and coming up</h3></div><div id="priorityDueList" class="record-list"></div></section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Responsibility</p><h3>Member workload</h3></div><div id="memberResponsibilityList" class="breakdown-list"></div></section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="payments">
-            <header class="topbar">
-              <div><p class="eyebrow">Payment items</p><h2>Payments</h2><p class="muted-copy">Manage recurring and once-off payments from one place.</p></div>
-              <button class="primary" type="button" data-open-payment-item-dialog>Add payment</button>
-            </header>
-            <section class="ledger-panel payments-list-panel"><div class="panel-heading"><p class="eyebrow">Active list</p><h3>Payments to track</h3></div><div id="obligationsList" class="record-list"></div></section>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="schedule">
-            <header class="topbar"><div><p class="eyebrow">Due schedule</p><h2>Monthly payment board</h2></div></header>
-            <div id="scheduleList" class="record-list"></div>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="my">
-            <header class="topbar"><div><p class="eyebrow">Responsibility</p><h2>My assigned payments</h2></div></header>
-            <div id="myPaymentsList" class="record-list"></div>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="members">
-            <header class="topbar"><div><p class="eyebrow">Family workspace</p><h2>Family &amp; Members</h2><p class="muted-copy">Manage the selected family, its people, and invitations.</p></div><button id="inviteMemberButton" class="primary" type="button" data-open-invite-dialog>Invite member</button></header>
-            <section id="selectedFamilyPanel" class="family-overview hidden" aria-labelledby="selectedFamilyTitle">
-              <div class="family-overview-copy"><p class="eyebrow">Selected family</p><h3 id="selectedFamilyTitle">Family details</h3><p id="selectedFamilyMeta" class="muted-copy"></p></div>
-              <div class="family-overview-stats" aria-label="Selected family summary">
-                <div><strong id="selectedFamilyMemberCount">0</strong><span>Active members</span></div>
-                <div><strong id="selectedFamilyMemberLimit">0</strong><span>Paid places</span></div>
-                <div><strong id="selectedFamilyAvailableCount">0</strong><span>Available</span></div>
-                <div><strong id="selectedFamilyPaymentCount">0</strong><span>Payments</span></div>
-                <div><strong id="selectedFamilyInviteCount">0</strong><span>Pending invites</span></div>
-              </div>
-              <div class="family-overview-actions"><div class="row-actions"><button type="button" data-edit-family-name>Edit family name</button><button class="danger" type="button" data-delete-family>Delete family</button></div><small>Permanently removing a family also removes all of its related data.</small></div>
-            </section>
-            <section id="familyCreationNotice" class="notice family-creation-notice hidden"><strong id="familyCreationNoticeTitle">Active membership required.</strong><span id="familyCreationNoticeText">The Mushavo Budget admin must activate family access before you can create a family.</span></section>
-            <section id="familyManagementGrid" class="family-management-grid">
-              <div class="family-action-column family-create-column">
-                <section class="tool-panel" aria-labelledby="createFamilyTitle">
-                  <div class="panel-heading"><p class="eyebrow">New family</p><h3 id="createFamilyTitle">Create another family</h3><p class="muted-copy">Your admin controls how many families your account may own.</p></div>
-                  <form id="memberFamilyForm" class="form-grid compact-form-grid">
-                    <label class="full" for="memberFamilyName">Family name<input id="memberFamilyName" placeholder="The Parekh family" /></label>
-                    <label for="memberFamilyBudget">Monthly expected payments<input id="memberFamilyBudget" type="number" min="0" step="0.01" placeholder="2500" /></label>
-                    <label for="memberFamilyCurrency">Currency<select id="memberFamilyCurrency"><option value="USD">USD</option><option value="ZAR">ZAR</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CAD">CAD</option><option value="AUD">AUD</option></select></label>
-                    <button class="primary full" type="submit">Create family</button>
-                  </form>
-                </section>
-              </div>
-            </section>
-            <section id="memberAccessNotice" class="notice hidden"><strong>Family-member access is locked.</strong> Only an active family owner can send invitations. Invited users do not need an active membership, but they must already have a Mushavo Budget account.</section>
-            <section class="family-roster-grid">
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Roster</p><h3>Family members</h3><p class="muted-copy">Active people in the selected family.</p></div><div id="membersList" class="record-list"></div></section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Invitations</p><h3>Join requests and invites</h3><p class="muted-copy">Track invitations sent and received.</p></div><div id="invitationsList" class="record-list"></div></section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="reports">
-            <header class="topbar report-topbar">
-              <div><p class="eyebrow">Reports</p><h2>Payment analytics</h2><p id="reportPeriodLabel" class="muted-copy">Performance for the selected month.</p></div>
-              <div class="report-filter-controls">
-                <label class="report-workspace-control" for="reportWorkspaceFilter">Workspace<select id="reportWorkspaceFilter" data-family-selector aria-label="Choose the workspace for this report"></select></label>
-                <label class="report-month-control" for="reportMonthFilter">Report month<input id="reportMonthFilter" type="month" /></label>
-                <label for="reportCurrencyFilter">Original currency<select id="reportCurrencyFilter"><option value="all">All currencies</option></select></label>
-                <label for="reportViewMode">Money view<select id="reportViewMode"><option value="original">Original currencies</option><option value="converted">Converted reporting currency</option></select></label>
-                <label for="reportReportingCurrency">Reporting currency<select id="reportReportingCurrency"></select></label>
-              </div>
-            </header>
-            <section id="reportRatePanel" class="report-rate-panel hidden" aria-live="polite"><div><strong id="reportRateTitle">Exchange-rate status</strong><span id="reportRateText">Converted unpaid balances are estimates.</span></div><div class="button-row"><button id="exportReportCsvButton" type="button">Export CSV</button><button id="printReportButton" type="button">Print / Save PDF</button></div></section>
-            <section id="reportsLockNotice" class="locked-feature-panel hidden">
-              <p id="reportsLockEyebrow" class="eyebrow">Workspace reports</p>
-              <h3 id="reportsLockTitle">Finance analytics are locked</h3>
-              <p id="reportsLockText">Choose a workspace with an active analytics plan, or upgrade this workspace to view its reports.</p>
-              <button class="primary" type="button" data-family-tab="subscription">View plans</button>
-            </section>
-            <section class="report-summary-grid" aria-label="Monthly payment summary">
-              <article class="report-kpi"><span>Payment completion</span><strong id="paidRate">0%</strong><small id="reportCompletionCaption">0 of 0 payments completed</small></article>
-              <article class="report-kpi"><span>Total due</span><strong id="reportDueTotal">$0.00</strong><small>For the selected month</small></article>
-              <article class="report-kpi"><span>Total paid</span><strong id="reportPaidTotal">$0.00</strong><small>Recorded payments</small></article>
-              <article class="report-kpi"><span>Outstanding</span><strong id="reportOutstandingTotal">$0.00</strong><small id="reportOverdueCaption">0 overdue payments</small></article>
-            </section>
-            <section class="report-analysis-grid">
-              <section class="ledger-panel report-collection-panel">
-                <div class="panel-heading"><p class="eyebrow">Collection</p><h3>Monthly progress</h3></div>
-                <div class="collection-progress"><div class="collection-progress-ring" id="collectionProgressRing"><strong id="collectionProgressValue">0%</strong><span>complete</span></div><div class="collection-progress-copy"><strong id="collectionProgressTitle">No payments due</strong><p id="collectionProgressText" class="muted-copy">Add a payment to begin tracking monthly reliability.</p></div></div>
-                <div id="reportStatusList" class="status-analysis-list"></div>
-              </section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Six-month view</p><h3>Reliability trend</h3><p class="muted-copy">The percentage of payment occurrences completed each month.</p></div><div id="reportTrendList" class="trend-list"></div></section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Categories</p><h3>Due and outstanding</h3></div><div id="categoryReportList" class="breakdown-list"></div></section>
-              <section class="ledger-panel report-context-panel"><div class="panel-heading"><p class="eyebrow">Portfolio context</p><h3>Payment commitments</h3></div><dl class="report-context-list"><div><dt>Partial payments</dt><dd id="partialCount">0</dd></div><div><dt>Active payment items</dt><dd id="activeObligationCount">0</dd></div><div><dt>Estimated annual total</dt><dd id="yearExpected">$0.00</dd></div></dl></section>
-              <section class="ledger-panel report-history-panel"><div class="panel-heading"><p class="eyebrow">History</p><h3>Recent payment records</h3></div><div id="paymentRecordsList" class="record-list"></div></section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="subscription">
-            <header class="topbar subscription-topbar">
-              <div><p class="eyebrow">Subscription</p><h2>Plan and billing</h2><p class="muted-copy">The plan belongs to this workspace. Invited members inherit its access and never need a separate subscription.</p></div>
-              <button id="openRenewalButton" class="primary" type="button" data-open-renewal-dialog>Submit payment</button>
-            </header>
-            <section class="subscription-details-panel" aria-label="Current subscription">
-              <dl class="subscription-details-list">
-                <div><dt>Current plan</dt><dd><strong id="subscriptionPlanName">Free</strong><small id="subscriptionStatusText">Active</small></dd></div>
-                <div><dt>Workspace</dt><dd><strong id="subscriptionWorkspaceName">Personal budget</strong><small id="subscriptionWorkspaceType">Personal</small></dd></div>
-                <div><dt>Paid through</dt><dd><strong id="subscriptionPaidThrough">No expiry</strong><small>Stored and calculated in UTC</small></dd></div>
-                <div><dt>Usage</dt><dd><strong id="subscriptionUsage">0 / 5</strong><small id="subscriptionUsageCaption">Active payment items</small></dd></div>
-              </dl>
-            </section>
-            <section id="subscriptionAccessNotice" class="notice hidden"></section>
-            <section class="ledger-panel">
-              <div class="panel-heading"><p class="eyebrow">Compare plans</p><h3>Personal and family plans</h3><p class="muted-copy">Compare every available Personal and Household plan. A plan can only be selected for a matching workspace.</p></div>
-              <div id="workspacePlanList" class="plan-card-grid"></div>
-            </section>
-            <section class="content-grid subscription-history-grid">
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Requests</p><h3>Payment review history</h3></div><div id="renewalHistoryList" class="record-list"></div></section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Entitlements</p><h3>Plan history</h3></div><div id="entitlementHistoryList" class="record-list"></div></section>
-            </section>
-          </section>
-
-          <section class="screen-panel hidden" data-family-panel="settings">
-            <header class="topbar"><div><p class="eyebrow">Settings</p><h2>Account and notifications</h2></div></header>
-            <section class="account-details-panel" aria-labelledby="accountDetailsTitle">
-              <div class="panel-heading"><p class="eyebrow">Account details</p><h3 id="accountDetailsTitle">Your account</h3></div>
-              <dl class="account-details-list">
-                <div class="account-detail-row"><dt>Plan</dt><dd><span id="settingsPlanBadge" class="mini-badge">Active - Free</span><small id="settingsPaymentLimit">0/5 free payments used</small></dd></div>
-                <div class="account-detail-row"><dt>Family access</dt><dd><strong id="settingsMemberAccess">Locked</strong><small>Admin-managed access</small></dd></div>
-                <div class="account-detail-row"><dt>Signed in as</dt><dd><strong id="settingsEmail">-</strong><small>Your login email</small></dd></div>
-                <div class="account-detail-row"><dt>Alerts</dt><dd><strong id="notificationCount">0</strong><small>Unread messages and due reminders</small></dd></div>
-              </dl>
-            </section>
-            <section class="content-grid settings-content-grid">
-              <section class="ledger-panel currency-settings-panel">
-                <div class="panel-heading"><p class="eyebrow">Currencies</p><h3>Workspace currency settings</h3><p class="muted-copy">Original amounts remain unchanged when you change these display and reporting preferences.</p></div>
-                <form id="workspaceCurrencySettingsForm" class="form-grid currency-settings-form">
-                  <label for="workspaceDefaultCurrency">Default payment currency<select id="workspaceDefaultCurrency" required></select></label>
-                  <label for="workspaceReportingCurrency">Reporting currency<select id="workspaceReportingCurrency" required></select></label>
-                  <label class="full" for="workspaceEnabledCurrencies">Enabled currencies<select id="workspaceEnabledCurrencies" multiple size="7" required></select><small>Hold Ctrl or Command to select more than one. The default and reporting currencies must be enabled.</small></label>
-                  <label class="checkbox-field full"><input id="workspaceConversionEnabled" type="checkbox" />Enable consolidated converted reporting</label>
-                  <button id="saveWorkspaceCurrencyButton" class="primary" type="submit">Save currency settings</button>
-                </form>
-                <div id="workspaceRateStatus" class="currency-rate-copy">No exchange-rate data has been loaded yet.</div>
-              </section>
-              <section class="ledger-panel"><div class="panel-heading"><p class="eyebrow">Inbox</p><h3>Notifications</h3></div><div id="notificationsList" class="record-list"></div></section>
-            </section>
-          </section>
+      <section class="audience-section page-section" aria-labelledby="workspaceHeading">
+        <div class="section-intro">
+          <p class="site-eyebrow">ONE LOGIN, SEPARATE WORKSPACES</p>
+          <h2 id="workspaceHeading">Built around the way money responsibilities are actually shared.</h2>
+          <p>Keep each budget separate while moving between the workspaces you own or have been invited to join.</p>
         </div>
+        <div class="workspace-grid">
+          <article>
+            <span class="workspace-number">01</span>
+            <h3>Personal</h3>
+            <p>Track your own recurring payments, due dates, payment history, and receipts.</p>
+            <a href="pricing.html#personal-plans">View personal plans</a>
+          </article>
+          <article>
+            <span class="workspace-number">02</span>
+            <h3>Family</h3>
+            <p>Assign responsibilities, invite registered members, and see household progress together.</p>
+            <a href="pricing.html#family-plans">View family plans</a>
+          </article>
+          <article>
+            <span class="workspace-number">03</span>
+            <h3>Business</h3>
+            <p>Organise team payment responsibilities with stronger oversight and reporting controls.</p>
+            <a href="pricing.html#business-plans">View business plans</a>
+          </article>
+        </div>
+      </section>
+
+      <section class="workflow-section page-section" aria-labelledby="workflowHeading">
+        <div class="section-intro compact-intro">
+          <p class="site-eyebrow">FROM DUE DATE TO PAYMENT RECORD</p>
+          <h2 id="workflowHeading">A complete payment workflow, not just a list.</h2>
+        </div>
+        <ol class="workflow-list">
+          <li><span>1</span><div><h3>Plan the payment</h3><p>Add the amount, frequency, currency, due date, reminder timing, and responsible person.</p></div></li>
+          <li><span>2</span><div><h3>See what needs attention</h3><p>Use the dashboard to review due, upcoming, outstanding, and overdue payments.</p></div></li>
+          <li><span>3</span><div><h3>Record what happened</h3><p>Save a full or partial payment with its date, method, reference, notes, and proof.</p></div></li>
+          <li><span>4</span><div><h3>Review progress</h3><p>Use reports and workload views to understand spending and responsibility over time.</p></div></li>
+        </ol>
+      </section>
+
+      <section class="feature-section page-section" aria-labelledby="featureHeading">
+        <div class="section-intro">
+          <p class="site-eyebrow">THE DETAILS STAY CONNECTED</p>
+          <h2 id="featureHeading">Everything needed to follow a payment through.</h2>
+        </div>
+        <div class="feature-list">
+          <article><h3>Recurring schedules</h3><p>Set one-time, monthly, annual, or custom payment cycles with upcoming occurrences.</p></article>
+          <article><h3>Useful reminders</h3><p>Choose how many days before a due date reminders should begin and keep the in-app bell informed.</p></article>
+          <article><h3>Payment proof</h3><p>Attach a receipt or document and preserve the payment reference and notes with the record.</p></article>
+          <article><h3>Multi-currency records</h3><p>Keep original currencies intact while supported exchange rates provide consolidated reporting.</p></article>
+          <article><h3>Member responsibility</h3><p>Make ownership visible, review member workload, and remove access without deleting another person.</p></article>
+          <article><h3>Plan-based access</h3><p>Free personal limits, shared family access, additional seats, and reporting are applied by workspace.</p></article>
+        </div>
+        <a class="inline-arrow" href="about.html">Explore every feature <span aria-hidden="true">→</span></a>
+      </section>
+
+      <section class="pricing-preview-section page-section" aria-labelledby="pricingPreviewHeading">
+        <div class="section-intro compact-intro">
+          <p class="site-eyebrow">PLANS THAT GROW WITH THE WORKSPACE</p>
+          <h2 id="pricingPreviewHeading">Start personally, then add the right shared plan.</h2>
+          <p>Prices below are loaded from the current Mushavo Budget plan catalogue.</p>
+        </div>
+        <div id="homePlanPreview" class="public-plan-preview" aria-live="polite">
+          <div class="site-loading">Loading current plans…</div>
+        </div>
+        <a class="secondary-button" href="pricing.html">See full plan comparison</a>
+      </section>
+
+      <section class="closing-section page-section">
+        <div><p class="site-eyebrow">READY WHEN YOU ARE</p><h2>Bring the next payment into focus.</h2></div>
+        <div><p>Create a free personal workspace now. You can join a family workspace without purchasing a separate plan.</p><a class="site-button" href="signup.html">Create free account</a></div>
       </section>
     </main>
 
-    <dialog id="inviteMemberDialog" class="payment-dialog invite-member-dialog" aria-labelledby="inviteTitle">
-      <form id="inviteForm" class="form-grid compact-form-grid">
-        <div class="panel-heading inline full"><div><p class="eyebrow">Invite member</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">They will receive an in-app invitation to accept or reject. They must already have a Mushavo Budget account.</p></div><button class="icon-button" type="button" data-close-invite-dialog aria-label="Close invitation form">Close</button></div>
-        <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
-        <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
-        <label class="full" for="inviteEmail">Registered email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
-        <div class="button-row full"><button class="primary" type="submit">Send invitation</button><button type="button" data-close-invite-dialog>Cancel</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="familyNameDialog" class="payment-dialog compact-dialog" aria-labelledby="familyNameDialogTitle">
-      <form id="familyNameForm" class="form-grid">
-        <div class="panel-heading inline full"><div><p class="eyebrow">Family details</p><h3 id="familyNameDialogTitle">Edit family name</h3></div><button class="icon-button" type="button" data-close-family-name-dialog aria-label="Close family name form">Close</button></div>
-        <label class="full" for="editableFamilyName">Family name<input id="editableFamilyName" maxlength="100" required /></label>
-        <button class="primary full" type="submit">Save family name</button>
-      </form>
-    </dialog>
-
-    <dialog id="paymentItemDialog" class="payment-dialog payment-item-dialog" aria-labelledby="obligationTitle">
-      <form id="obligationForm" class="form-grid">
-        <div class="panel-heading inline full"><div><p class="eyebrow">Payment details</p><h3 id="obligationTitle">Add payment</h3></div><button class="icon-button" type="button" data-close-payment-item-dialog aria-label="Close payment form">Close</button></div>
-        <label class="full" for="obligationName">Payment name<input id="obligationName" required placeholder="Rent, electricity, school fees..." /></label>
-        <label for="paymentScope">Show this payment in<select id="paymentScope"><option value="personal">Personal budget</option><option value="family">Family budget</option></select></label>
-        <label for="obligationAmount">Amount due<input id="obligationAmount" type="number" min="0.01" step="0.01" required placeholder="1000" /></label>
-        <fieldset class="currency-picker full"><legend>Currency</legend><label for="obligationCurrencySearch">Search currencies<input id="obligationCurrencySearch" type="search" autocomplete="off" placeholder="Search USD, dollar, rand..." /></label><label for="obligationCurrency">Select currency<select id="obligationCurrency" required></select></label><small id="currencySearchResult" aria-live="polite"></small></fieldset>
-        <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
-        <label for="obligationMember">Responsible member<select id="obligationMember"></select></label>
-        <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option></select></label>
-        <label for="recurrenceInterval">Every N months<input id="recurrenceInterval" type="number" min="1" max="24" value="1" /></label>
-        <label for="dueDay">Due day (calendar day payment must be paid)<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
-        <label for="startDate">Start date<input id="startDate" type="date" required /></label>
-        <label for="reminderDays">Remind days before (daily until due date)<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
-        <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
-        <div class="button-row full"><button id="obligationSubmitButton" class="primary" type="submit">Add payment</button><button id="cancelEditObligationButton" type="button">Cancel</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="renewalDialog" class="payment-dialog renewal-dialog" aria-labelledby="renewalDialogTitle">
-      <form id="renewalForm" class="form-grid">
-        <div class="panel-heading inline full"><div><p class="eyebrow">Subscription payment</p><h3 id="renewalDialogTitle">Submit payment for review</h3><p id="renewalDialogDescription" class="muted-copy">Submitting payment does not activate access automatically. Authorized finance staff will review it.</p></div><button class="icon-button" type="button" data-close-renewal-dialog aria-label="Close subscription payment form">Close</button></div>
-        <label for="renewalPlan">Plan<select id="renewalPlan" required></select></label>
-        <label for="renewalPeriod">Billing period<select id="renewalPeriod" required><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
-        <label id="renewalFamilyNameField" class="full hidden" for="renewalFamilyName">Family name<input id="renewalFamilyName" maxlength="100" /><small>This family will be created only after the payment is approved.</small></label>
-        <label id="renewalFamilyMembersField" class="full hidden" for="renewalFamilyMemberCount">Total people on this Family plan<input id="renewalFamilyMemberCount" type="number" min="4" max="100" step="1" value="4" /><small id="renewalFamilyMembersHelp">The Household plan includes 4 people in total. Add more people here if needed.</small></label>
-        <label for="renewalCurrency">Currency<select id="renewalCurrency" required></select></label>
-        <label for="renewalAmount">Amount due<input id="renewalAmount" type="number" readonly required /></label>
-        <label for="renewalMethod">Payment method<select id="renewalMethod" required><option value="EFT">EFT</option><option value="Bank deposit">Bank deposit</option><option value="Cash">Cash</option><option value="Card">Card</option><option value="Other">Other</option></select></label>
-        <label for="renewalPaymentDate">Payment date<input id="renewalPaymentDate" type="date" required /></label>
-        <label class="full" for="renewalReference">Payment reference<input id="renewalReference" required placeholder="Bank or receipt reference" /></label>
-        <label class="full" for="renewalProof">Proof of payment (optional)<input id="renewalProof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" /></label>
-        <label class="full" for="renewalNotes">Notes<textarea id="renewalNotes" placeholder="Information that will help the finance reviewer"></textarea></label>
-        <div id="renewalInvoiceSummary" class="invoice-summary full"></div>
-        <div class="button-row full"><button id="renewalSubmitButton" class="primary" type="submit">Submit for review</button><button type="button" data-close-renewal-dialog>Cancel</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="recordPaymentDialog" class="payment-dialog">
-      <form id="recordPaymentForm" method="dialog" class="form-grid">
-        <div class="panel-heading full"><p class="eyebrow">Payment record</p><h3 id="recordPaymentTitle">Record payment</h3><p id="recordPaymentMeta" class="muted-copy"></p></div>
-        <input id="recordItemId" type="hidden" />
-        <input id="recordPeriodStart" type="hidden" />
-        <input id="recordDueDate" type="hidden" />
-        <input id="recordOutstanding" type="hidden" />
-        <label for="recordPaymentType">Payment type<select id="recordPaymentType"><option value="full">Pay in full</option><option value="partial">Partial payment</option></select></label>
-        <label for="recordAmount">Amount paid<input id="recordAmount" type="number" min="0.0001" step="0.0001" required /></label>
-        <label for="recordCurrency">Currency<input id="recordCurrency" readonly aria-readonly="true" /></label>
-        <label for="recordPaidBy">Paid by<select id="recordPaidBy"></select></label>
-        <label for="recordPaymentDate">Payment date<input id="recordPaymentDate" type="date" required /></label>
-        <label for="recordMethod">Method<select id="recordMethod"><option value="Cash">Cash</option><option value="EFT">EFT</option><option value="Card">Card</option><option value="Bank deposit">Bank deposit</option><option value="Other">Other</option></select></label>
-        <label class="full" for="recordReference">Reference<input id="recordReference" placeholder="Receipt, EFT, account ref..." /></label>
-        <label class="full" for="recordNotes">Payment details<textarea id="recordNotes" placeholder="Add payment details, confirmation notes, or anything the family should know"></textarea></label>
-        <label class="full file-field" for="recordProof">Proof of payment (optional)<input id="recordProof" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" /><small>Upload a JPG, PNG, WebP, or PDF receipt up to 10 MB.</small></label>
-        <div class="button-row full">
-          <button class="primary" type="submit">Save payment</button>
-          <button type="button" data-close-payment-dialog>Cancel</button>
-        </div>
-      </form>
-    </dialog>
-
-    <dialog id="notificationDialog" class="payment-dialog notification-dialog" aria-labelledby="notificationDialogTitle">
-      <div class="panel-heading inline">
-        <div><p class="eyebrow">Inbox</p><h3 id="notificationDialogTitle">Notifications</h3></div>
-        <button class="icon-button" type="button" aria-label="Close notifications" data-close-notifications>Close</button>
-      </div>
-      <div id="notificationDialogList" class="record-list"></div>
-    </dialog>
-
-    <dialog id="adminDetailsDialog" class="payment-dialog admin-details-dialog" aria-labelledby="adminDetailsDialogTitle">
-      <div class="admin-details-shell">
-        <div class="panel-heading inline"><div><p id="adminDetailsEyebrow" class="eyebrow">Admin details</p><h3 id="adminDetailsDialogTitle">Details</h3><p id="adminDetailsSubtitle" class="muted-copy"></p></div><button class="icon-button" type="button" data-close-admin-details aria-label="Close admin details">Close</button></div>
-        <div id="adminDetailsBody" class="admin-details-body"></div>
-      </div>
-    </dialog>
-
-    <dialog id="confirmDialog" class="payment-dialog confirm-dialog">
-      <form id="confirmDialogForm" method="dialog" class="form-grid">
-        <div class="panel-heading full">
-          <p class="eyebrow">Confirm action</p>
-          <h3 id="confirmDialogTitle">Are you sure?</h3>
-          <p id="confirmDialogMessage" class="muted-copy"></p>
-        </div>
-        <div class="button-row full">
-          <button id="confirmDialogConfirm" class="danger" type="submit">Confirm</button>
-          <button type="button" data-close-confirm-dialog>Cancel</button>
-        </div>
-      </form>
-    </dialog>
-
-    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    <footer class="site-footer">
+      <div class="footer-brand"><img src="assets/mushavo-budget-logo.png" alt="Mushavo Budget" width="148" height="100" /><p>Clear payment planning for personal, family, and business life.</p></div>
+      <div><strong>Explore</strong><a href="about.html">About</a><a href="pricing.html">Pricing</a><a href="contact.html">Contact</a></div>
+      <div><strong>Account</strong><a href="app.html">Sign in</a><a href="signup.html">Create account</a></div>
+      <div class="footer-bottom"><span>© 2026 Mushavo Budget</span><span>Built for organised financial responsibility.</span></div>
+    </footer>
   </body>
 </html>
