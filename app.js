@@ -1,4 +1,4 @@
-// Mushavo Budget authenticated application — release 47
+// Mushavo Budget authenticated application — release 48
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -1462,13 +1462,12 @@ function renderDashboard() {
   const outstandingRows = occurrences.map((item) => ({ amount: item.outstanding, currency: item.item.currency }));
   const overdue = occurrences.filter((item) => item.status === "overdue");
   const myDue = myOccurrences(occurrences).filter((item) => item.status !== "paid");
-  const reportingCurrency = selectedReportingCurrency();
-  const useConverted = Boolean(state.workspaceSettings?.conversion_enabled);
-  const convertedDue = useConverted ? convertedTotalScaled(dueRows, reportingCurrency) : null;
-  const convertedPaid = useConverted ? convertedTotalScaled(paidRows, reportingCurrency) : null;
+  const dueSummary = dashboardAmountSummary(dueRows);
+  const paidSummary = dashboardAmountSummary(paidRows);
+  const outstandingSummary = dashboardAmountSummary(outstandingRows);
   const currencyCount = new Set(dueRows.map((row) => row.currency)).size;
-  const percentage = convertedDue != null && convertedDue > 0n && convertedPaid != null
-    ? Math.min(Number((convertedPaid * 10000n) / convertedDue) / 100, 100)
+  const percentage = dueSummary.scaled != null && dueSummary.scaled > 0n && paidSummary.scaled != null
+    ? Math.min(Number((paidSummary.scaled * 10000n) / dueSummary.scaled) / 100, 100)
     : currencyCount <= 1
       ? (() => {
         const due = occurrences.reduce((sum, item) => sum + Number(item.amount || 0), 0);
@@ -1477,14 +1476,15 @@ function renderDashboard() {
       })()
       : occurrences.length ? (occurrences.filter((item) => item.status === "paid").length / occurrences.length) * 100 : 0;
 
-  $("#dueAmount").textContent = convertedDue != null
-    ? money(scaledToDecimal(convertedDue), reportingCurrency)
-    : formatCurrencyTotals(dueRows);
-  const convertedOutstanding = useConverted ? convertedTotalScaled(outstandingRows, reportingCurrency) : null;
-  $("#outstandingAmount").textContent = convertedOutstanding != null
-    ? money(scaledToDecimal(convertedOutstanding), reportingCurrency)
-    : formatCurrencyTotals(outstandingRows);
-  $("#outstandingText").textContent = occurrences.some((item) => item.outstanding > 0) ? (convertedOutstanding != null ? "Estimated reporting total" : "Still outstanding") : "All clear";
+  $("#dueAmount").textContent = dueSummary.text;
+  $("#outstandingAmount").textContent = outstandingSummary.text;
+  $("#outstandingText").textContent = occurrences.some((item) => item.outstanding > 0)
+    ? outstandingSummary.converted
+      ? `Converted to ${outstandingSummary.currency}`
+      : outstandingSummary.scaled == null
+        ? "Original currencies"
+        : "Still outstanding"
+    : "All clear";
   $("#overdueCount").textContent = overdue.length;
   $("#overdueText").textContent = overdue.length ? "Needs follow-up" : "No overdue dues";
   $("#myDueCount").textContent = myDue.length;
@@ -1540,10 +1540,10 @@ function renderPriorityDueList(occurrences) {
       month: "long",
       year: "numeric"
     });
-    const totalOutstanding = formatCurrencyTotals(group.occurrences.map((occurrence) => ({
+    const totalOutstanding = dashboardAmountSummary(group.occurrences.map((occurrence) => ({
       currency: occurrence.item.currency,
       amount: occurrence.outstanding
-    })));
+    }))).text;
     const summary = group.occurrences.length
       ? `${group.occurrences.length} payment${group.occurrences.length === 1 ? "" : "s"} · ${totalOutstanding} outstanding`
       : "No payments scheduled";
@@ -1577,9 +1577,6 @@ function renderMemberResponsibility(occurrences) {
       name: member.name,
       role: member.role,
       assigned,
-      total: assigned.reduce((sum, item) => sum + item.amount, 0),
-      paid: assigned.reduce((sum, item) => sum + Math.min(item.paid, item.amount), 0),
-      outstanding: assigned.reduce((sum, item) => sum + item.outstanding, 0),
       overdueCount: assigned.filter((item) => item.status === "overdue").length,
       partialCount: assigned.filter((item) => item.status === "partial").length,
       dueSoonCount: assigned.filter((item) => item.status === "due-soon").length
@@ -1596,9 +1593,6 @@ function renderMemberResponsibility(occurrences) {
       name: "Household account",
       role: "Unassigned family payments",
       assigned: householdAssigned,
-      total: householdAssigned.reduce((sum, item) => sum + item.amount, 0),
-      paid: householdAssigned.reduce((sum, item) => sum + Math.min(item.paid, item.amount), 0),
-      outstanding: householdAssigned.reduce((sum, item) => sum + item.outstanding, 0),
       overdueCount: householdAssigned.filter((item) => item.status === "overdue").length,
       partialCount: householdAssigned.filter((item) => item.status === "partial").length,
       dueSoonCount: householdAssigned.filter((item) => item.status === "due-soon").length
@@ -1612,20 +1606,37 @@ function renderMemberResponsibility(occurrences) {
 
   const statusRank = { overdue: 0, partial: 1, "due soon": 2, "on track": 3, paid: 4 };
   rows.forEach((row) => {
-    row.progress = row.total > 0 ? Math.min((row.paid / row.total) * 100, 100) : 0;
+    row.totalSummary = dashboardAmountSummary(row.assigned.map((item) => ({
+      amount: item.amount,
+      currency: item.item.currency
+    })));
+    row.paidSummary = dashboardAmountSummary(row.assigned.map((item) => ({
+      amount: Math.min(item.paid, item.amount),
+      currency: item.item.currency
+    })));
+    row.outstandingSummary = dashboardAmountSummary(row.assigned.map((item) => ({
+      amount: item.outstanding,
+      currency: item.item.currency
+    })));
+    row.hasOutstanding = row.assigned.some((item) => item.outstanding > 0);
+    row.progress = row.totalSummary.scaled != null && row.totalSummary.scaled > 0n && row.paidSummary.scaled != null
+      ? Math.min(Number((row.paidSummary.scaled * 10000n) / row.totalSummary.scaled) / 100, 100)
+      : row.assigned.length
+        ? row.assigned.reduce((sum, item) => sum + (item.amount > 0 ? Math.min(item.paid / item.amount, 1) : 1), 0) / row.assigned.length * 100
+        : 0;
     row.status = row.overdueCount
       ? "overdue"
       : row.partialCount
         ? "partial"
         : row.dueSoonCount
           ? "due soon"
-          : row.outstanding > 0
+          : row.hasOutstanding
             ? "on track"
             : "paid";
   });
   rows.sort((a, b) =>
     statusRank[a.status] - statusRank[b.status]
-    || b.outstanding - a.outstanding
+    || compareScaledDescending(a.outstandingSummary.scaled, b.outstandingSummary.scaled)
     || a.name.localeCompare(b.name)
   );
 
@@ -1648,9 +1659,9 @@ function renderMemberResponsibility(occurrences) {
       </div>
       <div class="workload-metrics">
         <div><span>Assigned</span><strong>${row.assigned.length}</strong></div>
-        <div><span>Total due</span><strong data-fit-text data-fit-min="10">${money(row.total, familyCurrency())}</strong></div>
-        <div><span>Paid</span><strong data-fit-text data-fit-min="10">${money(row.paid, familyCurrency())}</strong></div>
-        <div><span>Outstanding</span><strong data-fit-text data-fit-min="10">${money(row.outstanding, familyCurrency())}</strong></div>
+        <div><span>Total due</span><strong data-fit-text data-fit-min="10">${row.totalSummary.text}</strong></div>
+        <div><span>Paid</span><strong data-fit-text data-fit-min="10">${row.paidSummary.text}</strong></div>
+        <div><span>Outstanding</span><strong data-fit-text data-fit-min="10">${row.outstandingSummary.text}</strong></div>
       </div>
       <div class="workload-progress">
         <div class="meter small-meter"><span style="width:${row.progress}%"></span></div>
@@ -4573,9 +4584,11 @@ function latestBaseRate(currency, at = null) {
 }
 
 function crossRateScaled(sourceCurrency, targetCurrency, at = null) {
-  if (sourceCurrency === targetCurrency) return DECIMAL_SCALE;
-  const source = latestBaseRate(sourceCurrency, at);
-  const target = latestBaseRate(targetCurrency, at);
+  const sourceCode = `${sourceCurrency || "USD"}`.toUpperCase();
+  const targetCode = `${targetCurrency || "USD"}`.toUpperCase();
+  if (sourceCode === targetCode) return DECIMAL_SCALE;
+  const source = latestBaseRate(sourceCode, at);
+  const target = latestBaseRate(targetCode, at);
   if (!source || !target) return null;
   const sourceRate = decimalToScaled(source.rate);
   const targetRate = decimalToScaled(target.rate);
@@ -4606,6 +4619,34 @@ function convertedTotalScaled(rows, targetCurrency) {
 
 function selectedReportingCurrency() {
   return state.workspaceSettings?.reporting_currency || "USD";
+}
+
+function selectedDashboardCurrency() {
+  return state.workspaceSettings?.default_payment_currency || selectedReportingCurrency();
+}
+
+function dashboardAmountSummary(rows) {
+  const currency = selectedDashboardCurrency();
+  const scaled = convertedTotalScaled(rows, currency);
+  if (scaled != null) {
+    return {
+      scaled,
+      currency,
+      converted: rows.some((row) => `${row.currency || "USD"}`.toUpperCase() !== currency.toUpperCase()),
+      text: money(scaledToDecimal(scaled), currency)
+    };
+  }
+  return {
+    scaled: null,
+    currency: null,
+    converted: false,
+    text: formatCurrencyTotals(rows)
+  };
+}
+
+function compareScaledDescending(left, right) {
+  if (left == null || right == null || left === right) return 0;
+  return left > right ? -1 : 1;
 }
 
 function rateStatusPresentation(status = state.exchangeRateStatus) {
