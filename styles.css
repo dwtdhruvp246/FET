@@ -3319,3 +3319,470 @@ input[type="file"] {
   .enquiry-actions { width: 100%; min-width: 0; }
   .enquiry-status-actions { grid-template-columns: 1fr 1fr; }
 }
+
+/* Mobile interface refinement — release 43 */
+.toast[popover] {
+  inset: auto 24px 24px auto;
+  width: max-content;
+  margin: 0;
+}
+
+@media (max-width: 680px) {
+  .mobile-bar {
+    top: 8px;
+    min-height: 72px;
+    gap: 8px;
+    border-radius: 20px;
+    padding: 8px 10px;
+  }
+
+  .mobile-brand {
+    display: flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  .mobile-logo {
+    flex: 0 0 auto;
+    width: 78px;
+    max-width: 25vw;
+    height: auto;
+  }
+
+  .mobile-brand > div {
+    flex: 1 1 auto;
+    gap: 2px;
+  }
+
+  .mobile-brand strong {
+    font-size: 1rem;
+    line-height: 1.15;
+  }
+
+  .mobile-brand span {
+    overflow: visible;
+    color: var(--muted);
+    font-size: 0.67rem;
+    line-height: 1.2;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .mobile-actions {
+    display: flex;
+    gap: 6px;
+  }
+
+  .mobile-actions .icon-button {
+    min-width: 42px;
+    min-height: 42px;
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  [data-family-panel="dashboard"] > .content-grid > .ledger-panel,
+  .payments-list-panel {
+    padding: 14px;
+  }
+
+  [data-family-panel="dashboard"] > .content-grid > .ledger-panel .panel-heading,
+  .payments-list-panel .panel-heading {
+    gap: 3px;
+    margin-bottom: 12px;
+  }
+
+  [data-family-panel="dashboard"] > .content-grid > .ledger-panel .panel-heading h3,
+  .payments-list-panel .panel-heading h3 {
+    font-size: clamp(1.05rem, 5.5vw, 1.28rem);
+    line-height: 1.18;
+  }
+
+  .due-month-group {
+    gap: 8px;
+    border-radius: 18px;
+    padding: 10px;
+  }
+
+  .due-month-header span,
+  .due-month-header h4,
+  .due-month-header small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .due-month-header h4 {
+    font-size: 0.98rem;
+  }
+
+  .due-month-header small {
+    font-size: 0.68rem;
+    line-height: 1.3;
+  }
+
+  .due-month-items {
+    gap: 8px;
+  }
+
+  .occurrence-summary-button {
+    grid-template-columns: 40px minmax(0, 1fr) 22px;
+    grid-template-areas:
+      "date copy chevron"
+      "date amount chevron";
+    align-items: center;
+    gap: 3px 9px;
+    padding: 10px;
+  }
+
+  .occurrence-summary-button > .date-chip {
+    grid-area: date;
+    width: 40px;
+    height: 44px;
+    border-radius: 13px;
+  }
+
+  .occurrence-summary-copy {
+    grid-area: copy;
+    gap: 2px;
+  }
+
+  .occurrence-summary-copy .occurrence-name,
+  .occurrence-summary-meta,
+  .occurrence-summary-button .occurrence-amount {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .occurrence-summary-copy .occurrence-name {
+    font-size: 0.86rem;
+    line-height: 1.2;
+  }
+
+  .occurrence-summary-meta {
+    font-size: 0.66rem;
+    line-height: 1.25;
+  }
+
+  .occurrence-summary-button .occurrence-amount {
+    grid-area: amount;
+    justify-self: start;
+    font-size: 0.76rem;
+    line-height: 1.2;
+    text-align: left;
+  }
+
+  .occurrence-summary-button > .accordion-chevron {
+    grid-area: chevron;
+    width: 22px;
+    height: 22px;
+  }
+
+  .occurrence-card-details {
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .occurrence-facts {
+    gap: 6px;
+  }
+
+  .occurrence-facts > div {
+    gap: 2px;
+    padding: 8px;
+  }
+
+  .occurrence-facts dt {
+    font-size: 0.62rem;
+  }
+
+  .occurrence-facts dd {
+    overflow: visible;
+    font-size: 0.73rem;
+    line-height: 1.25;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .occurrence-detail-footer {
+    gap: 8px;
+  }
+
+  .occurrence-detail-footer .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    overflow: visible;
+  }
+
+  .occurrence-detail-footer .mini-badge {
+    max-width: 100%;
+    min-height: 25px;
+    padding: 3px 8px;
+    font-size: 0.66rem;
+    line-height: 1.25;
+    white-space: normal;
+  }
+
+  .occurrence-detail-footer .row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .occurrence-detail-footer .row-actions button {
+    min-height: 38px;
+    padding: 0 8px;
+    font-size: 0.73rem;
+  }
+
+  [data-family-panel="payments"] > .topbar {
+    gap: 12px;
+  }
+
+  [data-family-panel="payments"] > .topbar h2 {
+    font-size: 1.75rem;
+  }
+
+  [data-family-panel="payments"] > .topbar .muted-copy {
+    margin-top: 4px;
+    font-size: 0.88rem;
+    line-height: 1.4;
+  }
+
+  [data-family-panel="payments"] > .topbar > .primary {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 16px;
+    font-size: 0.88rem;
+  }
+
+  .payments-list-panel {
+    margin-top: 14px;
+  }
+
+  .payments-list-panel .record-card {
+    gap: 9px;
+    border-radius: 17px;
+    padding: 12px;
+  }
+
+  .payments-list-panel .record-main {
+    gap: 4px;
+  }
+
+  .payments-list-panel .record-main > strong {
+    font-size: 0.94rem;
+    line-height: 1.25;
+  }
+
+  .payments-list-panel .record-main > span {
+    font-size: 0.72rem;
+    line-height: 1.35;
+  }
+
+  .payments-list-panel .badge-row {
+    gap: 5px;
+    margin-top: 3px;
+  }
+
+  .payments-list-panel .mini-badge {
+    min-height: 25px;
+    padding: 3px 8px;
+    font-size: 0.66rem;
+    line-height: 1.25;
+  }
+
+  .payments-list-panel .reminder-badge {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .payments-list-panel .record-side {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+
+  .payments-list-panel .record-side > strong {
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+
+  .payments-list-panel .record-side .row-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+  }
+
+  .payments-list-panel .record-side button {
+    min-width: 0;
+    min-height: 36px;
+    padding: 0 6px;
+    font-size: 0.68rem;
+  }
+
+  .family-overview {
+    gap: 11px;
+    margin: 14px 0;
+    border-radius: 20px;
+    padding: 14px;
+  }
+
+  .family-overview-copy {
+    gap: 4px;
+  }
+
+  .family-overview-copy h3 {
+    font-size: 1.22rem;
+  }
+
+  .family-overview-copy .muted-copy {
+    font-size: 0.74rem;
+    line-height: 1.4;
+  }
+
+  .family-overview-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid rgba(15, 118, 110, 0.14);
+    border-radius: 15px;
+  }
+
+  .family-overview-stats > div,
+  .family-overview-stats > div:nth-child(odd) {
+    gap: 2px;
+    border-width: 0 1px 1px 0;
+    border-style: solid;
+    border-color: rgba(15, 118, 110, 0.12);
+    padding: 9px 7px;
+  }
+
+  .family-overview-stats > div:nth-child(3n) {
+    border-right: 0;
+  }
+
+  .family-overview-stats > div:nth-last-child(-n + 2) {
+    border-bottom: 0;
+  }
+
+  .family-overview-stats strong {
+    font-size: 1rem;
+  }
+
+  .family-overview-stats span {
+    font-size: 0.61rem;
+    line-height: 1.2;
+    white-space: normal;
+  }
+
+  .family-overview-actions {
+    gap: 7px;
+  }
+
+  .family-overview-actions .row-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .family-overview-actions button {
+    min-height: 40px;
+    padding: 0 8px;
+    font-size: 0.7rem;
+  }
+
+  .family-overview-actions small {
+    max-width: none;
+    font-size: 0.64rem;
+    line-height: 1.35;
+  }
+
+  .invite-member-dialog {
+    max-height: calc(100dvh - 24px);
+    border-radius: 22px;
+    padding: 16px;
+  }
+
+  .invite-member-dialog .panel-heading.inline {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px;
+    margin-bottom: 2px;
+  }
+
+  .invite-member-dialog .panel-heading.inline > div {
+    min-width: 0;
+  }
+
+  .invite-member-dialog .panel-heading h3 {
+    font-size: 1.15rem;
+    line-height: 1.2;
+  }
+
+  .invite-member-dialog .panel-heading .muted-copy {
+    margin-top: 5px;
+    font-size: 0.74rem;
+    line-height: 1.4;
+  }
+
+  .invite-member-dialog .dialog-close-button {
+    grid-column: 2;
+    grid-row: 1;
+    width: 38px;
+    min-width: 38px;
+    min-height: 38px;
+    padding: 0;
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .invite-member-dialog .form-grid {
+    gap: 10px;
+  }
+
+  .invite-member-dialog label {
+    gap: 5px;
+    font-size: 0.74rem;
+  }
+
+  .invite-member-dialog input,
+  .invite-member-dialog select {
+    min-height: 43px;
+    padding: 8px 11px;
+    font-size: 0.84rem;
+  }
+
+  .invite-member-dialog .button-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+  }
+
+  .invite-member-dialog .button-row button {
+    min-width: 0;
+    min-height: 42px;
+    padding: 0 8px;
+    font-size: 0.74rem;
+  }
+
+  .toast,
+  .toast[popover] {
+    inset: auto 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+    width: auto;
+    max-width: none;
+    border-radius: 14px;
+    padding: 11px 13px;
+    font-size: 0.76rem;
+    line-height: 1.35;
+  }
+}

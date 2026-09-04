@@ -1,4 +1,4 @@
-// Mushavo Budget authenticated application — release 49
+// Mushavo Budget authenticated application — release 50
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -89,6 +89,7 @@ const realtime = {
 let dashboardFitFrame = null;
 let appLoadPromise = null;
 let appLoadUserId = null;
+let toastTimer = null;
 
 const PAYMENT_PROOF_BUCKET = "payment-proofs";
 const SUBSCRIPTION_PROOF_BUCKET = "subscription-proofs";
@@ -298,7 +299,26 @@ function showToast(message) {
   const toast = $("#toast");
   toast.textContent = friendlyMessage(message);
   toast.classList.remove("hidden");
-  window.setTimeout(() => toast.classList.add("hidden"), 3600);
+  if (toastTimer) window.clearTimeout(toastTimer);
+  if (typeof toast.showPopover === "function") {
+    try {
+      toast.hidePopover();
+    } catch (_error) {
+      // The popover may not be open yet.
+    }
+    toast.showPopover();
+  }
+  toastTimer = window.setTimeout(() => {
+    if (typeof toast.hidePopover === "function") {
+      try {
+        toast.hidePopover();
+      } catch (_error) {
+        // Fall back to the hidden class below.
+      }
+    }
+    toast.classList.add("hidden");
+    toastTimer = null;
+  }, 4200);
 }
 
 function showAppError(error) {
@@ -1355,7 +1375,7 @@ function renderMemberAccess() {
   selectedFamilyPanel.classList.toggle("hidden", !ownsSelectedFamily);
   if (ownsSelectedFamily) {
     $("#selectedFamilyTitle").textContent = state.family.name;
-    $("#selectedFamilyMeta").textContent = `${money(state.family.monthly_budget, state.family.currency)} expected each month · ${selectedActiveMembers + selectedPendingInvites} of ${selectedMemberLimit} paid places reserved · ${familyCount} of ${limit} family workspaces used`;
+    $("#selectedFamilyMeta").textContent = `${money(state.family.monthly_budget, state.family.currency)} monthly · ${selectedActiveMembers + selectedPendingInvites}/${selectedMemberLimit} places reserved · ${familyCount}/${limit} family workspaces used`;
     $("#selectedFamilyMemberCount").textContent = selectedActiveMembers;
     $("#selectedFamilyMemberLimit").textContent = selectedMemberLimit;
     $("#selectedFamilyAvailableCount").textContent = selectedAvailablePlaces;
@@ -1723,7 +1743,7 @@ function renderObligationCard(item) {
         ${statusBadge(item.status || "active")}
         <span class="mini-badge">${escapeHtml(item.visibility === "family" ? "Family" : "Personal")}</span>
         <span class="mini-badge">${escapeHtml(member?.name || "No assigned member")}</span>
-        <span class="mini-badge">Daily reminders from ${item.reminder_days_before ?? 0} day${Number(item.reminder_days_before ?? 0) === 1 ? "" : "s"} before until due</span>
+        <span class="mini-badge reminder-badge">Daily reminder · ${item.reminder_days_before ?? 0} day${Number(item.reminder_days_before ?? 0) === 1 ? "" : "s"} before</span>
       </div>
     </div>
     <div class="record-side">

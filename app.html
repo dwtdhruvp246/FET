@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=42" />
+    <link rel="stylesheet" href="styles.css?v=43" />
     <script src="config.js?v=26"></script>
-    <script type="module" src="app.js?v=49"></script>
+    <script type="module" src="app.js?v=50"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -648,7 +648,7 @@
 
     <dialog id="inviteMemberDialog" class="payment-dialog invite-member-dialog" aria-labelledby="inviteTitle">
       <form id="inviteForm" class="form-grid compact-form-grid">
-        <div class="panel-heading inline full"><div><p class="eyebrow">Invite member</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">They will receive an in-app invitation to accept or reject. They must already have a Mushavo Budget account.</p></div><button class="icon-button" type="button" data-close-invite-dialog aria-label="Close invitation form">Close</button></div>
+        <div class="panel-heading inline full"><div><p class="eyebrow">Invite member</p><h3 id="inviteTitle">Invite a registered user</h3><p class="muted-copy">They will receive an in-app invitation to accept or reject. They must already have a Mushavo Budget account.</p></div><button class="icon-button dialog-close-button" type="button" data-close-invite-dialog aria-label="Close invitation form">&times;</button></div>
         <label for="inviteFamily">Family<select id="inviteFamily" required></select></label>
         <label for="inviteRole">Role<select id="inviteRole"><option value="Adult">Adult</option><option value="Child">Child</option><option value="Teen">Teen</option><option value="Other">Other</option></select></label>
         <label class="full" for="inviteEmail">Registered email<input id="inviteEmail" type="email" required placeholder="member@example.com" /></label>
@@ -754,6 +754,6 @@
       </form>
     </dialog>
 
-    <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+    <div id="toast" class="toast hidden" role="status" aria-live="polite" popover="manual"></div>
   </body>
 </html>
