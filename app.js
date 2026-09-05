@@ -1,4 +1,4 @@
-// Mushavo Budget authenticated application — release 51
+// Mushavo Budget authenticated application — release 52
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -2024,6 +2024,7 @@ function renderWorkspaceCurrencySettings() {
   populateCurrencySelect($("#workspaceDefaultCurrency"), settings.default_payment_currency, settings.enabled_currencies);
   populateCurrencySelect($("#workspaceReportingCurrency"), settings.reporting_currency, settings.enabled_currencies);
   $("#workspaceConversionEnabled").checked = Boolean(settings.conversion_enabled);
+  renderWorkspaceCurrencyPicker();
   const canManage = canManageCurrentWorkspaceCurrencies();
   $("#workspaceCurrencySettingsForm").querySelectorAll("input, select, button").forEach((field) => {
     field.disabled = !canManage;
@@ -2032,6 +2033,63 @@ function renderWorkspaceCurrencySettings() {
   const presentation = rateStatusPresentation();
   $("#workspaceRateStatus").textContent = presentation.text;
   $("#workspaceRateStatus").dataset.level = presentation.level;
+}
+
+function renderWorkspaceCurrencyPicker() {
+  const optionList = $("#workspaceCurrencyOptions");
+  const chipList = $("#workspaceCurrencyChips");
+  const count = $("#workspaceCurrencyCount");
+  if (!optionList || !chipList || !count) return;
+  const search = $("#workspaceCurrencySearch")?.value.trim().toLowerCase() || "";
+  const enabled = new Set(selectedOptions($("#workspaceEnabledCurrencies")));
+  const defaultCurrency = $("#workspaceDefaultCurrency").value;
+  const reportingCurrency = $("#workspaceReportingCurrency").value;
+  const protectedCodes = new Set([defaultCurrency, reportingCurrency].filter(Boolean));
+  const canManage = canManageCurrentWorkspaceCurrencies();
+  const catalogue = currencyCatalogue();
+  const orderedEnabled = [...enabled].sort((left, right) => {
+    if (left === defaultCurrency) return -1;
+    if (right === defaultCurrency) return 1;
+    return left.localeCompare(right);
+  });
+
+  count.textContent = `${orderedEnabled.length} selected`;
+  chipList.innerHTML = orderedEnabled.map((code) => {
+    const name = catalogue.find(([itemCode]) => itemCode === code)?.[1] || code;
+    const labels = [code === defaultCurrency ? "Default" : "", code === reportingCurrency && code !== defaultCurrency ? "Reporting" : ""].filter(Boolean);
+    return `<span class="currency-chip${protectedCodes.has(code) ? " default" : ""}">
+      <strong>${escapeHtml(code)}</strong><span>${escapeHtml(name)}</span>
+      ${labels.map((label) => `<em>${escapeHtml(label)}</em>`).join("")}
+      ${protectedCodes.has(code)
+        ? ""
+        : `<button type="button" data-remove-workspace-currency="${escapeHtml(code)}" aria-label="Remove ${escapeHtml(code)}" ${canManage ? "" : "disabled"}>&times;</button>`}
+    </span>`;
+  }).join("");
+
+  const matches = catalogue.filter(([code, name]) =>
+    !search || code.toLowerCase().includes(search) || name.toLowerCase().includes(search)
+  );
+  optionList.innerHTML = matches.length
+    ? matches.map(([code, name]) => {
+        const selected = enabled.has(code);
+        const locked = protectedCodes.has(code);
+        return `<label class="currency-option${selected ? " selected" : ""}">
+          <input type="checkbox" value="${escapeHtml(code)}" ${selected ? "checked" : ""} ${locked || !canManage ? "disabled" : ""} />
+          <span><strong>${escapeHtml(code)}</strong><small>${escapeHtml(name)}</small></span>
+          ${locked ? `<em>${code === defaultCurrency ? "Default" : "Reporting"}</em>` : ""}
+        </label>`;
+      }).join("")
+    : `<p class="currency-picker-empty">No currencies match your search.</p>`;
+}
+
+function setWorkspaceCurrencySelected(code, shouldEnable) {
+  const select = $("#workspaceEnabledCurrencies");
+  const option = [...select.options].find((item) => item.value === code);
+  if (!option) return;
+  const protectedCodes = new Set([$("#workspaceDefaultCurrency").value, $("#workspaceReportingCurrency").value]);
+  if (!shouldEnable && protectedCodes.has(code)) return;
+  option.selected = shouldEnable;
+  refreshWorkspaceCurrencyDependentOptions();
 }
 
 function selectedOptions(select) {
@@ -2044,6 +2102,7 @@ function refreshWorkspaceCurrencyDependentOptions() {
   const reportingValue = $("#workspaceReportingCurrency").value;
   populateCurrencySelect($("#workspaceDefaultCurrency"), enabled.includes(defaultValue) ? defaultValue : enabled[0], enabled);
   populateCurrencySelect($("#workspaceReportingCurrency"), enabled.includes(reportingValue) ? reportingValue : enabled[0], enabled);
+  renderWorkspaceCurrencyPicker();
 }
 
 async function saveWorkspaceCurrencySettings(event) {
@@ -2051,12 +2110,17 @@ async function saveWorkspaceCurrencySettings(event) {
   const workspace = currentBudgetWorkspace();
   const button = event.submitter || $("#saveWorkspaceCurrencyButton");
   if (!workspace) return;
+  const enabledCurrencies = selectedOptions($("#workspaceEnabledCurrencies"));
+  if (!enabledCurrencies.length) {
+    showToast("Select at least one workspace currency.");
+    return;
+  }
   try {
     setSubmitting(button, true, "Saving...");
     await query("workspace currency settings save", supabase.rpc("save_workspace_currency_settings", {
       p_workspace_id: workspace.id,
       p_default_payment_currency: $("#workspaceDefaultCurrency").value,
-      p_enabled_currencies: selectedOptions($("#workspaceEnabledCurrencies")),
+      p_enabled_currencies: enabledCurrencies,
       p_reporting_currency: $("#workspaceReportingCurrency").value,
       p_conversion_enabled: $("#workspaceConversionEnabled").checked
     }));
@@ -4761,12 +4825,12 @@ function rateStatusPresentation(status = state.exchangeRateStatus) {
   const lastSuccess = status?.last_success_at ? new Date(status.last_success_at) : null;
   const hours = Number(status?.stale_hours);
   if (!lastSuccess || Number.isNaN(lastSuccess.getTime())) {
-    return { level: "missing", text: "No successful exchange-rate sync is available. Original currencies remain visible separately." };
+    return { level: "missing", text: "Rates last updated: not available. Original currencies remain visible separately." };
   }
-  const updated = lastSuccess.toLocaleString();
-  if (hours > 36) return { level: "danger", text: `Rates are more than 36 hours old. Last successful CurrencyAPI sync: ${updated}.` };
-  if (hours > 18) return { level: "warning", text: `Rates may be stale. Last successful CurrencyAPI sync: ${updated}.` };
-  return { level: "current", text: `CurrencyAPI rates last updated ${updated}.` };
+  const updated = lastSuccess.toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+  if (hours > 36) return { level: "danger", text: `Rates last updated: ${updated}. These rates are more than 36 hours old.` };
+  if (hours > 18) return { level: "warning", text: `Rates last updated: ${updated}. The next scheduled update may be pending.` };
+  return { level: "current", text: `Rates last updated: ${updated}.` };
 }
 
 function csvCell(value) {
@@ -4893,6 +4957,11 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-edit-family-name]")) openFamilyNameDialog();
   if (event.target.closest("[data-close-family-name-dialog]")) $("#familyNameDialog").close();
   if (event.target.closest("[data-close-admin-details]")) $("#adminDetailsDialog").close();
+
+  const removeWorkspaceCurrency = event.target.closest("[data-remove-workspace-currency]");
+  if (removeWorkspaceCurrency) {
+    setWorkspaceCurrencySelected(removeWorkspaceCurrency.dataset.removeWorkspaceCurrency, false);
+  }
 
   const planDefinitionEdit = event.target.closest("[data-edit-plan-definition]");
   if (planDefinitionEdit) editPlanDefinition(planDefinitionEdit.dataset.editPlanDefinition);
@@ -5146,6 +5215,14 @@ $("#cancelPlanEditButton").addEventListener("click", resetPlanDefinitionForm);
 $("#planPriceForm").addEventListener("submit", savePlanPrice);
 $("#workspaceCurrencySettingsForm").addEventListener("submit", saveWorkspaceCurrencySettings);
 $("#workspaceEnabledCurrencies").addEventListener("change", refreshWorkspaceCurrencyDependentOptions);
+$("#workspaceCurrencySearch").addEventListener("input", renderWorkspaceCurrencyPicker);
+$("#workspaceCurrencyOptions").addEventListener("change", (event) => {
+  const checkbox = event.target.closest('input[type="checkbox"]');
+  if (checkbox) setWorkspaceCurrencySelected(checkbox.value, checkbox.checked);
+});
+[$("#workspaceDefaultCurrency"), $("#workspaceReportingCurrency")].forEach((select) => {
+  select.addEventListener("change", renderWorkspaceCurrencyPicker);
+});
 $("#adminCurrencySettingsForm").addEventListener("submit", saveAdminFinanceCurrencySettings);
 $("#adminEnabledCurrencies").addEventListener("change", refreshAdminCurrencyDependentOptions);
 document.querySelectorAll("#adminFinanceCurrencyFilter, #adminFinanceStatusFilter, #adminFinanceTypeFilter, #adminFinanceFromDate, #adminFinanceToDate, #adminFinanceSearch").forEach((field) => {

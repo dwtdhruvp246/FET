@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=43" />
+    <link rel="stylesheet" href="styles.css?v=44" />
     <script src="config.js?v=26"></script>
-    <script type="module" src="app.js?v=51"></script>
+    <script type="module" src="app.js?v=52"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -629,13 +629,27 @@
             </section>
             <section class="content-grid settings-content-grid">
               <section class="ledger-panel currency-settings-panel">
-                <div class="panel-heading"><p class="eyebrow">Currencies</p><h3>Workspace currency settings</h3><p class="muted-copy">Original amounts remain unchanged when you change these display and reporting preferences.</p></div>
+                <div class="panel-heading currency-settings-heading"><p class="eyebrow">Currencies</p><h3>Workspace currencies</h3><p class="muted-copy">Choose which currencies this workspace can use. Your original payment amounts will never be changed.</p></div>
                 <form id="workspaceCurrencySettingsForm" class="form-grid currency-settings-form">
-                  <label for="workspaceDefaultCurrency">Default dashboard and payment currency<select id="workspaceDefaultCurrency" required></select></label>
-                  <label for="workspaceReportingCurrency">Reporting currency<select id="workspaceReportingCurrency" required></select></label>
-                  <label class="full" for="workspaceEnabledCurrencies">Enabled currencies<select id="workspaceEnabledCurrencies" multiple size="7" required></select><small>Hold Ctrl or Command to select more than one. The default and reporting currencies must be enabled.</small></label>
-                  <label class="checkbox-field full"><input id="workspaceConversionEnabled" type="checkbox" />Enable consolidated converted reporting</label>
-                  <button id="saveWorkspaceCurrencyButton" class="primary" type="submit">Save currency settings</button>
+                  <div class="currency-primary-settings full">
+                    <label for="workspaceDefaultCurrency"><span>Default currency</span><select id="workspaceDefaultCurrency" required></select><small>Used on your dashboard and for new payments.</small></label>
+                    <label for="workspaceReportingCurrency"><span>Reporting currency</span><select id="workspaceReportingCurrency" required></select><small>Used when different currencies are combined in reports.</small></label>
+                  </div>
+                  <section class="currency-selection-panel full" aria-labelledby="workspaceCurrenciesTitle">
+                    <div class="currency-selection-heading">
+                      <div><h4 id="workspaceCurrenciesTitle">Your currencies</h4><p>Select every currency this workspace needs.</p></div>
+                      <span id="workspaceCurrencyCount" class="currency-selection-count">0 selected</span>
+                    </div>
+                    <div id="workspaceCurrencyChips" class="currency-chip-list" aria-live="polite"></div>
+                    <label class="currency-search-field" for="workspaceCurrencySearch"><span>Add or remove currencies</span><input id="workspaceCurrencySearch" type="search" autocomplete="off" placeholder="Search by name or code" /></label>
+                    <div id="workspaceCurrencyOptions" class="currency-option-list" role="group" aria-label="Available workspace currencies"></div>
+                    <select id="workspaceEnabledCurrencies" class="currency-state-select" multiple aria-hidden="true" tabindex="-1"></select>
+                  </section>
+                  <label class="currency-conversion-toggle full" for="workspaceConversionEnabled">
+                    <input id="workspaceConversionEnabled" type="checkbox" />
+                    <span><strong>Consolidated currency reporting</strong><small>Convert eligible totals into your reporting currency using the latest stored rates.</small></span>
+                  </label>
+                  <div class="currency-settings-actions full"><button id="saveWorkspaceCurrencyButton" class="primary" type="submit">Save currency settings</button></div>
                 </form>
                 <div id="workspaceRateStatus" class="currency-rate-copy">No exchange-rate data has been loaded yet.</div>
               </section>
