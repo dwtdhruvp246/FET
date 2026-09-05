@@ -1,4 +1,4 @@
-// Mushavo Budget authenticated application — release 52
+// Mushavo Budget authenticated application — release 53
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -180,7 +180,7 @@ const today = new Date();
 $("#paymentDate").value = toDateValue(today);
 $("#monthFilter").value = state.filterMonth;
 $("#reportMonthFilter").value = state.filterMonth;
-$("#startDate").value = toDateValue(today);
+populatePaymentScheduleControls(today);
 $("#recordPaymentDate").value = toDateValue(today);
 $("#renewalPaymentDate").value = toDateValue(today);
 renderPaymentCurrencyOptions("", "USD");
@@ -236,6 +236,91 @@ function monthDiff(fromDate, toDate) {
 
 function lastDayOfMonth(year, monthIndex) {
   return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function populatePaymentScheduleControls(selectedDate = new Date()) {
+  const dueDay = $("#dueDay");
+  const startMonth = $("#startMonth");
+  const startYear = $("#startYear");
+  if (!dueDay || !startMonth || !startYear) return;
+
+  dueDay.innerHTML = Array.from({ length: 31 }, (_, index) => {
+    const day = index + 1;
+    return `<option value="${day}">${day}</option>`;
+  }).join("");
+  startMonth.innerHTML = Array.from({ length: 12 }, (_, monthIndex) => {
+    const label = new Intl.DateTimeFormat("en", { month: "long" }).format(new Date(2024, monthIndex, 1));
+    return `<option value="${monthIndex + 1}">${label}</option>`;
+  }).join("");
+  const currentYear = new Date().getFullYear();
+  startYear.innerHTML = Array.from({ length: 41 }, (_, index) => currentYear - 10 + index)
+    .map((year) => `<option value="${year}">${year}</option>`)
+    .join("");
+  setPaymentStartControls(toDateValue(selectedDate));
+  updateRecurrenceControls();
+}
+
+function setPaymentStartControls(dateValue) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateValue || "") ? parseDate(dateValue) : new Date();
+  const startYear = $("#startYear");
+  if (startYear && !Array.from(startYear.options).some((option) => Number(option.value) === date.getFullYear())) {
+    const option = document.createElement("option");
+    option.value = `${date.getFullYear()}`;
+    option.textContent = `${date.getFullYear()}`;
+    startYear.append(option);
+    Array.from(startYear.options)
+      .sort((a, b) => Number(a.value) - Number(b.value))
+      .forEach((yearOption) => startYear.append(yearOption));
+  }
+  $("#dueDay").value = `${date.getDate()}`;
+  $("#startMonth").value = `${date.getMonth() + 1}`;
+  $("#startYear").value = `${date.getFullYear()}`;
+  syncPaymentStartDate();
+}
+
+function syncPaymentStartDate() {
+  const year = Number($("#startYear")?.value);
+  const month = Number($("#startMonth")?.value);
+  const requestedDay = Number($("#dueDay")?.value);
+  if (!year || !month || !requestedDay) return "";
+  const day = Math.min(requestedDay, lastDayOfMonth(year, month - 1));
+  const value = `${year}-${`${month}`.padStart(2, "0")}-${`${day}`.padStart(2, "0")}`;
+  $("#startDate").value = value;
+  return value;
+}
+
+function updateRecurrenceControls() {
+  const recurrenceType = $("#recurrenceType")?.value || "monthly";
+  const intervalField = $("#recurrenceIntervalField");
+  const intervalInput = $("#recurrenceInterval");
+  const customMonths = recurrenceType === "custom";
+  const customDays = recurrenceType === "custom_days";
+  const needsInterval = customMonths || customDays;
+  if (intervalField) intervalField.classList.toggle("hidden", !needsInterval);
+  if (intervalInput) {
+    intervalInput.disabled = !needsInterval;
+    intervalInput.max = customDays ? "3650" : "120";
+    if (needsInterval && Number(intervalInput.value || 0) < 1) intervalInput.value = "1";
+  }
+  if ($("#recurrenceIntervalLabel")) {
+    $("#recurrenceIntervalLabel").textContent = customDays
+      ? "Repeat every how many days?"
+      : "Repeat every how many months?";
+  }
+  if ($("#recurrenceIntervalHelp")) {
+    $("#recurrenceIntervalHelp").textContent = customDays
+      ? "For example, enter 56 for a payment due every 56 days."
+      : "Enter the number of months between payments.";
+  }
+  if ($("#dueDayLabel")) {
+    $("#dueDayLabel").textContent = customDays ? "First due day" : "Due day";
+  }
+  if ($("#dueDayHelp")) {
+    $("#dueDayHelp").textContent = customDays
+      ? "This day, together with the start month and year, anchors the repeating schedule."
+      : "For shorter months, the last calendar day is used.";
+  }
+  syncPaymentStartDate();
 }
 
 function money(amount, currency = "USD") {
@@ -1474,9 +1559,44 @@ function selectedOccurrences(items = state.paymentItems, records = state.payment
 function generateOccurrences(items, records, monthValue) {
   const targetDate = parseDate(monthStart(monthValue));
   return items
-    .filter((item) => item.status !== "inactive" && isItemDueInMonth(item, targetDate))
-    .map((item) => occurrenceForItem(item, records, targetDate))
+    .filter((item) => item.status !== "inactive")
+    .flatMap((item) => {
+      if (item.recurrence_type === "custom_days") {
+        return dailyOccurrenceDatesInMonth(item, monthValue)
+          .map((dueDate) => occurrenceForItem(item, records, targetDate, dueDate));
+      }
+      return isItemDueInMonth(item, targetDate)
+        ? [occurrenceForItem(item, records, targetDate)]
+        : [];
+    })
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+}
+
+function dateValueToUtcDayNumber(value) {
+  const [year, month, day] = `${value}`.split("-").map(Number);
+  return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function utcDayNumberToDateValue(dayNumber) {
+  const date = new Date(dayNumber * 86400000);
+  return `${date.getUTCFullYear()}-${`${date.getUTCMonth() + 1}`.padStart(2, "0")}-${`${date.getUTCDate()}`.padStart(2, "0")}`;
+}
+
+function dailyOccurrenceDatesInMonth(item, monthValue) {
+  const intervalDays = Math.max(Number(item.recurrence_interval || 1), 1);
+  const startDay = dateValueToUtcDayNumber(item.start_date);
+  const targetStartDay = dateValueToUtcDayNumber(monthStart(monthValue));
+  const targetDate = parseDate(monthStart(monthValue));
+  const targetEndDay = dateValueToUtcDayNumber(
+    `${monthValue}-${`${lastDayOfMonth(targetDate.getFullYear(), targetDate.getMonth())}`.padStart(2, "0")}`
+  );
+  if (!Number.isFinite(startDay) || startDay > targetEndDay) return [];
+  const firstStep = Math.max(0, Math.ceil((targetStartDay - startDay) / intervalDays));
+  const dates = [];
+  for (let day = startDay + firstStep * intervalDays; day <= targetEndDay; day += intervalDays) {
+    dates.push(utcDayNumberToDateValue(day));
+  }
+  return dates;
 }
 
 function isItemDueInMonth(item, targetDate) {
@@ -1490,12 +1610,12 @@ function isItemDueInMonth(item, targetDate) {
   return diff % Math.max(interval, 1) === 0;
 }
 
-function occurrenceForItem(item, records, targetDate) {
+function occurrenceForItem(item, records, targetDate, explicitDueDate = null) {
   const year = targetDate.getFullYear();
   const monthIndex = targetDate.getMonth();
   const day = Math.min(Number(item.due_day || 1), lastDayOfMonth(year, monthIndex));
-  const dueDate = toDateValue(new Date(year, monthIndex, day));
-  const periodStart = toDateValue(new Date(year, monthIndex, 1));
+  const dueDate = explicitDueDate || toDateValue(new Date(year, monthIndex, day));
+  const periodStart = explicitDueDate || toDateValue(new Date(year, monthIndex, 1));
   const paid = records
     .filter((record) => record.payment_item_id === item.id && record.period_start === periodStart)
     .reduce((sum, record) => sum + Number(record.amount || 0), 0);
@@ -1781,7 +1901,7 @@ function renderObligationCard(item) {
   article.innerHTML = `
     <div class="record-main">
       <strong>${escapeHtml(item.name)}</strong>
-      <span>${escapeHtml(item.category)} &middot; ${recurrenceLabel(item)} &middot; Due day ${item.due_day}</span>
+      <span>${escapeHtml(item.category)} &middot; ${recurrenceLabel(item)} &middot; ${paymentScheduleLabel(item)}</span>
       <div class="badge-row">
         ${statusBadge(item.status || "active")}
         <span class="mini-badge">${escapeHtml(item.visibility === "family" ? "Family" : "Personal")}</span>
@@ -2823,6 +2943,7 @@ function estimateYearTotals(items) {
     if (item.recurrence_type === "quarterly") multiplier = 4;
     if (item.recurrence_type === "yearly") multiplier = 1;
     if (item.recurrence_type === "custom") multiplier = Math.ceil(12 / Math.max(Number(item.recurrence_interval || 1), 1));
+    if (item.recurrence_type === "custom_days") multiplier = Math.ceil(365 / Math.max(Number(item.recurrence_interval || 1), 1));
     rows.push({ currency: item.currency, amount: Number(item.amount || 0) * multiplier });
     return rows;
   }, []);
@@ -4157,6 +4278,21 @@ async function saveObligation(event) {
     $("#obligationMember").focus();
     return;
   }
+  const recurrenceType = $("#recurrenceType").value;
+  const recurrenceInterval = ["custom", "custom_days"].includes(recurrenceType)
+    ? Number($("#recurrenceInterval").value)
+    : 1;
+  const maximumInterval = recurrenceType === "custom_days" ? 3650 : 120;
+  if (!Number.isInteger(recurrenceInterval) || recurrenceInterval < 1 || recurrenceInterval > maximumInterval) {
+    showToast(`Enter a repeat interval between 1 and ${maximumInterval}.`);
+    $("#recurrenceInterval").focus();
+    return;
+  }
+  const startDate = syncPaymentStartDate();
+  if (!startDate) {
+    showToast("Choose the due day, start month, and start year.");
+    return;
+  }
   const editingItem = state.paymentItems.find((item) => item.id === state.editingObligationId);
   const usesNewPersonalSlot = scope === "personal" && (
     !editingItem || editingItem.visibility !== "personal" || editingItem.status === "inactive"
@@ -4174,10 +4310,10 @@ async function saveObligation(event) {
     amount,
     currency: $("#obligationCurrency").value,
     responsible_member_id: scope === "family" ? $("#obligationMember").value || null : null,
-    recurrence_type: $("#recurrenceType").value,
-    recurrence_interval: Number($("#recurrenceInterval").value || 1),
+    recurrence_type: recurrenceType,
+    recurrence_interval: recurrenceInterval,
     due_day: Number($("#dueDay").value || 1),
-    start_date: $("#startDate").value,
+    start_date: startDate,
     reminder_days_before: Number($("#reminderDays").value || 0),
     notes: $("#obligationNotes").value.trim() || null,
     status: "active",
@@ -4234,8 +4370,9 @@ function startEditObligation(itemId) {
   $("#obligationMember").value = item.responsible_member_id || "";
   $("#recurrenceType").value = item.recurrence_type;
   $("#recurrenceInterval").value = item.recurrence_interval || 1;
-  $("#dueDay").value = item.due_day || 1;
-  $("#startDate").value = item.start_date;
+  setPaymentStartControls(item.start_date);
+  $("#dueDay").value = `${item.due_day || 1}`;
+  updateRecurrenceControls();
   $("#reminderDays").value = item.reminder_days_before || 0;
   $("#obligationNotes").value = item.notes || "";
   const dialog = $("#paymentItemDialog");
@@ -4245,15 +4382,15 @@ function startEditObligation(itemId) {
 function resetObligationForm() {
   state.editingObligationId = null;
   $("#obligationForm").reset();
-  $("#startDate").value = toDateValue(new Date());
+  setPaymentStartControls(toDateValue(new Date()));
   $("#recurrenceInterval").value = 1;
-  $("#dueDay").value = 1;
   $("#reminderDays").value = 3;
   $("#obligationCurrencySearch").value = "";
   renderPaymentCurrencyOptions("", state.workspaceSettings?.default_payment_currency || state.family?.currency || "USD");
   $("#paymentScope").value = state.family ? "family" : "personal";
   $("#obligationTitle").textContent = "Add payment";
   $("#obligationSubmitButton").textContent = "Add payment";
+  updateRecurrenceControls();
   renderPaymentScope();
 }
 
@@ -4729,7 +4866,17 @@ function recurrenceLabel(item) {
   if (item.recurrence_type === "quarterly") return "Every 3 months";
   if (item.recurrence_type === "yearly") return "Yearly";
   if (item.recurrence_type === "custom") return `Every ${item.recurrence_interval || 1} months`;
+  if (item.recurrence_type === "custom_days") {
+    const interval = Number(item.recurrence_interval || 1);
+    return `Every ${interval} day${interval === 1 ? "" : "s"}`;
+  }
   return "Monthly";
+}
+
+function paymentScheduleLabel(item) {
+  if (item.recurrence_type === "custom_days") return `First due ${item.start_date}`;
+  if (item.recurrence_type === "once") return `Due ${item.start_date}`;
+  return `Due day ${item.due_day}`;
 }
 
 function formatOccurrenceCurrencyTotals(occurrences) {
@@ -5198,6 +5345,10 @@ $("#memberFamilyForm").addEventListener("submit", createFamilyFromMembers);
 $("#familyNameForm").addEventListener("submit", saveFamilyName);
 $("#inviteForm").addEventListener("submit", inviteMember);
 $("#obligationForm").addEventListener("submit", saveObligation);
+$("#recurrenceType").addEventListener("change", updateRecurrenceControls);
+[$("#dueDay"), $("#startMonth"), $("#startYear")].forEach((field) => {
+  field.addEventListener("change", syncPaymentStartDate);
+});
 $("#recordPaymentForm").addEventListener("submit", savePaymentRecord);
 $("#recordPaymentType").addEventListener("change", (event) => {
   const amountInput = $("#recordAmount");

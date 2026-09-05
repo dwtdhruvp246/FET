@@ -17,9 +17,9 @@
     <link rel="icon" href="assets/pwa-icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png" />
     <link rel="manifest" href="manifest.webmanifest" />
-    <link rel="stylesheet" href="styles.css?v=44" />
+    <link rel="stylesheet" href="styles.css?v=45" />
     <script src="config.js?v=26"></script>
-    <script type="module" src="app.js?v=52"></script>
+    <script type="module" src="app.js?v=53"></script>
   </head>
   <body>
     <a class="skip-link" href="#mainWorkspace">Skip to main content</a>
@@ -687,10 +687,10 @@
         <fieldset class="currency-picker full"><legend>Currency</legend><label for="obligationCurrencySearch">Search currencies<input id="obligationCurrencySearch" type="search" autocomplete="off" placeholder="Search USD, dollar, rand..." /></label><label for="obligationCurrency">Select currency<select id="obligationCurrency" required></select></label><small id="currencySearchResult" aria-live="polite"></small></fieldset>
         <label for="obligationCategory">Category<select id="obligationCategory"><option value="Housing">Housing</option><option value="Utilities">Utilities</option><option value="School">School</option><option value="Insurance">Insurance</option><option value="Loan">Loan</option><option value="Subscription">Subscription</option><option value="Family contribution">Family contribution</option><option value="Other">Other</option></select></label>
         <label for="obligationMember">Responsible member<select id="obligationMember"></select></label>
-        <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option></select></label>
-        <label for="recurrenceInterval">Every N months<input id="recurrenceInterval" type="number" min="1" max="24" value="1" /></label>
-        <label for="dueDay">Due day (calendar day payment must be paid)<input id="dueDay" type="number" min="1" max="31" value="1" /></label>
-        <label for="startDate">Start date<input id="startDate" type="date" required /></label>
+        <label for="recurrenceType">Repeats<select id="recurrenceType"><option value="monthly">Monthly</option><option value="quarterly">Every 3 months</option><option value="yearly">Yearly</option><option value="once">Once-off</option><option value="custom">Every N months</option><option value="custom_days">Every N days</option></select></label>
+        <label id="recurrenceIntervalField" class="hidden" for="recurrenceInterval"><span id="recurrenceIntervalLabel">Repeat every how many months?</span><input id="recurrenceInterval" type="number" min="1" max="120" value="1" disabled /><small id="recurrenceIntervalHelp">Enter the number of months between payments.</small></label>
+        <label for="dueDay"><span id="dueDayLabel">Due day</span><select id="dueDay" required aria-describedby="dueDayHelp"></select><small id="dueDayHelp">For shorter months, the last calendar day is used.</small></label>
+        <fieldset class="schedule-start-picker"><legend>Schedule starts</legend><div class="schedule-select-row"><label for="startMonth">Month<select id="startMonth" required></select></label><label for="startYear">Year<select id="startYear" required></select></label></div><small id="scheduleStartHelp">Together with the due day, this sets the first due date.</small><input id="startDate" type="hidden" /></fieldset>
         <label for="reminderDays">Remind days before (daily until due date)<input id="reminderDays" type="number" min="0" max="30" value="3" /></label>
         <label class="full" for="obligationNotes">Notes<input id="obligationNotes" placeholder="Account number, payment instructions, family agreement..." /></label>
         <div class="button-row full"><button id="obligationSubmitButton" class="primary" type="submit">Add payment</button><button id="cancelEditObligationButton" type="button">Cancel</button></div>

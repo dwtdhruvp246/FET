@@ -1,4 +1,4 @@
-/* Mushavo Budget authenticated application stylesheet — release 44 */
+/* Mushavo Budget authenticated application stylesheet — release 45 */
 :root {
   --ink: #0f172a;
   --muted: #64748b;
@@ -1691,6 +1691,44 @@ code {
 
 .payment-item-dialog {
   width: min(760px, calc(100vw - 32px));
+}
+
+#recurrenceIntervalField small,
+#dueDayHelp,
+.schedule-start-picker > small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.schedule-start-picker {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 18px;
+  padding: 12px;
+}
+
+.schedule-start-picker legend {
+  padding: 0 6px;
+  color: var(--muted-strong);
+  font-size: 0.88rem;
+  font-weight: 800;
+}
+
+.schedule-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(92px, 0.75fr);
+  gap: 10px;
+}
+
+.schedule-select-row label {
+  gap: 5px;
+  font-size: 0.76rem;
 }
 
 .invite-member-dialog {
