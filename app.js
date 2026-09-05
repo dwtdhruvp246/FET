@@ -1,4 +1,4 @@
-// Mushavo Budget authenticated application — release 50
+// Mushavo Budget authenticated application — release 51
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.110.9/+esm";
 
 const config = window.MUSHAVO_BUDGET_CONFIG || window.EXPENSE_TRACKER_CONFIG || {};
@@ -122,16 +122,57 @@ const currencyNames = {
 };
 
 const PAYMENT_CURRENCIES = [
-  ["AED", "United Arab Emirates Dirham"], ["AUD", "Australian Dollar"], ["BDT", "Bangladeshi Taka"],
-  ["BWP", "Botswana Pula"], ["BRL", "Brazilian Real"], ["CAD", "Canadian Dollar"], ["CHF", "Swiss Franc"],
-  ["CNY", "Chinese Yuan"], ["DKK", "Danish Krone"], ["EGP", "Egyptian Pound"], ["EUR", "Euro"],
-  ["GBP", "British Pound"], ["GHS", "Ghanaian Cedi"], ["HKD", "Hong Kong Dollar"], ["INR", "Indian Rupee"],
-  ["JPY", "Japanese Yen"], ["KES", "Kenyan Shilling"], ["KWD", "Kuwaiti Dinar"], ["MUR", "Mauritian Rupee"],
-  ["MZN", "Mozambican Metical"], ["NAD", "Namibian Dollar"], ["NGN", "Nigerian Naira"], ["NOK", "Norwegian Krone"],
-  ["NZD", "New Zealand Dollar"], ["OMR", "Omani Rial"], ["PKR", "Pakistani Rupee"], ["PLN", "Polish Zloty"],
-  ["QAR", "Qatari Riyal"], ["SAR", "Saudi Riyal"], ["SEK", "Swedish Krona"], ["SGD", "Singapore Dollar"],
-  ["SZL", "Swazi Lilangeni"], ["THB", "Thai Baht"], ["TRY", "Turkish Lira"], ["TZS", "Tanzanian Shilling"],
-  ["UGX", "Ugandan Shilling"], ["USD", "US Dollar"], ["ZAR", "South African Rand"], ["ZMW", "Zambian Kwacha"],
+  ["AED", "United Arab Emirates Dirham"], ["AFN", "Afghan Afghani"], ["ALL", "Albanian Lek"],
+  ["AMD", "Armenian Dram"], ["AOA", "Angolan Kwanza"], ["ARS", "Argentine Peso"],
+  ["AUD", "Australian Dollar"], ["AWG", "Aruban Florin"], ["AZN", "Azerbaijani Manat"],
+  ["BAM", "Bosnia-Herzegovina Convertible Mark"], ["BBD", "Barbadian Dollar"], ["BDT", "Bangladeshi Taka"],
+  ["BHD", "Bahraini Dinar"], ["BIF", "Burundian Franc"], ["BMD", "Bermudan Dollar"],
+  ["BND", "Brunei Dollar"], ["BOB", "Bolivian Boliviano"], ["BRL", "Brazilian Real"],
+  ["BSD", "Bahamian Dollar"], ["BTN", "Bhutanese Ngultrum"], ["BWP", "Botswanan Pula"],
+  ["BYN", "Belarusian Ruble"], ["BZD", "Belize Dollar"], ["CAD", "Canadian Dollar"],
+  ["CDF", "Congolese Franc"], ["CHF", "Swiss Franc"], ["CLP", "Chilean Peso"],
+  ["CNY", "Chinese Yuan"], ["COP", "Colombian Peso"], ["CRC", "Costa Rican Colón"],
+  ["CUP", "Cuban Peso"], ["CVE", "Cape Verdean Escudo"], ["CZK", "Czech Koruna"],
+  ["DJF", "Djiboutian Franc"], ["DKK", "Danish Krone"], ["DOP", "Dominican Peso"],
+  ["DZD", "Algerian Dinar"], ["EGP", "Egyptian Pound"], ["ERN", "Eritrean Nakfa"],
+  ["ETB", "Ethiopian Birr"], ["EUR", "Euro"], ["FJD", "Fijian Dollar"],
+  ["FKP", "Falkland Islands Pound"], ["GBP", "British Pound"], ["GEL", "Georgian Lari"],
+  ["GHS", "Ghanaian Cedi"], ["GIP", "Gibraltar Pound"], ["GMD", "Gambian Dalasi"],
+  ["GNF", "Guinean Franc"], ["GTQ", "Guatemalan Quetzal"], ["GYD", "Guyanese Dollar"],
+  ["HKD", "Hong Kong Dollar"], ["HNL", "Honduran Lempira"], ["HTG", "Haitian Gourde"],
+  ["HUF", "Hungarian Forint"], ["IDR", "Indonesian Rupiah"], ["ILS", "Israeli New Shekel"],
+  ["INR", "Indian Rupee"], ["IQD", "Iraqi Dinar"], ["IRR", "Iranian Rial"],
+  ["ISK", "Icelandic Króna"], ["JMD", "Jamaican Dollar"], ["JOD", "Jordanian Dinar"],
+  ["JPY", "Japanese Yen"], ["KES", "Kenyan Shilling"], ["KGS", "Kyrgyz Som"],
+  ["KHR", "Cambodian Riel"], ["KMF", "Comorian Franc"], ["KPW", "North Korean Won"],
+  ["KRW", "South Korean Won"], ["KWD", "Kuwaiti Dinar"], ["KYD", "Cayman Islands Dollar"],
+  ["KZT", "Kazakhstani Tenge"], ["LAK", "Laotian Kip"], ["LBP", "Lebanese Pound"],
+  ["LKR", "Sri Lankan Rupee"], ["LRD", "Liberian Dollar"], ["LSL", "Lesotho Loti"],
+  ["LYD", "Libyan Dinar"], ["MAD", "Moroccan Dirham"], ["MDL", "Moldovan Leu"],
+  ["MGA", "Malagasy Ariary"], ["MKD", "Macedonian Denar"], ["MMK", "Myanmar Kyat"],
+  ["MNT", "Mongolian Tugrik"], ["MOP", "Macanese Pataca"], ["MRU", "Mauritanian Ouguiya"],
+  ["MUR", "Mauritian Rupee"], ["MVR", "Maldivian Rufiyaa"], ["MWK", "Malawian Kwacha"],
+  ["MXN", "Mexican Peso"], ["MYR", "Malaysian Ringgit"], ["MZN", "Mozambican Metical"],
+  ["NAD", "Namibian Dollar"], ["NGN", "Nigerian Naira"], ["NIO", "Nicaraguan Córdoba"],
+  ["NOK", "Norwegian Krone"], ["NPR", "Nepalese Rupee"], ["NZD", "New Zealand Dollar"],
+  ["OMR", "Omani Rial"], ["PAB", "Panamanian Balboa"], ["PEN", "Peruvian Sol"],
+  ["PGK", "Papua New Guinean Kina"], ["PHP", "Philippine Peso"], ["PKR", "Pakistani Rupee"],
+  ["PLN", "Polish Zloty"], ["PYG", "Paraguayan Guarani"], ["QAR", "Qatari Riyal"],
+  ["RON", "Romanian Leu"], ["RSD", "Serbian Dinar"], ["RUB", "Russian Ruble"],
+  ["RWF", "Rwandan Franc"], ["SAR", "Saudi Riyal"], ["SBD", "Solomon Islands Dollar"],
+  ["SCR", "Seychellois Rupee"], ["SDG", "Sudanese Pound"], ["SEK", "Swedish Krona"],
+  ["SGD", "Singapore Dollar"], ["SHP", "St. Helena Pound"], ["SLE", "Sierra Leonean Leone"],
+  ["SOS", "Somali Shilling"], ["SRD", "Surinamese Dollar"], ["SSP", "South Sudanese Pound"],
+  ["STN", "São Tomé and Príncipe Dobra"], ["SVC", "Salvadoran Colón"], ["SYP", "Syrian Pound"],
+  ["SZL", "Eswatini Lilangeni"], ["THB", "Thai Baht"], ["TJS", "Tajikistani Somoni"],
+  ["TMT", "Turkmenistani Manat"], ["TND", "Tunisian Dinar"], ["TOP", "Tongan Paʻanga"],
+  ["TRY", "Turkish Lira"], ["TTD", "Trinidad and Tobago Dollar"], ["TWD", "New Taiwan Dollar"],
+  ["TZS", "Tanzanian Shilling"], ["UAH", "Ukrainian Hryvnia"], ["UGX", "Ugandan Shilling"],
+  ["USD", "US Dollar"], ["UYU", "Uruguayan Peso"], ["UZS", "Uzbekistani Som"],
+  ["VES", "Venezuelan Bolívar"], ["VND", "Vietnamese Dong"], ["VUV", "Vanuatu Vatu"],
+  ["WST", "Samoan Tala"], ["XAF", "Central African CFA Franc"], ["XCD", "East Caribbean Dollar"],
+  ["XCG", "Caribbean Guilder"], ["XOF", "West African CFA Franc"], ["XPF", "CFP Franc"],
+  ["YER", "Yemeni Rial"], ["ZAR", "South African Rand"], ["ZMW", "Zambian Kwacha"],
   ["ZWG", "Zimbabwe Gold"]
 ];
 
@@ -249,11 +290,12 @@ function renderPaymentCurrencyOptions(searchTerm = "", selectedCurrency = "") {
   const queryText = searchTerm.trim().toLowerCase();
   const currentValue = selectedCurrency || select.value || "USD";
   const allowed = new Set(activeWorkspaceCurrencies());
-  const matches = PAYMENT_CURRENCIES.filter(([code, name]) =>
+  const catalogue = currencyCatalogue();
+  const matches = catalogue.filter(([code, name]) =>
     allowed.has(code) && (!queryText || code.toLowerCase().includes(queryText) || name.toLowerCase().includes(queryText))
   );
   if (!queryText && currentValue && !matches.some(([code]) => code === currentValue)) {
-    const currentCurrency = PAYMENT_CURRENCIES.find(([code]) => code === currentValue);
+    const currentCurrency = catalogue.find(([code]) => code === currentValue);
     if (currentCurrency) matches.unshift(currentCurrency);
   }
   select.innerHTML = "";
@@ -1092,6 +1134,7 @@ async function loadWorkspaceSubscriptionData() {
   state.planPrices = prices;
   state.planLimits = limits;
   state.supportedCurrencies = supportedCurrencies;
+  populateWorkspaceCreationCurrencySelects();
 
   const workspace = currentBudgetWorkspace();
   if (!workspace) throw new Error("Your subscription workspace could not be reconciled. Run the complete Supabase schema again.");
@@ -1950,6 +1993,13 @@ function populateCurrencySelect(select, selectedValues, allowedCodes = null) {
     const option = new Option(`${code} — ${name}`, code);
     option.selected = selected.has(code);
     select.append(option);
+  });
+}
+
+function populateWorkspaceCreationCurrencySelects() {
+  [$("#familyCurrency"), $("#memberFamilyCurrency")].forEach((select) => {
+    if (!select) return;
+    populateCurrencySelect(select, select.value || "USD");
   });
 }
 
